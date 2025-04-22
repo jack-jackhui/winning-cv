@@ -1,0 +1,11 @@
+.venv
+.venv/*
+.env*
+*.pickle
+/.idea/
+.DS_Store
+/*/__pycache_ls_/*
+./user_cv/*
+./logs/*
+.streamlit
+./customised_cv/*
