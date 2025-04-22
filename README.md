@@ -33,7 +33,7 @@ Winning CV is an open-source AI app that revolutionizes job applications by auto
 - LLM-powered achievement highlighting
 
 ### 📬 Multi-Channel Alerts
-- Email/Telegram/WeChat notifications
+- Email/Telegram/WeChat(coming soon) notifications
 - Daily/weekly digest options
 - Instant matching alerts for premium listings
 
@@ -62,17 +62,91 @@ pip install -r requirements.txt
 ### Configuration
 1. Copy `.env.example` to `.env`
 2. Configure your settings:
+
+**`.env.example`**
 ```ini
-# Azure AI Settings
-AZURE_OPENAI_KEY=your-key-here
-AZURE_ENDPOINT=https://your-endpoint.openai.azure.com
+# === Airtable Configuration ===
+AIRTABLE_PAT=your-airtable-personal-access-token
+AIRTABLE_BASE_ID=your-base-id
+AIRTABLE_TABLE_ID=your-main-table-id
+AIRTABLE_TABLE_ID_HISTORY=your-history-table-id
 
-# Job Sources
+# === Linkedin & Seek URLs for Scraping Jobs ===
+LINKEDIN_JOB_URL=https://linkedin.com
+SEEK_JOB_URL=https://seek.com
 
+# === Azure AI Configuration ===
+AZURE_AI_ENDPOINT=https://your-azure-endpoint.openai.azure.com
+AZURE_AI_API_KEY=your-azure-ai-api-key
+AZURE_DEPLOYMENT=your-deployment-name
 
-# Notification Channels
-EMAIL_HOST=your-smtp-server
-TELEGRAM_BOT_TOKEN=your-bot-token
+# === Notification Settings ===
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
+WECHAT_API_KEY=your-wechat-api-key
+WECHAT_BOT_URL=https://your-wechat-webhook-url
+EMAIL_USER=your-email@domain.com
+EMAIL_PASSWORD=your-email-password
+SMTP_SERVER=your-smtp-server.com
+DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
+DEFAULT_TO_EMAIL=user@domain.com
+
+# === Job Search Parameters ===
+LOCATION=Melbourne,VIC
+COUNTRY=australia
+HOURS_OLD=168
+RESULTS_WANTED=10
+JOB_MATCH_THRESHOLD=7
+MAX_JOBS_TO_SCRAPE=50
+CHECK_INTERVAL_MIN=60
+
+# === Advanced Configuration ===
+ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
+GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
+```
+---
+
+## Configuration Values 🔧
+
+Create `.env` file in project root with these required values:
+
+### Essential Services
+- `AIRTABLE_PAT`: Airtable Personal Access Token
+- `AIRTABLE_BASE_ID`: Your Airtable base ID
+- `AIRTABLE_TABLE_ID`: Main table ID for job storage
+- `AIRTABLE_TABLE_ID_HISTORY`: History table ID for CV generations
+
+### AI Services
+- `AZURE_AI_ENDPOINT`: Azure AI endpoint URL
+- `AZURE_AI_API_KEY`: Azure AI API key
+- `AZURE_DEPLOYMENT`: Azure deployment name
+
+### Linked and Seek URL
+- `LINKEDIN_JOB_URL`: Linkedin URL for scraping jobs
+- `SEEK_JOB_URL`: Seek URL for scraping jobs
+
+### Notifications
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token for alerts
+- `TELEGRAM_CHAT_ID`: Your Telegram chat ID
+- `WECHAT_API_KEY`: WeChat API credentials
+- `WECHAT_BOT_URL`: WeChat webhook URL
+- Email settings (`EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`)
+
+### Job Search Parameters (For Indeed, Glassdoor & Google)
+- `LOCATION`: Default search location (e.g., "Melbourne,VIC")
+- `COUNTRY`: Target country for job search
+- `HOURS_OLD`: Max age of job listings (hours)
+- `RESULTS_WANTED`: Number of results per platform
+- **Optional**: Adjust matching threshold (`JOB_MATCH_THRESHOLD`) and scraping limits (`MAX_JOBS_TO_SCRAPE`)
+
+### Default Values
+Most parameters have sensible defaults:
+- Check interval: 60 minutes
+- Max description length: 15,000 characters
+- Search terms include AI/IT leadership roles
+
+**Note**: Copy `.env.example` to `.env` and replace placeholder values with your actual credentials. Keep this file secure and never commit it to version control.
+
 ```
 
 ## Usage 🚦

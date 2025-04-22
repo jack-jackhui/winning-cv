@@ -65,14 +65,98 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 2. 编辑配置参数：
+**`.env.example`**
 ```ini
-# Azure AI 配置
-AZURE_OPENAI_KEY=您的API密钥
-AZURE_ENDPOINT=https://您的终端节点.openai.azure.com
+# === Airtable Configuration ===
+AIRTABLE_PAT=your-airtable-personal-access-token
+AIRTABLE_BASE_ID=your-base-id
+AIRTABLE_TABLE_ID=your-main-table-id
+AIRTABLE_TABLE_ID_HISTORY=your-history-table-id
 
-# 通知渠道配置
-EMAIL_HOST=SMTP服务器地址
-TELEGRAM_BOT_TOKEN=机器人令牌
+# === Linkedin & Seek URLs for Scraping Jobs ===
+LINKEDIN_JOB_URL=https://linkedin.com
+SEEK_JOB_URL=https://seek.com
+
+# === Azure AI Configuration ===
+AZURE_AI_ENDPOINT=https://your-azure-endpoint.openai.azure.com
+AZURE_AI_API_KEY=your-azure-ai-api-key
+AZURE_DEPLOYMENT=your-deployment-name
+
+# === Notification Settings ===
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
+WECHAT_API_KEY=your-wechat-api-key
+WECHAT_BOT_URL=https://your-wechat-webhook-url
+EMAIL_USER=your-email@domain.com
+EMAIL_PASSWORD=your-email-password
+SMTP_SERVER=your-smtp-server.com
+DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
+DEFAULT_TO_EMAIL=user@domain.com
+
+# === Job Search Parameters ===
+LOCATION=Melbourne,VIC
+COUNTRY=australia
+HOURS_OLD=168
+RESULTS_WANTED=10
+JOB_MATCH_THRESHOLD=7
+MAX_JOBS_TO_SCRAPE=50
+CHECK_INTERVAL_MIN=60
+
+# === Advanced Configuration ===
+ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
+GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
+```
+---
+
+## 配置参数说明 🔧
+
+在项目根目录创建 `.env` 文件并配置以下参数：
+
+### 核心服务配置
+- `AIRTABLE_PAT`: Airtable 个人访问令牌
+- `AIRTABLE_BASE_ID`: Airtable 数据库ID
+- `AIRTABLE_TABLE_ID`: 主职位存储表ID
+- `AIRTABLE_TABLE_ID_HISTORY`: 简历生成历史表ID
+
+### AI 服务配置
+- `AZURE_AI_ENDPOINT`: Azure AI 服务终端地址
+- `AZURE_AI_API_KEY`: Azure AI API 密钥
+- `AZURE_DEPLOYMENT`: Azure 部署名称
+
+### 招聘平台URL
+- `LINKEDIN_JOB_URL`: LinkedIn 职位爬取地址
+- `SEEK_JOB_URL`: Seek 职位爬取地址
+
+### 通知服务配置
+- `TELEGRAM_BOT_TOKEN`: Telegram 机器人令牌
+- `TELEGRAM_CHAT_ID`: Telegram 通知频道ID
+- `WECHAT_API_KEY`: 微信API凭证
+- `WECHAT_BOT_URL`: 微信机器人Webhook地址
+- 邮件服务配置 (`EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`)
+
+### 职位搜索参数（Indeed/Glassdoor/Google）
+- `LOCATION`: 默认搜索地区 (例："Melbourne,VIC")
+- `COUNTRY`: 目标国家/地区）
+- `HOURS_OLD`: 职位信息最大时效（小时）
+- `RESULTS_WANTED`: 各平台获取结果数量
+- **可选参数**：匹配阈值 (`JOB_MATCH_THRESHOLD`) 和爬取限制 (`MAX_JOBS_TO_SCRAPE`)
+
+### 默认参数
+系统已预设合理默认值：
+- 检查间隔：60 分钟
+- 最大描述长度：15,000 字符
+- 包含AI/IT管理岗的搜索关键词
+
+**重要提示**： 
+1. 复制 `.env.example` 为 `.env` 并替换示例值
+2. 务必妥善保管此文件，禁止提交到版本控制系统
+3. 实际值需根据您的服务配置进行设置
+
+```ini
+# === 示例配置 ===
+EMAIL_USER=your-email@example.com
+SMTP_SERVER=smtp.example.com
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghijkl-567MNOPQrs
 ```
 
 ## 使用指南 🚦

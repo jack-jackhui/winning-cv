@@ -28,7 +28,7 @@ class Config:
     AZURE_AI_API_KEY = os.getenv("AZURE_AI_API_KEY")
     AZURE_DEPLOYMENT = os.getenv("AZURE_DEPLOYMENT")
 
-    # Additional Search Config
+    # Additional Search Config for Indeed and Glassdoor
     ADDITIONAL_SEARCH_TERM = 'AI IT (manager OR head OR director) "software engineering" leadership'
     GOOGLE_SEARCH_TERM = 'head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week'
     LOCATION = os.getenv('LOCATION', 'Melbourne, VIC')
