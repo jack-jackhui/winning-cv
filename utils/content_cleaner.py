@@ -1,11 +1,10 @@
 from bs4 import BeautifulSoup
-from utils.logger import setup_logger
-
+import logging
 
 class ContentCleaner:
     def __init__(self, max_length=15000):
         self.max_length = max_length
-        self.logger = setup_logger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def clean_html(self, html_content):
         try:

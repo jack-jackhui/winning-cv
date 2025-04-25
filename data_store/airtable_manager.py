@@ -4,12 +4,19 @@ from utils.logger import setup_logger
 from datetime import datetime
 import os
 import logging
+from config.settings import Config
 
 class AirtableManager:
     def __init__(self, api_key, base_id, table_id):
         self.api = Api(api_key)
+        self.base_id = base_id
         self.table = self.api.table(base_id, table_id)
-        self.logger = setup_logger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        self.user_config_table = self.api.table(
+            base_id,
+            Config.AIRTABLE_TABLE_ID_USER_CONFIGS  # Get from settings
+        )
 
         self._history_field_map = {
             "user_email": "user_email",
@@ -30,10 +37,11 @@ class AirtableManager:
             self.logger.error(f"Failed to fetch existing jobs: {str(e)}")
             return set()
 
-    def create_job_record(self, job_data):
+    def create_job_record(self, job_data, user_email: str = "system"):
         """Create new job record with proper column mapping"""
         try:
             record = self.table.create({
+                'User Email': user_email,
                 'Job Title': job_data.get('Job Title'),
                 'Job Description': job_data.get('Job Description'),
                 'Job Date': self._format_date(job_data.get('Job Date')),
@@ -47,7 +55,7 @@ class AirtableManager:
             self.logger.error(f"Create failed: {str(e)}")
             return None
 
-    def update_cv_info(self, job_link, score, cv_url):
+    def update_cv_info(self, job_link, score, cv_url, reasons=None, suggestions=None):
         """Update matching score and CV link for existing job"""
         try:
             record = self.table.first(
@@ -55,9 +63,18 @@ class AirtableManager:
                 fields=["Job Link"]
             )
             if record:
+                update_fields = {
+                    'Matching Score': score,
+                    'CV Link': cv_url
+                }
+                if reasons is not None:
+                    update_fields['Match Reasons'] = "\n".join(reasons) if isinstance(reasons, list) else reasons
+                if suggestions is not None:
+                    update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions,
+                                                                                              list) else suggestions
                 return self.table.update(
                     record['id'],
-                    {'Matching Score': score, 'CV Link': cv_url}
+                    update_fields
                 )
             return None
         except Exception as e:
@@ -150,3 +167,52 @@ class AirtableManager:
         safe_email = user_email.replace("'", "\\'")
         formula = f"{{{field_name}}} = '{safe_email}'"
         return self.get_records_by_filter(formula)
+
+    # ──────────────────────────────────────────────────────────
+    # USER CONFIG TABLE METHODS
+    # ──────────────────────────────────────────────────────────
+    def get_user_config(self, user_email: str) -> dict:
+        """Retrieve user's saved configuration"""
+        try:
+            formula = f"{{user_email}} = '{user_email}'"
+            records = self.user_config_table.all(
+                formula=formula,
+                max_records=1  # Get only the first match
+            )
+            return records[0]['fields'] if records else {}
+        except Exception as e:
+            self.logger.error(f"Config fetch failed: {str(e)}")
+            return {}
+
+    def save_user_config(self, config_data: dict) -> bool:
+        """Store/update user configuration"""
+        try:
+            existing = self.user_config_table.first(
+                formula=f"{{user_email}} = '{config_data['user_email']}'"
+            )
+
+            # Map to lowercase field names expected by Airtable
+            fields = {
+                "user_email": config_data["user_email"],
+                "base_cv_path": config_data["base_cv_path"],
+                "base_cv_link": config_data.get("base_cv_link", ""),
+                "linkedin_job_url": config_data["linkedin_job_url"],
+                "seek_job_url": config_data["seek_job_url"],
+                "max_jobs_to_scrape": config_data["max_jobs_to_scrape"],
+                "additional_search_term": config_data["additional_search_term"],
+                "google_search_term": config_data["google_search_term"],
+                "location": config_data["location"],
+                "hours_old": config_data["hours_old"],
+                "results_wanted": config_data["results_wanted"],
+                "country": config_data["country"]
+            }
+
+            if existing:
+                self.user_config_table.update(existing['id'], fields)
+            else:
+                self.user_config_table.create(fields)
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Config save failed: {str(e)}")
+            return False

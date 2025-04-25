@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    def __getattr__(self, name):
+        # Allow lowercase access
+        upper = name.upper()
+        if hasattr(type(self), upper):
+            return getattr(type(self), upper)
+        raise AttributeError(f"'Config' object has no attribute '{name}'")
+
+    BASE_CV_PATH = os.getenv("BASE_CV_PATH", "user_cv/default_cv.docx")
     RSS_FEED_URL = os.getenv("LINKEDIN_RSS_URL", "your_default_rss_url")
     LINKEDIN_JOB_URL=os.getenv("LINKEDIN_JOB_URL", "https://linkedin.com")
     LINKEDIN_API_KEY = os.getenv("LINKEDIN_API_KEY", "")
@@ -17,6 +25,7 @@ class Config:
     AIRTABLE_UI_HISTORY_TABLE_URL = (
         f"https://airtable.com/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID_HISTORY}"
     )
+    AIRTABLE_TABLE_ID_USER_CONFIGS = os.getenv("AIRTABLE_TABLE_ID_USER_CONFIGS")
     CHECK_INTERVAL_MIN = int(os.getenv("CHECK_INTERVAL_MIN", 60))
     MAX_DESCRIPTION_LENGTH = 15000
     MAX_JOBS_FOR_DESCRIPTION = int(os.getenv("MAX_JOBS_FOR_DESCRIPTION", 10))

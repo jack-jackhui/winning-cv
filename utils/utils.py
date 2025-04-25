@@ -6,6 +6,11 @@ import logging
 from fpdf import FPDF
 import re
 
+class Struct:
+    """Convert dict to object for config"""
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
 def extract_text_from_file(file):
     """Extract text from PDF, DOCX, or TXT files with error handling"""
     try:

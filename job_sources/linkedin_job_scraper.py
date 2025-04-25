@@ -4,16 +4,18 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from DrissionPage import Chromium, ChromiumOptions
 from config.settings import Config
-from utils.logger import setup_logger
+import logging
+import os
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
 
 class LinkedInJobScraper:
-    def __init__(self):
+    def __init__(self, base_url=None):
         self.browser = None
         self.init_drission()
         self.max_jobs_for_description = Config.MAX_JOBS_FOR_DESCRIPTION
         self.max_jobs_to_scrape = Config.MAX_JOBS_TO_SCRAPE
+        self.base_url = base_url or os.getenv("LINKEDIN_JOB_URL")
 
     def init_drission(self):
         """Initialize DrissionPage browser"""

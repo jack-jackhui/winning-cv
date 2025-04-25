@@ -2,6 +2,18 @@
 import re
 import requests
 
+def format_job_description(desc: str) -> str:
+    if not desc:
+        return ""
+    # Replace bullet characters with markdown bullets
+    desc = re.sub(r'^[\-\*\u2022]\s*', '- ', desc, flags=re.MULTILINE)
+    # Add a newline before bullets if missing
+    desc = re.sub(r'([^\n])(\n[\-\*])', r'\1\n\2', desc)
+    # Ensure double newlines after periods (for paragraphs)
+    desc = re.sub(r'([a-z0-9])\. ([A-Z])', r'\1.\n\n\2', desc)
+    # Optional: collapse excessive linebreaks
+    desc = re.sub(r'\n{3,}', '\n\n', desc)
+    return desc.strip()
 
 def upload_pdf_to_wordpress(
         file_path: str,
@@ -162,7 +174,6 @@ def clean_llm_output(content: str) -> str:
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     return cleaned.strip()
 
-# ui/helpers.py
 def strip_llm_contact_block(md, contact):
     """
     Remove only the duplicate contact line pattern:
@@ -190,7 +201,6 @@ def strip_llm_contact_block(md, contact):
     )
 
     return re.sub(pattern, '', md, flags=re.MULTILINE)
-
 
 def extract_contact_info(cv_text: str) -> dict:
     """

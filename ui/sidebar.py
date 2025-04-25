@@ -1,6 +1,5 @@
 import streamlit as st
 
-
 def render_sidebar() -> tuple[str, str]:
     """Draw the left sidebar. Returns (user_email, mode)."""
     # Main content first
@@ -8,7 +7,7 @@ def render_sidebar() -> tuple[str, str]:
     st.sidebar.markdown("---")
 
     # Email input
-    email = st.sidebar.text_input("Your email (placeholder)", "")
+    email = st.sidebar.text_input("Your email", "")
     if not email:
         st.sidebar.warning("Enter your email to continue")
         # Add footer before stopping
@@ -26,7 +25,7 @@ def render_sidebar() -> tuple[str, str]:
     st.sidebar.markdown("---")
     mode = st.sidebar.radio(
         "What would you like to do?",
-        ["Generate New CV", "View History"]
+        ["Generate New CV", "Run Job Search", "View History"]
     )
 
     # Add footer after user options
@@ -46,8 +45,7 @@ def render_sidebar() -> tuple[str, str]:
     </style>
     <div class="sidebar-footer" align="center">
         Powered by <strong>Winning CV AI</strong><br>
-        Built with 🚀 by <a href="https://jackhui.com.au" target="_blank">@jackhui</a><br>
-        <a href="https://jackhui.com.au" target="_blank">jackhui.com.au</a>
+        Built with 🗳️ by <a href="https://jackhui.com.au" target="_blank">@jackhui</a><br>        
     </div>
     """, unsafe_allow_html=True)
 

@@ -1,11 +1,10 @@
 # utils/cv_loader.py
 from utils.utils import extract_text_from_file
-from utils.logger import setup_logger
 import os
 import io
 import logging
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
 
 def load_cv_content(file_path="user_cv/CV_Jack_HUI_08042025_EL.docx"):
     """Load CV content using unified text extraction"""

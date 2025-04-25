@@ -3,7 +3,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import spacy
 import re
 import json
-from utils.logger import setup_logger
+import logging
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
@@ -17,7 +17,7 @@ class JobMatcher:
         self.nlp = spacy.load("en_core_web_sm")
         self.vectorizer = TfidfVectorizer(stop_words="english")
         self.llm_client = self._init_azure_llm()
-        self.logger = setup_logger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def _init_azure_llm(self):
         """Initialize Azure LLM client using centralized config"""

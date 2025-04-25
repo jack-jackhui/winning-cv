@@ -1,10 +1,19 @@
+# utils/logger.py
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
 from pathlib import Path
 
+# Add initialization flag
+_LOGGER_INITIALIZED = False
 
 def setup_logger(log_file=None, level=logging.DEBUG):
     """Configure root logger with handlers and third-party log levels"""
+    global _LOGGER_INITIALIZED
+
+    if _LOGGER_INITIALIZED:
+        return logging.getLogger()
+
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
@@ -18,15 +27,21 @@ def setup_logger(log_file=None, level=logging.DEBUG):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # File handler (all levels)
+    # File handler with rotation
     if log_file:
-        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = RotatingFileHandler(
+            filename=log_path,
+            maxBytes=5 * 1024 * 1024,  # 5MB
+            backupCount=3,
+            encoding='utf-8'
+        )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.DEBUG)
         root_logger.addHandler(file_handler)
-
-    # Console handler (info+ only)
+    # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.INFO)
@@ -42,4 +57,5 @@ def setup_logger(log_file=None, level=logging.DEBUG):
     for logger_name, log_level in third_party_loggers.items():
         logging.getLogger(logger_name).setLevel(log_level)
 
+    _LOGGER_INITIALIZED = True
     return root_logger

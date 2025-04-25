@@ -15,6 +15,89 @@ Winning CV is an open-source AI app that revolutionizes job applications by auto
 
 **Stop sending generic resumes** - Get AI-powered precision targeting for every application!
 
+
+---
+
+## New Interactive UI Workflow 🚦
+
+### Search for Jobs Directly from the Web App
+
+Winning CV now features an enhanced **web-based user interface** where you can configure your job search and generate tailored CVs without writing a single line of code!
+
+**You can:**
+- Search for jobs directly from the app, across multiple job platforms.
+- Save your search configurations and update them any time.
+- Generate customized CVs for each job with a single click.
+
+### How It Works
+
+1. **Configure Your Search**
+   - In the web UI, go to the **"Run Job Search"** section.
+   - Upload your base CV (PDF or DOCX).
+   - Enter your preferences: location, keywords, number of jobs, etc.
+   - For each supported job board, provide the relevant search URL.
+
+2. **LinkedIn & Seek Integration**
+   - **LinkedIn:** Paste any LinkedIn job search results URL (for example, after filtering for your desired roles or location on LinkedIn Jobs).
+   - **Seek:** Paste any Seek search results URL (after applying filters on seek.com.au).
+   - The app will scrape jobs from the URLs you provide, so make sure the URLs represent your search criteria.
+
+3. **Save & Run**
+   - Your configuration is saved per user and updated automatically if you change your preferences.
+   - Click **"Save & Run Search"** to aggregate job postings from the specified platforms.
+   - The app will analyze each job description against your CV and display a list of matches, complete with compatibility scores and download links for tailored resumes.
+
+4. **View & Manage Results**
+   - See detailed matching breakdowns for each job found.
+   - Download application-ready, AI-tailored CVs instantly.
+   - Edit your search configuration any time to refine your job search.
+
+### Supported Job Platforms
+
+- **LinkedIn:** Paste your custom search results URL.
+- **Seek:** Paste your custom search results URL.
+- **Indeed, Glassdoor, Google Jobs:** Enter keywords or search terms for additional AI-driven aggregation.
+
+> **Note:**
+> The quality and relevance of jobs depend on the URLs you provide.
+> For best results, use the official job search and filtering tools on each platform to create URLs reflecting your interests, then copy those URLs into the app.
+
+---
+
+## Example: Using the Web App
+
+1. **Open the Web Dashboard**
+   ```
+   python webui_new.py
+   ```
+   Then visit [http://localhost:8501](http://localhost:8501) in your browser.
+
+2. **Configure Your Search**
+   - Upload your base CV.
+   - Paste your job board search URLs:
+     - e.g., `https://www.linkedin.com/jobs/search/?keywords=data+scientist&location=Melbourne`
+     - e.g., `https://www.seek.com.au/data-scientist-jobs/in-Melbourne`
+   - Set job search preferences (location, keywords, etc).
+
+3. **Run and Review**
+   - Click **Save & Run Search**.
+   - Instantly view all matching jobs with their compatibility scores.
+   - Download custom CVs for each match.
+
+---
+
+## Why Provide URLs?
+For job boards like LinkedIn and Seek, the app relies on your search URLs to fetch the most relevant jobs for you. This approach:
+- Offers you total control over search filters and criteria.
+- Ensures the app always works with the latest job postings displayed to you.
+- Makes the system compatible with changing user preferences or platform UI.
+
+---
+
+**Upgrade your job search workflow with the new Winning CV web UI and precision job aggregation!**
+
+---
+
 ## Key Features 🔥
 ### 🔍 Smart Job Aggregation
 - Real-time crawling of LinkedIn, Seek, Indeed (with more platforms)
@@ -56,7 +139,18 @@ Winning CV is an open-source AI app that revolutionizes job applications by auto
 ```bash
 git clone https://github.com/jack-jackhui/winning-cv.git
 cd winning-cv
-pip install -r requirements.txt
+```
+#### Install base requirements
+```
+uv pip install -r requirements.txt
+```
+#### Download spaCy model
+```
+python -m spacy download en-core-web-sm
+```
+#### Verify installation
+```
+python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
 ```
 
 ### Configuration
@@ -65,6 +159,9 @@ pip install -r requirements.txt
 
 **`.env.example`**
 ```ini
+# === Base CV Configuration ===
+BASE_CV_PATH=Path-to-your-base-CV-file 
+
 # === Airtable Configuration ===
 AIRTABLE_PAT=your-airtable-personal-access-token
 AIRTABLE_BASE_ID=your-base-id
@@ -111,6 +208,7 @@ GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last wee
 Create `.env` file in project root with these required values:
 
 ### Essential Services
+- `BASE_CV_PATH`: Path to your base CV document (e.g., "user_cv/my_cv.docx")
 - `AIRTABLE_PAT`: Airtable Personal Access Token
 - `AIRTABLE_BASE_ID`: Your Airtable base ID
 - `AIRTABLE_TABLE_ID`: Main table ID for job storage

@@ -2,21 +2,76 @@ import streamlit as st
 from ui.sidebar     import render_sidebar
 from ui.generate_ui import show_generate_ui
 from ui.history_ui  import show_history_ui
+from data_store.airtable_manager import AirtableManager
+from config.settings import Config
+from ui.job_search_ui import show_job_search_ui, display_search_results
+from utils.logger import setup_logger
+import logging
 
 def main():
+    # Initialize logging FIRST THING
+    setup_logger(
+        log_file="logs/web_app.log",  # Central log file path
+        level=logging.DEBUG
+    )
     st.set_page_config(
         page_title="Winning CV - Powered by AI",
         page_icon="⚡",
+        layout="wide",
         menu_items={
             "About": "https://jackhui.com.au"
         }
     )
 
+    # Add custom CSS for footer
+    st.markdown("""
+            <style>
+            footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: var(--background-color);
+                color: var(--text-color);
+                padding: 1rem;
+                text-align: center;
+                border-top: 1px solid var(--secondary-background-color);
+                z-index: 1000;
+            }
+            footer a {
+                color: var(--text-color) !important;
+                text-decoration: none;
+                margin: 0 0.5rem;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+    # Initialize Airtable manager
+    airtable = AirtableManager(
+        Config.AIRTABLE_API_KEY,
+        Config.AIRTABLE_BASE_ID,
+        Config.AIRTABLE_TABLE_ID
+    )
+
     user_email, mode = render_sidebar()
     if mode == "Generate New CV":
         show_generate_ui(user_email)
+    elif mode == "Run Job Search":  # New mode
+        if "search_results" in st.session_state:
+            display_search_results()
+        else:
+            show_job_search_ui(user_email, airtable)
     else:
         show_history_ui(user_email)
+
+    # Add footer content
+    st.markdown("""
+        <footer>
+            ⭐ Winning CV Powered by AI | 
+            <a href="https://jackhui.com.au/" target="_blank">About</a> |
+            <a href="https://jackhui.com.au/" target="_blank">Contact</a>
+        </footer>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

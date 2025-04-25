@@ -6,7 +6,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class AdditionalJobProcessor:
     def __init__(self, content_cleaner, config):
         self.content_cleaner = content_cleaner
@@ -44,8 +43,11 @@ class AdditionalJobProcessor:
         if jobs_df.empty:
             return []
 
+        # Remove duplicate columns
+        jobs_df = jobs_df.loc[:, ~jobs_df.columns.duplicated()]
+
         # Ensure expected columns exist
-        for col in ['salary', 'employment_type']:
+        for col in ['salary', 'employment_type', 'description']:
             if col not in jobs_df.columns:
                 jobs_df[col] = None
 
@@ -81,14 +83,14 @@ class AdditionalJobProcessor:
         """Ensure consistent Airtable schema"""
         try:
             return {
-                "title": job.get("title", "No Title"),
-                "link": job.get("url", ""),
-                "published": job.get("posted_date", ""),
-                "company": job.get("company", "Unknown Company"),
-                "location": job.get("location", ""),
-                "description": job.get("description", ""),
-                "salary": job.get("salary", ""),
-                "employment_type": job.get("employment_type", "")
+                "Job Title": job.get("title", "No Title"),
+                "Job Link": job.get("url", ""),
+                "Job Date": job.get("posted_date", ""),
+                "Company": job.get("company", "Unknown Company"),
+                "Location": job.get("location", ""),
+                "Job Description": job.get("description", ""),
+                "Salary": job.get("salary", ""),
+                "Employment Type": job.get("employment_type", "")
             }
         except KeyError as e:
             logger.warning(f"Invalid job format: {str(e)}")
