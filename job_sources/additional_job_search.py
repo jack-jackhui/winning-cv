@@ -29,13 +29,13 @@ class AdditionalJobProcessor:
         """Core scraping functionality"""
         return scrape_jobs(
             site_name=["indeed", "glassdoor", "google"],
-            search_term=self.config.ADDITIONAL_SEARCH_TERM,
-            google_search_term=self.config.GOOGLE_SEARCH_TERM or self.config.ADDITIONAL_SEARCH_TERM,
-            location=self.config.LOCATION,
+            search_term=self.config.additional_search_term,
+            google_search_term=self.config.google_search_term or self.config.additional_search_term,
+            location=self.config.location,
             job_type="fulltime",
-            results_wanted=self.config.RESULTS_WANTED,
-            hours_old=self.config.HOURS_OLD,
-            country_indeed=self.config.COUNTRY
+            results_wanted=self.config.results_wanted,
+            hours_old=self.config.hours_old,
+            country_indeed=self.config.country
         )
 
     def _prepare_for_airtable(self, jobs_df: pd.DataFrame) -> List[Dict]:

@@ -60,3 +60,9 @@ class Config:
     WORDPRESS_SITE = os.getenv("WORDPRESS_SITE")
     WORDPRESS_USERNAME = os.getenv("WORDPRESS_USERNAME")
     WORDPRESS_APP_PASSWORD = os.getenv("WORDPRESS_APP_PASSWORD")
+
+    # New Docker-related settings
+    RUNNING_IN_DOCKER = os.getenv('RUNNING_IN_DOCKER', 'false').lower() == 'true'
+    CHROMIUM_PATH = os.getenv('CHROMIUM_PATH')
+    CHROME_PATH = os.getenv('CHROME_PATH')
+    HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'

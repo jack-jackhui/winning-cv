@@ -1,0 +1,53 @@
+# Development specific
+.git
+.gitignore
+*.map
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/Editors
+.vscode
+.idea
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs
+*.log
+
+# streamlit config
+.streamlit
+
+# UWSGI config
+uwsgi.ini
+
+# Env variables
+.env
+.env*
+.env.build_config
+
+# DB
+db.sqlite3
+
+# Docker confgi
+Dockerfile
+docker-compose*.yml
+
+# Build script
+build_and_push.sh
+
+# Generated Files
+./user_cv/
+./customised_cv/
+./temp_audio/
+./temp_files/
+./uploaded_files/
+
+
+# venv files
+./.venv/

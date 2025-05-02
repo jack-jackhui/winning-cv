@@ -1,26 +1,18 @@
+import argparse
 import logging
 import os
-from datetime import datetime
-import uuid
-from typing import List, Dict
 
 from config.settings import Config
 from job_processing.core import JobProcessor
 from utils.logger import setup_logger
 from utils.notifications import notify_all
-"""
-from data_store.airtable_manager import AirtableManager
-from job_sources.linkedin_job_scraper import LinkedInJobScraper
-from job_sources.additional_job_search import AdditionalJobProcessor
-from job_sources.seek_job_scraper import SeekJobScraper
-from utils.content_cleaner import ContentCleaner
-from utils.cv_loader import load_cv_content
-from utils.utils import create_pdf
-from utils.matcher import JobMatcher
-from cv.cv_generator import CVGenerator
-"""
 
-def main(config_data: dict = None):
+
+class Struct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+def main(config_data: dict):
     # ----------------------------------------------------------------------
     # Set up Logging in a "logs" folder
     # ----------------------------------------------------------------------
@@ -34,7 +26,7 @@ def main(config_data: dict = None):
     # Initialize Application Components
     # ----------------------------------------------------------------------
     # Use passed config or load default
-    config = Config() if config_data is None else Struct(**config_data)
+    config = Struct(**config_data)
 
     # ----------------------------------------------------------------------
     # Main Execution (Single Run, No Scheduler)
@@ -42,21 +34,17 @@ def main(config_data: dict = None):
     try:
         processor = JobProcessor(config)
         results = processor.process_jobs()
-
-        # CLI notifications
-        if config_data is None:
-            notify_all(len(results), results, config.AIRTABLE_UI_URL)
+        notify_all(len(results), results, config.airtable_ui_url)
 
         return results
     except Exception as e:
         logger.error(f"Main execution failed: {str(e)}")
         return []
 
-class Struct:
-    """Convert dict to object for config"""
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
-
 if __name__ == "__main__":
-    # CLI mode with default config
-    main()
+    parser = argparse.ArgumentParser(description="Run job search and CV tailoring")
+    parser.add_argument("--user-email", type=str, required=True, help="User email for job search session")
+    args = parser.parse_args()
+    config_data = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
+    config_data["user_email"] = args.user_email
+    main(config_data)

@@ -1,6 +1,8 @@
 .venv
 .venv/*
 .env*
+.env.build_config
+build_and_push.sh
 *.pickle
 /.idea/
 .DS_Store

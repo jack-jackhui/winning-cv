@@ -1,0 +1,35 @@
+services:
+  winning-cv:
+    image: ghcr.io/jack-jackhui/winning-cv:latest
+    container_name: winning-cv
+    restart: unless-stopped
+    ports:
+      - "13000:8501"  # Map host port 13000 to container port 8501
+    volumes:
+      - ./user_cv:/winning-cv/user_cv  # Host directory for input files
+      - cv_data:/winning-cv/customised_cv  # Named volume for persistent output
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - CHROMIUM_PATH=/usr/bin/chromium
+      - HEADLESS=true
+    env_file:
+      - .env
+
+  job-runner: # New service for CLI jobs
+    image: ghcr.io/jack-jackhui/winning-cv:latest
+    restart: "no"
+    volumes:
+      - ./user_cv:/winning-cv/user_cv
+      - cv_data:/winning-cv/customised_cv
+    environment:
+      - CHROMIUM_PATH=/usr/bin/chromium
+      - HEADLESS=true
+    env_file: # Use same env file as webui
+      - .env
+    command: [ "python", "main.py", "--user-email", "$$USER_EMAIL" ]
+
+volumes:
+  cv_data:  # Named volume declaration for persistent storage

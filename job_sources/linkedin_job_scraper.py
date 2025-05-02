@@ -20,7 +20,19 @@ class LinkedInJobScraper:
     def init_drission(self):
         """Initialize DrissionPage browser"""
         options = ChromiumOptions()
-        options.auto_port(True).headless(True).no_imgs(True).mute(True).incognito(True).set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
+        # Get values from Config
+        config = Config()
+
+        options.auto_port(True) \
+            .headless(config.HEADLESS) \
+            .no_imgs(True) \
+            .mute(True) \
+            .incognito(True) \
+            .set_paths(browser_path=config.CHROMIUM_PATH or config.CHROME_PATH) \
+            .set_user_agent("Mozilla/5.0...")
+        if config.RUNNING_IN_DOCKER:
+            options.no_sandbox(True)
+            options.disable_gpu(True)
 
         self.browser = Chromium(options)
 

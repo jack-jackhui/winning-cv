@@ -131,11 +131,80 @@ For job boards like LinkedIn and Seek, the app relies on your search URLs to fet
 - Customizable prompt engineering
 
 ## Getting Started 🛠️
+Here's the updated README with Docker-related additions:
+
+```markdown
+<div align="center">
+[...existing header content unchanged...]
+</div>
+
+## Development Environments 🖥️
+
+### Local Development (macOS/Windows)
+- Requires Chrome browser installed
+- Uses local Chrome instance for scraping
+- Set these environment variables in `.env`:
+  ```ini
+  CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" # macOS
+  # CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe" # Windows
+  HEADLESS=false
+  RUNNING_IN_DOCKER=false
+  ```
+
+### Docker Deployment
+- Uses built-in Chromium browser
+- Automatic headless mode configuration
+- Set these variables in `docker-compose.yml`:
+  ```yaml
+  environment:
+    - CHROMIUM_PATH=/usr/bin/chromium
+    - HEADLESS=true
+    - RUNNING_IN_DOCKER=true
+  ```
+
+## Getting Started 🛠️
+
+### Docker Deployment (Recommended)
+
+1. **Build and Run**
+Download the docker-compose.yml file from this repo.
+   ```bash
+   docker compose up -d --build
+   ```
+
+2. **Access Web UI**
+   ```bash
+   docker compose exec winning-cv streamlit run webui_new.py
+   ```
+   Visit `http://localhost:13000`
+
+3. **View Logs**
+   ```bash
+   docker compose logs -f winning-cv
+   ```
+
+### Docker Configuration
+Example `docker-compose.yml`:
+```yaml
+services:
+  winning-cv:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - CHROMIUM_PATH=/usr/bin/chromium
+      - HEADLESS=true
+      - RUNNING_IN_DOCKER=true
+      - AZURE_AI_API_KEY=your-azure-key
+      - AIRTABLE_PAT=your-airtable-token
+    volumes:
+      - ./user_cv:/app/user_cv
+```
+
+### Manual Installation
 ### Prerequisites
 - Python 3.10+
 - LLM API key (Azure OpenAI or local Ollama instance)
-
-### Installation
 ```bash
 git clone https://github.com/jack-jackhui/winning-cv.git
 cd winning-cv
@@ -196,7 +265,11 @@ RESULTS_WANTED=10
 JOB_MATCH_THRESHOLD=7
 MAX_JOBS_TO_SCRAPE=50
 CHECK_INTERVAL_MIN=60
-
+# Browser Configuration
+CHROME_PATH="/path/to/chrome"      # Local development only
+CHROMIUM_PATH="/usr/bin/chromium"  # Docker only
+HEADLESS="true"                    # true for Docker, false for local
+RUNNING_IN_DOCKER="false"          # Auto-set in Docker
 # === Advanced Configuration ===
 ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
 GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
@@ -245,27 +318,15 @@ Most parameters have sensible defaults:
 
 **Note**: Copy `.env.example` to `.env` and replace placeholder values with your actual credentials. Keep this file secure and never commit it to version control.
 
-```
-
 ## Usage 🚦
-1. **Set Base CV**
+1. **Start Job Monitoring**
 ```bash
-python main.py --setup-cv path/to/your_cv.pdf
+python main.py --user-email <your-email>
 ```
 
-2. **Start Job Monitoring**
-```bash
-python main.py --daemon
-```
-
-3. **Access Dashboard**
+2. **Access Dashboard**
 ```bash
 python webui_new.py  # Local web interface at http://localhost:8501
-```
-
-4. **Generate Tailored CV**
-```bash
-python main.py --generate-cv JOB_ID_12345
 ```
 
 ## Roadmap 🗺️
