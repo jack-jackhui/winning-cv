@@ -131,67 +131,163 @@ Winning CV 现已支持**全新网页界面**，你可以直接在浏览器中�
 - 即将支持Ollama本地大模型
 - 可定制的提示词工程
 
-## 快速开始 🛠️
-### 环境要求
-- Python 3.10+
-- 大模型API密钥（Azure OpenAI 或本地Ollama）
+## 🚀 快速开始
 
-### 安装步骤
-```bash
-git clone https://github.com/jack-jackhui/winning-cv.git
-cd winning-cv
-pip install -r requirements.txt
-```
-#### Install base requirements
-```
-uv pip install -r requirements.txt
-```
-#### Download spaCy model
-```
-python -m spacy download en-core-web-sm
-```
-#### Verify installation
-```
-python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
-```
-### 配置说明
-1. 复制环境文件：
-```bash
-cp .env.example .env
-```
-2. 编辑配置参数：
-**`.env.example`**
+欢迎使用 Winning CV！本项目支持**快速 Docker 部署**（强烈推荐）和**本地手动安装**（适合开发者和高级用户）。
+所有配置均通过 `.env` 文件集中管理。
+
+---
+
+### 🟢 方式一：Docker 快速部署（推荐）
+
+1. **克隆本仓库（或仅下载 docker-compose.yml 和 .env.example）**
+   ```bash
+   git clone https://github.com/jack-jackhui/winning-cv.git
+   cd winning-cv
+   ```
+
+2. **创建你的 `.env` 配置文件**
+   ```bash
+   cp env.example .env
+   ```
+   编辑 `.env`，填写所有必需配置项（详见[下方配置说明](#配置)）。
+
+3. **（可选，推荐）检查并编辑 `docker-compose.yml`**
+
+   示例 `docker-compose.yml`（详情参见仓库）：
+   ```yaml
+   version: '3.8'
+   services:
+     winning-cv:
+       image: ghcr.io/jack-jackhui/winning-cv:latest
+       container_name: winning-cv
+       restart: unless-stopped
+       ports:
+         - "13000:8501"  # 主机端口 13000 映射到容器 8501
+       volumes:
+         - ./user_cv:/winning-cv/user_cv
+         - cv_data:/winning-cv/customised_cv
+       env_file:
+         - .env
+   volumes:
+     cv_data:
+   ```
+
+4. **启动应用**
+   ```bash
+   docker compose up -d
+   ```
+
+5. **访问 Web 界面**
+   - 浏览器访问 [http://localhost:13000](http://localhost:13000)
+
+6. **查看日志（可选）**
+   ```bash
+   docker compose logs -f winning-cv
+   ```
+
+> **注意：**
+> 必须拥有有效的 `.env` 文件并正确填写所有参数。
+> 所有配置（API 密钥、爬取网址、通知设置等）均从该文件读取。
+
+---
+
+### 🧑‍💻 方式二：本地手动安装（开发/高级用户）
+
+1. **克隆仓库**
+   ```bash
+   git clone https://github.com/jack-jackhui/winning-cv.git
+   cd winning-cv
+   ```
+
+2. **创建 `.env` 配置文件**
+   ```bash
+   cp env.example .env
+   ```
+   按下方说明填写配置。
+
+3. **安装依赖**
+   - 需 Python 3.10+ 环境
+   - 需安装最新版 Google Chrome 浏览器，并在 `.env` 中正确配置其路径
+   - 推荐使用 [uv](https://github.com/astral-sh/uv) 安装依赖（或用 pip）
+
+4. **安装 Python 依赖**
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+
+5. **下载并安装 spaCy 语言模型**
+   ```bash
+   python -m spacy download en-core-web-sm
+   python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
+   ```
+
+6. **在 `.env` 中配置浏览器路径**
+   - **macOS 示例：**
+     ```ini
+     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+     HEADLESS=false
+     RUNNING_IN_DOCKER=false
+     ```
+   - **Windows 示例：**
+     ```ini
+     CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
+     HEADLESS=false
+     RUNNING_IN_DOCKER=false
+     ```
+
+7. **本地运行应用**
+   - 启动 Web 界面：
+     ```bash
+     python webui_new.py
+     ```
+     浏览器访问 [http://localhost:8501](http://localhost:8501)
+   - 运行命令行任务：
+     ```bash
+     python main.py --user-email <your-email>
+     ```
+
+---
+
+## ⚙️ 配置
+
+所有配置均通过项目根目录下的 `.env` 文件统一管理。
+**请先复制** `.env.example` 到 `.env`，再填写各项参数。
+
+<details>
+<summary>点击展开完整 <code>.env.example</code> 模板</summary>
+
 ```ini
-# === Base CV Configuration ===
-BASE_CV_PATH=Path-to-your-base-CV-file 
+# === 基础简历配置 ===
+BASE_CV_PATH=你的基础简历文档路径
 
-# === Airtable Configuration ===
-AIRTABLE_PAT=your-airtable-personal-access-token
-AIRTABLE_BASE_ID=your-base-id
-AIRTABLE_TABLE_ID=your-main-table-id
-AIRTABLE_TABLE_ID_HISTORY=your-history-table-id
+# === Airtable 配置 ===
+AIRTABLE_PAT=你的 Airtable 个人访问令牌
+AIRTABLE_BASE_ID=你的 Airtable Base ID
+AIRTABLE_TABLE_ID=主表格 ID
+AIRTABLE_TABLE_ID_HISTORY=历史记录表格 ID
 
-# === Linkedin & Seek URLs for Scraping Jobs ===
+# === 职位爬取网址 ===
 LINKEDIN_JOB_URL=https://linkedin.com
 SEEK_JOB_URL=https://seek.com
 
-# === Azure AI Configuration ===
+# === Azure AI 配置 ===
 AZURE_AI_ENDPOINT=https://your-azure-endpoint.openai.azure.com
-AZURE_AI_API_KEY=your-azure-ai-api-key
-AZURE_DEPLOYMENT=your-deployment-name
+AZURE_AI_API_KEY=你的 Azure AI API Key
+AZURE_DEPLOYMENT=你的部署名
 
-# === Notification Settings ===
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token
-TELEGRAM_CHAT_ID=your-telegram-chat-id
-WECHAT_API_KEY=your-wechat-api-key
-WECHAT_BOT_URL=https://your-wechat-webhook-url
-EMAIL_USER=your-email@domain.com
-EMAIL_PASSWORD=your-email-password
-SMTP_SERVER=your-smtp-server.com
-DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
-DEFAULT_TO_EMAIL=user@domain.com
+# === 通知设置 ===
+TELEGRAM_BOT_TOKEN=Telegram Bot Token
+TELEGRAM_CHAT_ID=Telegram 聊天 ID
+WECHAT_API_KEY=微信 API Key
+WECHAT_BOT_URL=微信 Webhook 地址
+EMAIL_USER=你的邮箱账号
+EMAIL_PASSWORD=邮箱密码
+SMTP_SERVER=SMTP服务器地址
+DEFAULT_FROM_EMAIL=发信邮箱
+DEFAULT_TO_EMAIL=默认收件邮箱
 
-# === Job Search Parameters ===
+# === 职位搜索参数 ===
 LOCATION=Melbourne,VIC
 COUNTRY=australia
 HOURS_OLD=168
@@ -200,84 +296,74 @@ JOB_MATCH_THRESHOLD=7
 MAX_JOBS_TO_SCRAPE=50
 CHECK_INTERVAL_MIN=60
 
-# === Advanced Configuration ===
+# === 浏览器配置 ===
+CHROME_PATH="/path/to/chrome"      # 本地开发专用
+CHROMIUM_PATH="/usr/bin/chromium"  # Docker 专用
+HEADLESS="true"                    # Docker 填 true，本地填 false
+RUNNING_IN_DOCKER="false"          # Docker 自动设置
+
+# === 高级搜索配置 ===
 ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
 GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
 ```
+</details>
+
 ---
 
-## 配置参数说明 🔧
+### 🔑 主要配置说明
 
-在项目根目录创建 `.env` 文件并配置以下参数：
+- **BASE_CV_PATH**：你的基础简历文档路径（如 `user_cv/my_cv.docx`）
+- **Airtable 相关**：`AIRTABLE_PAT`、`AIRTABLE_BASE_ID`、`AIRTABLE_TABLE_ID`、`AIRTABLE_TABLE_ID_HISTORY`
+- **职位爬取网址**：
+  - `LINKEDIN_JOB_URL`：定制化 Linkedin 职位搜索网址
+  - `SEEK_JOB_URL`：定制化 Seek 职位搜索网址
+- **Azure AI**：`AZURE_AI_ENDPOINT`、`AZURE_AI_API_KEY`、`AZURE_DEPLOYMENT`
+- **通知通道**：
+  - Telegram：`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+  - 微信：`WECHAT_API_KEY`, `WECHAT_BOT_URL`
+  - 邮件：`EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `DEFAULT_FROM_EMAIL`, `DEFAULT_TO_EMAIL`
+- **职位搜索参数**：`LOCATION`、`COUNTRY`、`HOURS_OLD`、`RESULTS_WANTED`、`JOB_MATCH_THRESHOLD`、`MAX_JOBS_TO_SCRAPE`、`CHECK_INTERVAL_MIN`
+- **浏览器配置**：
+  - Docker 环境：`CHROMIUM_PATH=/usr/bin/chromium`, `HEADLESS=true`, `RUNNING_IN_DOCKER=true`
+  - 本地开发：`CHROME_PATH`, `HEADLESS=false`, `RUNNING_IN_DOCKER=false`
 
-### 核心服务配置
-- `BASE_CV_PATH`: 基础简历文件路径 (例："user_cv/my_cv.docx")
-- `AIRTABLE_PAT`: Airtable 个人访问令牌
-- `AIRTABLE_BASE_ID`: Airtable 数据库ID
-- `AIRTABLE_TABLE_ID`: 主职位存储表ID
-- `AIRTABLE_TABLE_ID_HISTORY`: 简历生成历史表ID
+> **提示：**
+> 大多数参数有默认值，但请根据你的实际需求调整搜索网址和通知设置。
 
-### AI 服务配置
-- `AZURE_AI_ENDPOINT`: Azure AI 服务终端地址
-- `AZURE_AI_API_KEY`: Azure AI API 密钥
-- `AZURE_DEPLOYMENT`: Azure 部署名称
+---
 
-### 招聘平台URL
-- `LINKEDIN_JOB_URL`: LinkedIn 职位爬取地址
-- `SEEK_JOB_URL`: Seek 职位爬取地址
+### 🛡️ 安全与最佳实践
 
-### 通知服务配置
-- `TELEGRAM_BOT_TOKEN`: Telegram 机器人令牌
-- `TELEGRAM_CHAT_ID`: Telegram 通知频道ID
-- `WECHAT_API_KEY`: 微信API凭证
-- `WECHAT_BOT_URL`: 微信机器人Webhook地址
-- 邮件服务配置 (`EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`)
+- **绝不要提交你的 `.env` 文件**（请将 `.env` 加入 `.gitignore`）
+- API Key、令牌、密码等敏感信息务必妥善保管
+- 建议使用 Docker 卷或本地目录保证数据持久化
+- 多人协作开发时，如有新增配置项，请同步更新 `.env.example`
 
-### 职位搜索参数（Indeed/Glassdoor/Google）
-- `LOCATION`: 默认搜索地区 (例："Melbourne,VIC")
-- `COUNTRY`: 目标国家/地区）
-- `HOURS_OLD`: 职位信息最大时效（小时）
-- `RESULTS_WANTED`: 各平台获取结果数量
-- **可选参数**：匹配阈值 (`JOB_MATCH_THRESHOLD`) 和爬取限制 (`MAX_JOBS_TO_SCRAPE`)
+---
 
-### 默认参数
-系统已预设合理默认值：
-- 检查间隔：60 分钟
-- 最大描述长度：15,000 字符
-- 包含AI/IT管理岗的搜索关键词
+## 🚦 使用方法
 
-**重要提示**： 
-1. 复制 `.env.example` 为 `.env` 并替换示例值
-2. 务必妥善保管此文件，禁止提交到版本控制系统
-3. 实际值需根据您的服务配置进行设置
+**Web 界面**
+- **Docker 部署：** 浏览器访问 [http://localhost:13000](http://localhost:13000)
+- **本地开发：** 运行 `python webui_new.py`，浏览器访问 [http://localhost:8501](http://localhost:8501)
 
-```ini
-# === 示例配置 ===
-EMAIL_USER=your-email@example.com
-SMTP_SERVER=smtp.example.com
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghijkl-567MNOPQrs
-```
-
-## 使用指南 🚦
-1. **设置基础简历**
+**命令行批量任务（Docker）：**
 ```bash
-python main.py --setup-cv 您的简历.pdf
+docker compose run --rm job-runner
+```
+**命令行批量任务（本地）：**
+```bash
+python main.py --user-email <你的邮箱>
 ```
 
-2. **启动职位监控**
-```bash
-python main.py --daemon
-```
+---
 
-3. **访问控制面板**
-```bash
-python webui_new.py  # 本地访问 http://localhost:8501
-```
+## 总结
 
-4. **生成定制简历**
-```bash
-python main.py --generate-cv 岗位ID_12345
-```
+- **Docker 部署**：简单快捷，推荐绝大多数用户使用
+- **手动安装**：适合开发者深度定制
+- **所有配置**：集中在 `.env` 文件（建议从 `.env.example` 复制）
+- **安全建议**：敏感信息请勿上传到代码仓库
 
 ## 开发路线 🗺️
 - [ ] 接入更多招聘平台

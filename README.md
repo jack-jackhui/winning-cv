@@ -130,106 +130,135 @@ For job boards like LinkedIn and Seek, the app relies on your search URLs to fet
 - Local LLM support via Ollama (coming soon)
 - Customizable prompt engineering
 
-## Getting Started 🛠️
-Here's the updated README with Docker-related additions:
+## 🚀 Getting Started
 
-```markdown
-<div align="center">
-[...existing header content unchanged...]
-</div>
+Welcome! Winning CV supports both **easy Docker deployment** (recommended for most users) and **manual local installation** (for developers and advanced users).
+All configuration is managed through a single `.env` file.
 
-## Development Environments 🖥️
+---
 
-### Local Development (macOS/Windows)
-- Requires Chrome browser installed
-- Uses local Chrome instance for scraping
-- Set these environment variables in `.env`:
-  ```ini
-  CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" # macOS
-  # CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe" # Windows
-  HEADLESS=false
-  RUNNING_IN_DOCKER=false
-  ```
+### 🟢 Option 1: Quick Deploy with Docker (**Recommended**)
 
-### Docker Deployment
-- Uses built-in Chromium browser
-- Automatic headless mode configuration
-- Set these variables in `docker-compose.yml`:
-  ```yaml
-  environment:
-    - CHROMIUM_PATH=/usr/bin/chromium
-    - HEADLESS=true
-    - RUNNING_IN_DOCKER=true
-  ```
-
-## Getting Started 🛠️
-
-### Docker Deployment (Recommended)
-
-1. **Build and Run**
-Download the docker-compose.yml file from this repo.
+1. **Clone this repository (optional: or just download the docker-compose.yml and .env.example)**
    ```bash
-   docker compose up -d --build
+   git clone https://github.com/jack-jackhui/winning-cv.git
+   cd winning-cv
    ```
 
-2. **Access Web UI**
+2. **Create your `.env` file**
    ```bash
-   docker compose exec winning-cv streamlit run webui_new.py
+   cp env.example .env
    ```
-   Visit `http://localhost:13000`
+   Edit `.env` and provide all necessary values (see [Configuration](#configuration) section below for details).
 
-3. **View Logs**
+3. **(Optional, but recommended) Review and edit `docker-compose.yml`**
+
+   Example `docker-compose.yml` (see repo for latest sample):
+   ```yaml
+   version: '3.8'
+   services:
+     winning-cv:
+       image: ghcr.io/jack-jackhui/winning-cv:latest
+       container_name: winning-cv
+       restart: unless-stopped
+       ports:
+         - "13000:8501"  # Access UI on host port 13000
+       volumes:
+         - ./user_cv:/winning-cv/user_cv
+         - cv_data:/winning-cv/customised_cv
+       env_file:
+         - .env
+   volumes:
+     cv_data:
+   ```
+
+4. **Start the app**
+   ```bash
+   docker compose up -d
+   ```
+
+5. **Access the Web UI**
+   - Open [http://localhost:13000](http://localhost:13000) in your browser.
+
+6. **View logs (optional)**
    ```bash
    docker compose logs -f winning-cv
    ```
 
-### Docker Configuration
-Example `docker-compose.yml`:
-```yaml
-services:
-  winning-cv:
-    build: .
-    ports:
-      - "8501:8501"
-    environment:
-      - CHROMIUM_PATH=/usr/bin/chromium
-      - HEADLESS=true
-      - RUNNING_IN_DOCKER=true
-      - AZURE_AI_API_KEY=your-azure-key
-      - AIRTABLE_PAT=your-airtable-token
-    volumes:
-      - ./user_cv:/app/user_cv
-```
+> **Note:**
+> You must have a valid `.env` file with all required settings.
+> All configuration (API keys, scraping URLs, notifications, etc.) is loaded from this file.
 
-### Manual Installation
-### Prerequisites
-- Python 3.10+
-- LLM API key (Azure OpenAI or local Ollama instance)
-```bash
-git clone https://github.com/jack-jackhui/winning-cv.git
-cd winning-cv
-```
-#### Install base requirements
-```
-uv pip install -r requirements.txt
-```
-#### Download spaCy model
-```
-python -m spacy download en-core-web-sm
-```
-#### Verify installation
-```
-python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
-```
+---
 
-### Configuration
-1. Copy `.env.example` to `.env`
-2. Configure your settings:
+### 🧑‍💻 Option 2: Manual Local Installation (for Developers/Advanced Users)
 
-**`.env.example`**
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/jack-jackhui/winning-cv.git
+   cd winning-cv
+   ```
+
+2. **Create your `.env` file**
+   ```bash
+   cp env.example .env
+   ```
+   Fill in all required configuration (see details below).
+
+3. **Install prerequisites**
+   - **Python 3.10+** required
+   - **Google Chrome** browser must be installed for scraping (see `.env` for path)
+   - [uv](https://github.com/astral-sh/uv) for fast dependency install (or use pip)
+
+4. **Install Python dependencies**
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+
+5. **Download and install spaCy model**
+   ```bash
+   python -m spacy download en-core-web-sm
+   python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
+   ```
+
+6. **Set browser config in `.env`**
+   For **macOS**:
+   ```ini
+   CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+   HEADLESS=false
+   RUNNING_IN_DOCKER=false
+   ```
+   For **Windows**:
+   ```ini
+   CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
+   HEADLESS=false
+   RUNNING_IN_DOCKER=false
+   ```
+
+7. **Run the app locally**
+   - Start Web UI:
+     ```bash
+     python webui_new.py
+     ```
+     Then go to [http://localhost:8501](http://localhost:8501)
+   - Run CLI job:
+     ```bash
+     python main.py --user-email <your-email>
+     ```
+
+---
+
+## ⚙️ Configuration
+
+All configuration is managed via the `.env` file in your project root.
+**Copy** `.env.example` to `.env` and fill in your settings.
+
+<details>
+<summary>Click to view a full <code>.env.example</code> template</summary>
+
 ```ini
 # === Base CV Configuration ===
-BASE_CV_PATH=Path-to-your-base-CV-file 
+BASE_CV_PATH=Path-to-your-base-CV-file
 
 # === Airtable Configuration ===
 AIRTABLE_PAT=your-airtable-personal-access-token
@@ -265,69 +294,79 @@ RESULTS_WANTED=10
 JOB_MATCH_THRESHOLD=7
 MAX_JOBS_TO_SCRAPE=50
 CHECK_INTERVAL_MIN=60
-# Browser Configuration
+
+# === Browser Configuration ===
 CHROME_PATH="/path/to/chrome"      # Local development only
 CHROMIUM_PATH="/usr/bin/chromium"  # Docker only
 HEADLESS="true"                    # true for Docker, false for local
 RUNNING_IN_DOCKER="false"          # Auto-set in Docker
+
 # === Advanced Configuration ===
 ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
 GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
 ```
+</details>
+
 ---
 
-## Configuration Values 🔧
+### 🔑 Configuration Values Reference
 
-Create `.env` file in project root with these required values:
+- **BASE_CV_PATH**: Path to your base CV document (e.g. `user_cv/my_cv.docx`)
+- **Airtable Credentials**: `AIRTABLE_PAT`, `AIRTABLE_BASE_ID`, `AIRTABLE_TABLE_ID`, `AIRTABLE_TABLE_ID_HISTORY`
+- **Job Board URLs**:
+  - `LINKEDIN_JOB_URL`: Your LinkedIn job search results URL (with preferred filters)
+  - `SEEK_JOB_URL`: Your Seek job search results URL
+- **Azure AI**: `AZURE_AI_ENDPOINT`, `AZURE_AI_API_KEY`, `AZURE_DEPLOYMENT`
+- **Notification Channels**:
+  - Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+  - WeChat: `WECHAT_API_KEY`, `WECHAT_BOT_URL`
+  - Email: `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `DEFAULT_FROM_EMAIL`, `DEFAULT_TO_EMAIL`
+- **Job Search Parameters**:
+  - `LOCATION` (e.g. "Melbourne,VIC")
+  - `COUNTRY` (e.g. "australia")
+  - `HOURS_OLD`, `RESULTS_WANTED`, `JOB_MATCH_THRESHOLD`, `MAX_JOBS_TO_SCRAPE`, `CHECK_INTERVAL_MIN`
+- **Browser Configuration**:
+  - For **Docker**: `CHROMIUM_PATH=/usr/bin/chromium`, `HEADLESS=true`, `RUNNING_IN_DOCKER=true`
+  - For **Local**:  `CHROME_PATH`, `HEADLESS=false`, `RUNNING_IN_DOCKER=false`
 
-### Essential Services
-- `BASE_CV_PATH`: Path to your base CV document (e.g., "user_cv/my_cv.docx")
-- `AIRTABLE_PAT`: Airtable Personal Access Token
-- `AIRTABLE_BASE_ID`: Your Airtable base ID
-- `AIRTABLE_TABLE_ID`: Main table ID for job storage
-- `AIRTABLE_TABLE_ID_HISTORY`: History table ID for CV generations
+> **Tip:**
+> Most parameters have sensible defaults.
+> For best results, review and update your job search URLs and notification channels.
 
-### AI Services
-- `AZURE_AI_ENDPOINT`: Azure AI endpoint URL
-- `AZURE_AI_API_KEY`: Azure AI API key
-- `AZURE_DEPLOYMENT`: Azure deployment name
+---
 
-### Linked and Seek URL
-- `LINKEDIN_JOB_URL`: Linkedin URL for scraping jobs
-- `SEEK_JOB_URL`: Seek URL for scraping jobs
+### 🛡️ Security & Best Practices
 
-### Notifications
-- `TELEGRAM_BOT_TOKEN`: Telegram bot token for alerts
-- `TELEGRAM_CHAT_ID`: Your Telegram chat ID
-- `WECHAT_API_KEY`: WeChat API credentials
-- `WECHAT_BOT_URL`: WeChat webhook URL
-- Email settings (`EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`)
+- **Never commit your `.env` file** (`.env` should always be in `.gitignore`)
+- Treat your API keys, tokens, and credentials as secrets
+- Use named Docker volumes for persistent output storage
+- For collaborative development, update `.env.example` if a new setting is introduced
 
-### Job Search Parameters (For Indeed, Glassdoor & Google)
-- `LOCATION`: Default search location (e.g., "Melbourne,VIC")
-- `COUNTRY`: Target country for job search
-- `HOURS_OLD`: Max age of job listings (hours)
-- `RESULTS_WANTED`: Number of results per platform
-- **Optional**: Adjust matching threshold (`JOB_MATCH_THRESHOLD`) and scraping limits (`MAX_JOBS_TO_SCRAPE`)
+---
 
-### Default Values
-Most parameters have sensible defaults:
-- Check interval: 60 minutes
-- Max description length: 15,000 characters
-- Search terms include AI/IT leadership roles
+## 🚦 Usage
 
-**Note**: Copy `.env.example` to `.env` and replace placeholder values with your actual credentials. Keep this file secure and never commit it to version control.
+**Web Dashboard**
+- **Docker:** Visit [http://localhost:13000](http://localhost:13000)
+- **Local:** Run `python webui_new.py` and open [http://localhost:8501](http://localhost:8501)
 
-## Usage 🚦
-1. **Start Job Monitoring**
+**Run CLI Job (Docker):**
 ```bash
-python main.py --user-email <your-email>
+docker compose run --rm job-runner
+```
+**Run CLI Job (Local):**
+```bash
+python main.py --user-email <your@email.com>
 ```
 
-2. **Access Dashboard**
-```bash
-python webui_new.py  # Local web interface at http://localhost:8501
-```
+---
+
+## Summary
+
+- **Docker deployment:** Fast, portable, recommended for most users
+- **Manual installation:** Full control, ideal for contributors and advanced users
+- **All configuration:** Managed via `.env` (copy from `.env.example`)
+- **Security:** Keep secrets out of version control
 
 ## Roadmap 🗺️
 - [ ] Add more job sources integration

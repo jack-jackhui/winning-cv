@@ -1,5 +1,5 @@
 # Use official Python slim image
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 LABEL authors="jackhui"
 
@@ -20,10 +20,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /winning-cv
 
-# Install system dependencies in a single layer
+# Copy requirements first to leverage caching
+COPY requirements.in requirements.txt ./
+
+# Install system dependencies and build Python packages in a single layer
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
+        # Compiler tools
+        build-essential \
+        gcc \
+        g++ \
+        python3-dev \
         # Chromium dependencies
         chromium \
         chromium-driver \
@@ -32,29 +40,26 @@ RUN apt-get update && \
         libfontconfig1 \
         fonts-liberation \
         fonts-noto-cjk \
-        # Python build dependencies
-        build-essential \
-        python3-dev \
+        # SSL dependencies
         libssl-dev \
-        libffi-dev \
+        libffi-dev && \
     # Install UV
-    && curl -Ls https://astral.sh/uv/install.sh | sh -s -- "$TARGETOS" "$TARGETARCH" \
-    && mv /root/.local/bin/uv /usr/local/bin/ \
-    # Cleanup
-    && apt-get purge -y --auto-remove build-essential python3-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Copy requirements first to leverage caching
-COPY requirements.in requirements.txt ./
-
-# Install Python packages with UV
-RUN uv pip install --system \
-    --no-cache-dir \
-    -r requirements.txt \
-    --force-reinstall \
-    --no-deps \
-    streamlit==1.45.0
+    curl -Ls https://astral.sh/uv/install.sh | sh -s -- "$TARGETOS" "$TARGETARCH" && \
+    mv /root/.local/bin/uv /usr/local/bin/ && \
+    # Install Python packages with build tools available
+    uv pip install --system \
+        --no-cache-dir \
+        -r requirements.txt \
+        --force-reinstall \
+        --no-deps && \
+    # Cleanup build dependencies
+    apt-get purge -y --auto-remove \
+        build-essential \
+        gcc \
+        g++ \
+        python3-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create non-root user
 RUN useradd -m -U -u 1001 appuser && \
