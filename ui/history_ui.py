@@ -2,12 +2,20 @@ import streamlit as st
 import pandas as pd
 from data_store.airtable_manager import AirtableManager
 from config.settings import Config
-from datetime import datetime
+# from datetime import datetime
 from streamlit_extras.great_tables import great_tables
 from great_tables import GT, style, loc
 
 def show_history_ui(user_email: str):
     st.title("📂 Your CV Generation History")
+
+    # Auth check
+    if not user_email:
+        st.info("🔒 Log in to view your generation history")
+        if st.button("Log in with Google", key="history_login"):
+            st.session_state.require_login = True
+            st.rerun()
+        return
 
     cfg = Config()
     historyAT = AirtableManager(
@@ -16,7 +24,8 @@ def show_history_ui(user_email: str):
         cfg.AIRTABLE_TABLE_ID_HISTORY
     )
 
-    records = historyAT.get_history_by_user(user_email)
+    with st.spinner("Loading your history..."):
+        records = historyAT.get_history_by_user(user_email)
     if not records:
         st.info("No history found. Generate a CV first!")
         return
@@ -34,11 +43,14 @@ def show_history_ui(user_email: str):
 
     df = pd.DataFrame(history_data)
 
+    # Handle user name display
+    user_name = st.user.name if st.user.is_logged_in else "Guest User"
+
     # Create and format table
     try:
         table = (
             GT(df)
-            .tab_header(title="User Name", subtitle=f"{user_email}")
+            .tab_header(title="User Name", subtitle=f"{user_email}" if user_email else "Preview Mode")
             .fmt_date(columns="Generated Date", date_style="iso")
             .fmt_markdown(columns="CV")
             .opt_vertical_padding(scale=2)
@@ -75,6 +87,7 @@ def show_history_ui(user_email: str):
 
     except Exception as e:
         st.error(f"Error displaying table: {str(e)}")
+        st.write("Here's your history in simple format:")
         # Fallback to original display
         for r in records:
             f = r["fields"]

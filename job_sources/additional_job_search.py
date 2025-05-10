@@ -72,9 +72,9 @@ class AdditionalJobProcessor:
             if not normalized:
                 continue
 
-            normalized["description"] = self.content_cleaner.clean_html(
-                normalized["description"]
-            )
+            # clean the one‐and‐only “Job Description” field
+            raw_html = normalized.get("Job Description", "")
+            normalized["Job Description"] = self.content_cleaner.clean_html(raw_html)
             processed_jobs.append(normalized)
 
         return processed_jobs

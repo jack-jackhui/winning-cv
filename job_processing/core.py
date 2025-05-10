@@ -4,6 +4,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import List, Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from data_store.airtable_manager import AirtableManager
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
@@ -36,21 +37,50 @@ class JobProcessor:
 
     def process_jobs(self) -> List[dict]:
         """Main processing pipeline"""
-        logger.info("Starting job processing pipeline")
+        logger.info("Starting parallel scraping of all sources")
 
-        try:
-            total_new = (
-                    self._process_linkedin_jobs() +
-                    self._process_seek_jobs() +
-                    self._process_additional_sources()
-            )
+        """ old code for sequential run
+                try:
+                    total_new = (
+                            self._process_linkedin_jobs() +
+                            self._process_seek_jobs() +
+                            self._process_additional_sources()
+                    )
 
-            if total_new > 0:
-                return self._process_job_matches()
-            return []
-        except Exception as e:
-            logger.error(f"Processing failed: {str(e)}")
-            raise
+                    if total_new > 0:
+                        return self._process_job_matches()
+                    return []
+                except Exception as e:
+                    logger.error(f"Processing failed: {str(e)}")
+                    raise
+                """
+
+        # Define a small mapping of names → methods
+        sources = {
+            "LinkedIn": self._process_linkedin_jobs,
+            "Seek": self._process_seek_jobs,
+            "Additional Sources": self._process_additional_sources
+        }
+        results = {}
+        # Spin up a threadpool
+        with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+            future_to_name = {
+                pool.submit(fn): name for name, fn in sources.items()
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    count = future.result()
+                    logger.info(f"✔️ {name} added {count} new jobs")
+                    results[name] = count
+                except Exception as e:
+                    logger.error(f"❌ {name} failed: {e}")
+                    results[name] = 0
+        total_new = sum(results.values())
+        logger.info(f"🔢 Total new jobs from all sources: {total_new}")
+        if total_new > 0:
+            return self._process_job_matches()
+        return []
 
     def _process_linkedin_jobs(self) -> int:
         """Handle LinkedIn-specific scraping"""

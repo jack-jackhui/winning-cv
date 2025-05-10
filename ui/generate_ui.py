@@ -10,6 +10,12 @@ from ui.helpers import upload_pdf_to_wordpress, extract_title_from_jd, extract_c
 
 def show_generate_ui(user_email: str):
     st.title("🔍 Generate a Tailored CV")
+    # Handle both auth states
+    if user_email:
+        st.subheader(f"Signed in as: {st.user.name} – {user_email}")
+    else:
+        st.subheader("Preview Mode - Log in to save your work")
+
     # 1) Job Description input
     st.subheader("Job Description")
     job_desc = st.text_area("Paste job description here", height=200)
@@ -24,7 +30,12 @@ def show_generate_ui(user_email: str):
     instructions = st.text_area("Any special instructions?",
                                 placeholder="e.g. Emphasize Python skills…")
     # Validate presence of both JD and CV
-    if st.button("Generate CV"):
+    if st.button("Generate CV", disabled=not user_email):
+        # Final auth check
+        if not user_email:
+            st.session_state.require_login = True
+            st.rerun()
+
         if not job_desc:
             st.warning("Please provide a job description.")
             return
@@ -112,19 +123,31 @@ def show_generate_ui(user_email: str):
             st.error(f"Failed to push PDF to WordPress: {e}")
             return
 
-        # 12) Persist into History table
-        cfg = Config()
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
-        history_data = {
-            "user_email": user_email,
-            "job_title": job_title,
-            "job_description": job_desc,
-            "instructions": instructions,
-            "cv_markdown": raw_md,
-            "cv_pdf_url": cv_pdf_url,
-        }
-        history_at.create_history_record(history_data)
+        # Modified: Only show save options when logged in
+        if user_email:
+            # 12) Persist into History table
+            cfg = Config()
+            history_at = AirtableManager(
+                cfg.AIRTABLE_API_KEY,
+                cfg.AIRTABLE_BASE_ID,
+                cfg.AIRTABLE_TABLE_ID_HISTORY
+            )
+            history_data = {
+                "user_email": user_email,
+                "job_title": job_title,
+                "job_description": job_desc,
+                "instructions": instructions,
+                "cv_markdown": raw_md,
+                "cv_pdf_url": cv_pdf_url,
+            }
+            history_at.create_history_record(history_data)
+        else:
+            st.warning("Preview complete - log in to save your work")
+
+    # Modified: Show login CTA for guests
+    if not user_email:
+        st.markdown("---")
+        st.write("Want to save your work?")
+        if st.button("Log in with Google"):
+            st.session_state.require_login = True
+            st.rerun()

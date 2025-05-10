@@ -1,9 +1,9 @@
 # ui/job_search_ui.py
 import streamlit as st
-import os
+# import os
 import uuid
 from pathlib import Path
-from utils.logger import setup_logger
+# from utils.logger import setup_logger
 from utils.utils import Struct
 import logging
 from data_store.airtable_manager import AirtableManager
@@ -12,7 +12,7 @@ from config.settings import Config
 
 logger = logging.getLogger(__name__)
 
-# === UPDATE: Helper for pretty field labels ===
+# Helper for pretty field labels ===
 FIELD_LABELS = {
     'user_email': 'User Email',
     'base_cv_path': 'Base CV Path',
@@ -26,6 +26,62 @@ FIELD_LABELS = {
     'results_wanted': 'Results Wanted',
     'country': 'Country'
 }
+
+# Create a Config INSTANCE
+config = Config()
+
+@st.dialog("🚀 Running Job Search", width="large")
+def _run_search_dialog(user_email, config_from_airtable):
+    """
+    This function runs in a modal dialog.
+    It must put anything you want *inside* the dialog here.
+    """
+    # simple progress + status text
+    progress = st.progress(0)
+    status = st.empty()
+
+    # Step 1: merge defaults + user config
+    status.text("📦 Merging configuration...")
+    defaults = {
+        k.lower(): v
+        for k, v in Config.__dict__.items()
+        if not k.startswith("_")
+    }
+    cfg_lower = {k.lower(): v for k, v in config_from_airtable.items()}
+    merged = {**defaults, **cfg_lower}
+    progress.progress(15)
+
+    # Step 2: init Airtable manager
+    status.text("🔗 Initializing Airtable manager...")
+    joblist_mgr = AirtableManager(
+        Config.AIRTABLE_API_KEY,
+        Config.AIRTABLE_BASE_ID,
+        Config.AIRTABLE_TABLE_ID
+    )
+    progress.progress(30)
+
+    # Step 3: build JobProcessor
+    status.text("⚙️ Initializing job processor...")
+    processor = JobProcessor(
+        config=Struct(**merged),
+        airtable=joblist_mgr
+    )
+    progress.progress(45)
+
+    # Step 4: run the actual search
+    status.text("🚀 Scraping jobs and matching... this may take a minute.")
+    results = processor.process_jobs()
+    progress.progress(80)
+
+    # Step 5: finalize
+    status.text("✅ Finalizing results...")
+    st.session_state.search_results = results
+    progress.progress(100)
+
+    st.success("🎉 Job search complete! Close this dialog to view your results.")
+    # on click → rerun (which will close dialog and fall back to normal UI)
+    if st.button("Close"):
+        st.rerun()
 
 # === Readonly form display ===
 def show_readonly_config(config: dict, field_labels: dict = None):
@@ -46,13 +102,34 @@ def show_readonly_config(config: dict, field_labels: dict = None):
 def show_job_search_ui(user_email: str, airtable: AirtableManager):
     """UI for configuring and triggering job searches"""
     st.title("🔍 Configure Job Search")
-    st.markdown(f"**Configured for:** {user_email}")
+    if user_email:
+        st.markdown(f"**Configured for:** {user_email}")
+    else:
+        st.markdown("**Preview Mode** (Log in to save configurations)")
 
     # Get user config from "User Config" table
-    user_config = airtable.get_user_config(user_email)
+    user_config = airtable.get_user_config(user_email) if user_email else {}
     edit_mode = st.session_state.get("edit_config", False)
 
-    if user_config and not edit_mode:
+    # PRE-SEED session_state on the first edit render
+    if user_email and user_config and edit_mode and not st.session_state.get("form_initialized"):
+        # map AIRTABLE keys → form keys
+        mapping = {
+            "linkedin_url":          user_config.get("linkedin_job_url", ""),
+            "seek_url":              user_config.get("seek_job_url", ""),
+            "search_term":           user_config.get("additional_search_term", ""),
+            "google_term":           user_config.get("google_search_term", ""),
+            "location":              user_config.get("location", "Melbourne, VIC"),
+            "max_jobs":              int(user_config.get("max_jobs_to_scrape", 5)),
+            "hours_old":             int(user_config.get("hours_old", 48)),
+            "results_wanted":        int(user_config.get("results_wanted", 5)),
+            "country":               user_config.get("country", "Australia"),
+        }
+        for k, v in mapping.items():
+            st.session_state[k] = v
+        st.session_state["form_initialized"] = True
+
+    if user_email and user_config and not edit_mode:
         # Show config summary
         st.subheader("Your Current Configuration")
         # st.json(user_config)
@@ -67,7 +144,9 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
             st.session_state.edit_config = True
             st.rerun()
         if run_clicked:
-            run_job_search(user_email, user_config)
+            # open modal dialog and immediately return
+            _run_search_dialog(user_email, user_config)
+            return
     else:
         # Show form to create config
         with st.form(key="job_search_config"):
@@ -76,6 +155,7 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
             cv_file = st.file_uploader(
                 "Upload your base CV (PDF/DOCX)",
                 type=["pdf", "docx"],
+                key="cv_file",
                 help="This will be used for matching and CV generation"
             )
 
@@ -85,13 +165,15 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
             with col1:
                 linkedin_url = st.text_input(
                     "LinkedIn Jobs URL",
-                    value=user_config.get("LINKEDIN_JOB_URL", ""),
+                    # value=user_config.get("LINKEDIN_JOB_URL", ""),
+                    key="linkedin_url",
                     help="Paste a LinkedIn jobs search URL"
                 )
             with col2:
                 seek_url = st.text_input(
                     "Seek.com.au URL",
-                    value=user_config.get("SEEK_JOB_URL", ""),
+                    # value=user_config.get("SEEK_JOB_URL", ""),
+                    key="seek_url",
                     help="Paste a Seek job search URL"
                 )
 
@@ -99,14 +181,16 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
             st.subheader("3. Additional Job Sources")
             search_term = st.text_input(
                 "Indeed/Glassdoor Search Terms",
-                value=user_config.get("ADDITIONAL_SEARCH_TERM",
-                                          'software engineering'),
-                help="Boolean search terms for Indeed/Glassdoor"
+                # value=user_config.get("ADDITIONAL_SEARCH_TERM",
+                #                          'software engineering'),
+                key="search_term",
+                help="Search terms for Indeed/Glassdoor"
             )
-            google_term = st.text_area(
+            google_term = st.text_input(
                 "Google Custom Search",
-                value=user_config.get("GOOGLE_SEARCH_TERM",
-                                          'software engineering or AI jobs near Melbourne, VIC since last week'),
+                # value=user_config.get("GOOGLE_SEARCH_TERM",
+                #                          'software engineering or AI jobs near Melbourne, VIC since last week'),
+                key="google_term",
                 help="Natural language search terms for Google Jobs"
             )
 
@@ -116,43 +200,52 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
             with col1:
                 location = st.text_input(
                     "Location",
-                    value=user_config.get("LOCATION", "Melbourne, VIC")
+                    key="location",
+                    # value=user_config.get("LOCATION", "Melbourne, VIC")
                 )
                 max_jobs = st.number_input(
                     "Max Jobs to Scrape",
-                    min_value=5,
-                    max_value=200,
-                    value=int(user_config.get("MAX_JOBS_TO_SCRAPE", 10))
+                    min_value=1,
+                    max_value=50,
+                    key="max_jobs",
+                    # value=int(user_config.get("MAX_JOBS_TO_SCRAPE", 10))
                 )
             with col2:
                 hours_old = st.number_input(
                     "Time Since Post (hours)",
                     min_value=24,
                     max_value=720,
-                    value=int(user_config.get("HOURS_OLD", 168))
+                    key="hours_old",
+                    # value=int(user_config.get("HOURS_OLD", 168))
                 )
                 results_wanted = st.number_input(
                     "Results Wanted",
-                    min_value=5,
+                    min_value=1,
                     max_value=50,
-                    value=int(user_config.get("RESULTS_WANTED", 10))
+                    key="results_wanted",
+                    # value=int(user_config.get("RESULTS_WANTED", 10))
                 )
             with col3:
                 country = st.selectbox(
                     "Country",
                     ["Australia", "USA", "Canada", "UK", "New Zealand"],
                     index=["Australia", "USA", "Canada", "UK", "New Zealand"].index(
-                        user_config.get("COUNTRY", "Australia"))
+                        user_config.get("COUNTRY", "Australia")),
+                    key="country"
                 )
 
             # Form submission
             if st.form_submit_button("💾 Save & Run Search"):
+                if not user_email:
+                    st.session_state.require_login = True
+                    st.rerun()
+
                 # Validate inputs
                 if not all([linkedin_url, seek_url, search_term]):
                     st.error("Please fill all required fields")
                     st.stop()
 
-                if not cv_file:
+                if not cv_file and not user_config.get("BASE_CV_PATH"):
                     if not user_config.get("BASE_CV_PATH"):
                         st.error("Please upload a CV file")
                         st.stop()
@@ -173,9 +266,9 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     cv_wp_url = upload_pdf_to_wordpress(
                         file_path=str(cv_path),
                         filename=cv_path.name,
-                        wp_site=Config.wordpress_site,
-                        wp_user=Config.wordpress_username,
-                        wp_app_password=Config.wordpress_app_password
+                        wp_site=config.wordpress_site,
+                        wp_user=config.wordpress_username,
+                        wp_app_password=config.wordpress_app_password
                     )
 
                     st.success(f"CV saved to: {cv_path}")
@@ -201,6 +294,10 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     st.session_state.current_config = config_data
                     st.success("Configuration saved!")
 
+                    # Clean up flags & re-run
+                    st.session_state.edit_config = False
+                    st.session_state.pop("form_initialized", None)
+
                     # Trigger job search
                     with st.spinner("🚀 Launching job search..."):
                         try:
@@ -217,12 +314,15 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                         except Exception as e:
                             logger.error(f"Job search failed: {str(e)}")
                             st.error("Job search failed - check logs for details")
+
+                    st.rerun()
                 else:
                     st.error("Failed to save configuration")
 
     # Always show job results table
     display_search_results(user_email=user_email)
 
+"""
 def run_job_search(user_email, config_from_airtable):
     # Merge config_from_airtable (lowercase keys) with defaults
     defaults = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
@@ -241,9 +341,14 @@ def run_job_search(user_email, config_from_airtable):
     )
     processor.process_jobs()
     st.success("Job search complete. Results updated!")
+"""
 
 def display_search_results(user_email):
     """Show results after search completes"""
+    if not user_email:
+        st.info("Log in to view your saved search results")
+        return
+
     # Create AirtableManager for "Job List" table
 
     from ui.helpers import format_job_description
@@ -290,3 +395,12 @@ def display_search_results(user_email):
                 st.markdown("**Suggestions to Improve Your CV:**")
                 st.markdown(
                     f"- " + "\n- ".join(suggestions.splitlines()) if isinstance(suggestions, str) else suggestions)
+
+    st.markdown("---")
+    if st.button("🔄 Run a new search", key="new_search"):
+        # flip into edit mode & clear the one‐time seed flag
+        st.session_state.edit_config = True
+        st.session_state.pop("form_initialized", None)
+        # optionally clear old results so the UI isn’t confused:
+        st.session_state.pop("search_results", None)
+        st.rerun()

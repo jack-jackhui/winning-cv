@@ -4,6 +4,7 @@
 .env.build_config
 build_and_push.sh
 *.pickle
+secrets.toml
 /.idea/
 .DS_Store
 /*/__pycache_ls_/*

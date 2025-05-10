@@ -8,6 +8,24 @@ from ui.job_search_ui import show_job_search_ui, display_search_results
 from utils.logger import setup_logger
 import logging
 
+# Add login dialog decorator
+@st.dialog("Login Required", width="large")
+def login_dialog():
+    st.write("Please log in with your Google or Microsoft account to continue.")
+    col1, col2 = st.columns(2, gap="small")
+    with col1:
+        icon_col, btn_col = st.columns([1, 5], gap="small")
+        icon_col.image("imgs/google.png", width=40)
+        if btn_col.button("Log in with Google", key="login_google"):
+            st.login("google")
+            st.rerun()
+    with col2:
+        icon_col, btn_col = st.columns([1, 5], gap="small")
+        icon_col.image("imgs/microsoft.png", width=40)
+        if btn_col.button("Log in with Microsoft", key="login_ms"):
+            st.login("microsoft")
+            st.rerun()
+
 def main():
     # Initialize logging FIRST THING
     setup_logger(
@@ -22,6 +40,9 @@ def main():
             "About": "https://jackhui.com.au"
         }
     )
+
+    # Always show sidebar
+    mode = render_sidebar()
 
     # Add custom CSS for footer
     st.markdown("""
@@ -53,12 +74,28 @@ def main():
         Config.AIRTABLE_TABLE_ID
     )
 
-    user_email, mode = render_sidebar()
+    # Check for protected actions
+    if not st.user.is_logged_in:
+        if mode in ["Generate New CV", "Run Job Search", "History"]:
+            login_dialog()
+            st.stop()  # Prevent further execution until logged in
+        elif mode == "Run Job Search" and "search_results" in st.session_state:
+            login_dialog()
+            st.stop()
+
+    # Show logout button only when logged in
+    if st.user.is_logged_in:
+        with st.sidebar:
+            st.button("🔓 Log out", on_click=st.logout)
+
+    user_email = st.user.email if st.user.is_logged_in else None
+    # never assume name exists
+    user_name = getattr(st.user, "name", None)
     if mode == "Generate New CV":
         show_generate_ui(user_email)
-    elif mode == "Run Job Search":  # New mode
+    elif mode == "Run Job Search":
         if "search_results" in st.session_state:
-            display_search_results()
+            display_search_results(user_email)
         else:
             show_job_search_ui(user_email, airtable)
     else:
