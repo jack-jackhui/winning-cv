@@ -19,6 +19,32 @@ Winning CV 是一款开源的AI求职助手，通过智能匹配岗位需求与�
 
 ---
 
+## 认证配置 🔐
+Winning CV 使用 Streamlit 内置的认证系统。要配置认证提供商（Google、GitHub 等），您需要设置 `secrets.toml` 文件。
+
+### 1. 创建 secrets.toml 文件
+在项目根目录创建 `.streamlit` 文件夹并添加 `secrets.toml` 文件：
+
+```bash
+mkdir -p .streamlit
+touch .streamlit/secrets.toml
+```
+
+### 2. 配置认证提供商
+Google OAuth 配置示例：
+```toml
+# .streamlit/secrets.toml
+[connections]
+[connections.google]
+client_id = "你的客户端ID.apps.googleusercontent.com"
+client_secret = "你的客户端密钥"
+redirect_uri = "https://你的域名.com/oauth/callback"
+```
+
+其他提供商（GitHub、AzureAD 等）配置请参考 [Streamlit 认证官方文档](https://docs.streamlit.io/develop/concepts/connections/authentication)。
+
+---
+
 ## 新版交互式 UI 工作流 🚦
 
 ### 直接在 Web 界面搜索职位
@@ -149,6 +175,7 @@ Winning CV 现已支持**全新网页界面**，你可以直接在浏览器中�
 2. **创建你的 `.env` 配置文件**
    ```bash
    cp env.example .env
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
    ```
    编辑 `.env`，填写所有必需配置项（详见[下方配置说明](#配置)）。
 
@@ -167,6 +194,7 @@ Winning CV 现已支持**全新网页界面**，你可以直接在浏览器中�
        volumes:
          - ./user_cv:/winning-cv/user_cv
          - cv_data:/winning-cv/customised_cv
+         - ./.streamlit/secrets.toml:/winning-cv/.streamlit/secrets.toml  # Auth config
        env_file:
          - .env
    volumes:
@@ -332,14 +360,47 @@ GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last wee
 
 ---
 
-### 🛡️ 安全与最佳实践
+### 认证密钥配置
+| 键名 | 描述 | 示例 |
+|-----|-------------|---------|
+| `[connections.google]` | Google OAuth 认证凭证 | `client_id = "1234.apps.googleusercontent.com"` |
+| `[email]` | 邮箱限制规则 | `allowed = ["@company.com"]` |
 
-- **绝不要提交你的 `.env` 文件**（请将 `.env` 加入 `.gitignore`）
-- API Key、令牌、密码等敏感信息务必妥善保管
-- 建议使用 Docker 卷或本地目录保证数据持久化
-- 多人协作开发时，如有新增配置项，请同步更新 `.env.example`
+<details>
+<summary>完整 secrets.toml 示例</summary>
+
+```toml
+# .streamlit/secrets.toml
+[connections]
+[connections.google]
+client_id = "your-google-client-id"
+client_secret = "your-google-secret"
+redirect_uri = "https://your-domain.com/oauth/callback"
+
+[connections.github]
+client_id = "your-github-client-id"
+client_secret = "your-github-secret"
+```
+</details>
 
 ---
+
+### 🛡️ 安全与最佳实践
+- **切勿提交敏感文件**：
+  ```bash
+  echo ".env" >> .gitignore
+  echo ".streamlit/secrets.toml" >> .gitignore
+  ```
+- 设置严格文件权限：
+  ```bash
+  chmod 600 .env .streamlit/secrets.toml
+  ```
+- 定期轮换凭证
+- 在 CI/CD 系统中使用环境变量
+- 查阅 Streamlit 的[安全建议](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
+- 将 API 密钥、令牌和凭证视为机密
+- 使用命名 Docker 卷持久化存储
+- 协作开发时，新增配置需更新 `.env.example`
 
 ## 🚦 使用方法
 
@@ -396,3 +457,18 @@ python main.py --user-email <你的邮箱>
 ---
 
 **开启智能求职新时代** - 点击⭐星标支持项目发展！
+
+---
+
+## 致谢 🙏
+本项目基于以下优秀开源技术构建：
+
+- **[JobSpy](https://github.com/speedyapply/JobSpy)** - Jobs scraper library for LinkedIn, Indeed, Glassdoor, Google, Bayt, & Naukri
+- **[Streamlit](https://streamlit.io)** - 强大的Web界面框架
+- **[Docker](https://www.docker.com)** - 容器化技术
+- **[Azure AI](https://azure.microsoft.com/zh-cn/products/ai-services)** - 核心大语言模型能力
+- **[spaCy](https://spacy.io)** - 自然语言处理引擎
+- **[Ollama](https://ollama.ai)** - 本地LLM集成（即将支持）
+- **[LinkedIn/Seek](https://www.linkedin.com/)** - 职位数据来源
+
+*特别致敬所有开源维护者和贡献者，正是你们让此类项目成为可能。*

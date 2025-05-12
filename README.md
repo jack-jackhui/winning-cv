@@ -15,6 +15,31 @@ Winning CV is an open-source AI app that revolutionizes job applications by auto
 
 **Stop sending generic resumes** - Get AI-powered precision targeting for every application!
 
+---
+
+## Authentication Configuration 🔐
+Winning CV uses Streamlit's built-in authentication system. To configure authentication providers (Google, GitHub, etc.), you'll need to set up a `secrets.toml` file.
+
+### 1. Create secrets.toml
+Create a `.streamlit` directory in your project root and add `secrets.toml`:
+
+```bash
+mkdir -p .streamlit
+touch .streamlit/secrets.toml
+```
+
+### 2. Configure Authentication Providers
+Example configuration for Google OAuth:
+```toml
+# .streamlit/secrets.toml
+[connections]
+[connections.google]
+client_id = "your-client-id.apps.googleusercontent.com"
+client_secret = "your-client-secret"
+redirect_uri = "https://your-domain.com/oauth/callback"
+```
+
+For other providers (GitHub, AzureAD, etc.), see [Streamlit Authentication Documentation](https://docs.streamlit.io/develop/concepts/connections/authentication).
 
 ---
 
@@ -148,6 +173,7 @@ All configuration is managed through a single `.env` file.
 2. **Create your `.env` file**
    ```bash
    cp env.example .env
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
    ```
    Edit `.env` and provide all necessary values (see [Configuration](#configuration) section below for details).
 
@@ -166,6 +192,7 @@ All configuration is managed through a single `.env` file.
        volumes:
          - ./user_cv:/winning-cv/user_cv
          - cv_data:/winning-cv/customised_cv
+         - ./.streamlit/secrets.toml:/winning-cv/.streamlit/secrets.toml  # Auth config
        env_file:
          - .env
    volumes:
@@ -202,6 +229,7 @@ All configuration is managed through a single `.env` file.
 2. **Create your `.env` file**
    ```bash
    cp env.example .env
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
    ```
    Fill in all required configuration (see details below).
 
@@ -249,7 +277,6 @@ All configuration is managed through a single `.env` file.
 ---
 
 ## ⚙️ Configuration
-
 All configuration is managed via the `.env` file in your project root.
 **Copy** `.env.example` to `.env` and fill in your settings.
 
@@ -335,9 +362,45 @@ GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last wee
 
 ---
 
-### 🛡️ Security & Best Practices
+### Authentication Secrets
+| Key | Description | Example |
+|-----|-------------|---------|
+| `[connections.google]` | Google OAuth credentials | `client_id = "1234.apps.googleusercontent.com"` |
+| `[email]` | Email restrictions | `allowed = ["@company.com"]` |
 
-- **Never commit your `.env` file** (`.env` should always be in `.gitignore`)
+<details>
+<summary>Full secrets.toml example</summary>
+
+```toml
+# .streamlit/secrets.toml
+[connections]
+[connections.google]
+client_id = "your-google-client-id"
+client_secret = "your-google-secret"
+redirect_uri = "https://your-domain.com/oauth/callback"
+
+[connections.github]
+client_id = "your-github-client-id"
+client_secret = "your-github-secret"
+
+```
+</details>
+
+---
+
+### 🛡️ Security & Best Practices
+- **Never commit sensitive files**:
+  ```bash
+  echo ".env" >> .gitignore
+  echo ".streamlit/secrets.toml" >> .gitignore
+  ```
+- Set strict file permissions:
+  ```bash
+  chmod 600 .env .streamlit/secrets.toml
+  ```
+- Rotate credentials regularly
+- Use environment variables for CI/CD systems
+- Review Streamlit's [security recommendations](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
 - Treat your API keys, tokens, and credentials as secrets
 - Use named Docker volumes for persistent output storage
 - For collaborative development, update `.env.example` if a new setting is introduced
@@ -397,5 +460,18 @@ Released under [MIT License](LICENSE).
 - Not affiliated with LinkedIn/Seek/Indeed
 
 ---
-
 **Transform Your Job Search** - Star ⭐ this repo to support development!
+---
+## Acknowledgments 🙏
+This project stands on the shoulders of these amazing open-source technologies:
+
+- **[JobSpy](https://github.com/speedyapply/JobSpy)** - Jobs scraper library for LinkedIn, Indeed, Glassdoor, Google, Bayt, & Naukri
+- **[Docker](https://www.docker.com)** - Containerization magic
+- **[Azure AI](https://azure.microsoft.com/en-us/products/ai-services)** - Core LLM capabilities
+- **[spaCy](https://spacy.io)** - NLP processing backbone
+- **[Ollama](https://ollama.ai)** - Local LLM integration (upcoming)
+- **[LinkedIn/Seek](https://www.linkedin.com/)** - Job data sources
+
+*Special thanks to all open-source maintainers and contributors who make projects like this possible.*
+
+---

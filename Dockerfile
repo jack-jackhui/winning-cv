@@ -38,7 +38,6 @@ RUN apt-get update && \
     uv pip install --system \
        --no-cache-dir \
        --force-reinstall \
-       --no-deps \
        -r requirements.txt && \
     \
     # -------------------------------------------------------------------------

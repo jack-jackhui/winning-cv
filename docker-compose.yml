@@ -8,6 +8,7 @@ services:
     volumes:
       - ./user_cv:/winning-cv/user_cv  # Host directory for input files
       - cv_data:/winning-cv/customised_cv  # Named volume for persistent output
+      - ./secrets.toml:/winning-cv/.streamlit/secrets.toml
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_HEADLESS=true
@@ -24,6 +25,7 @@ services:
     volumes:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
+      - ./secrets.toml:/winning-cv/.streamlit/secrets.toml
     environment:
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
