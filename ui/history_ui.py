@@ -12,9 +12,25 @@ def show_history_ui(user_email: str):
     # Auth check
     if not user_email:
         st.info("🔒 Log in to view your generation history")
-        if st.button("Log in with Google", key="history_login"):
-            st.session_state.require_login = True
-            st.rerun()
+        # Create columns for side-by-side buttons with icons
+        col1, col2 = st.columns(2, gap="small")
+
+        with col1:
+            icon_col, btn_col = st.columns([1, 5], gap="small")
+            icon_col.image("imgs/google.png", width=40)
+            if btn_col.button("Log in with Google", key="history_login_google"):
+                st.session_state.oauth_provider = "google"
+                st.session_state.require_login = True
+                st.rerun()
+
+        with col2:
+            icon_col, btn_col = st.columns([1, 5], gap="small")
+            icon_col.image("imgs/microsoft.png", width=40)
+            if btn_col.button("Log in with Microsoft", key="history_login_microsoft"):
+                st.session_state.oauth_provider = "microsoft"
+                st.session_state.require_login = True
+                st.rerun()
+
         return
 
     cfg = Config()
