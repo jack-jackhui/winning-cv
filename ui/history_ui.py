@@ -6,32 +6,43 @@ from config.settings import Config
 from streamlit_extras.great_tables import great_tables
 from great_tables import GT, style, loc
 
+# --- DIALOG FOR LOGIN ---
+@st.dialog("🔒 Please log in to view your CV history", width="medium")
+def _login_dialog():
+    st.write("To access your CV generation history, please log in:")
+    col1, col2 = st.columns(2, gap="small")
+    with col1:
+        icon_col, btn_col = st.columns([1, 5], gap="small")
+        icon_col.image("imgs/google.png", width=40)
+        if btn_col.button("Log in with Google", key="history_login_google_dialog"):
+            st.session_state.oauth_provider = "google"
+            st.session_state.require_login = True
+            st.rerun()
+    with col2:
+        icon_col, btn_col = st.columns([1, 5], gap="small")
+        icon_col.image("imgs/microsoft.png", width=40)
+        if btn_col.button("Log in with Microsoft", key="history_login_microsoft_dialog"):
+            st.session_state.oauth_provider = "microsoft"
+            st.session_state.require_login = True
+            st.rerun()
+
 def show_history_ui(user_email: str):
     st.title("📂 Your CV Generation History")
 
-    # Auth check
+    # --- Auto-trigger login dialog if not logged in ---
     if not user_email:
         st.info("🔒 Log in to view your generation history")
-        # Create columns for side-by-side buttons with icons
-        col1, col2 = st.columns(2, gap="small")
-
-        with col1:
-            icon_col, btn_col = st.columns([1, 5], gap="small")
-            icon_col.image("imgs/google.png", width=40)
-            if btn_col.button("Log in with Google", key="history_login_google"):
-                st.session_state.oauth_provider = "google"
-                st.session_state.require_login = True
-                st.rerun()
-
-        with col2:
-            icon_col, btn_col = st.columns([1, 5], gap="small")
-            icon_col.image("imgs/microsoft.png", width=40)
-            if btn_col.button("Log in with Microsoft", key="history_login_microsoft"):
-                st.session_state.oauth_provider = "microsoft"
-                st.session_state.require_login = True
-                st.rerun()
-
-        return
+        if not st.session_state.get("history_login_dialog_shown"):
+            st.session_state["history_login_dialog_shown"] = True
+            _login_dialog()
+            st.stop()
+        else:
+            # Dialog has been shown, don't show again on rerun
+            _login_dialog()
+            st.stop()
+    # If logged in, clear the session state flag
+    if "history_login_dialog_shown" in st.session_state:
+        del st.session_state["history_login_dialog_shown"]
 
     cfg = Config()
     historyAT = AirtableManager(
@@ -60,7 +71,7 @@ def show_history_ui(user_email: str):
     df = pd.DataFrame(history_data)
 
     # Handle user name display
-    user_name = st.user.name if st.user.is_logged_in else "Guest User"
+    user_name = st.user.name if hasattr(st, "user") and getattr(st.user, "is_logged_in", False) else "Guest User"
 
     # Create and format table
     try:
