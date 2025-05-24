@@ -1,6 +1,6 @@
 # ui/job_search_ui.py
 import streamlit as st
-# import os
+import math
 import uuid
 from pathlib import Path
 # from utils.logger import setup_logger
@@ -9,8 +9,64 @@ import logging
 from data_store.airtable_manager import AirtableManager
 from job_processing.core import JobProcessor
 from config.settings import Config
+from urllib.parse import urlencode, quote
 
 logger = logging.getLogger(__name__)
+
+LINKEDIN_GEOID_MAP = {
+    "Australia": "101452733",
+    "Greater Sydney": "90009524",
+    "Greater Melbourne": "90009521",
+    "United State": "103644278",
+    "United Kindom": "101165590",
+    "Canada": "101174742",
+    "Hong Kong": "103291313",
+    "Singapore": "102454443"
+    # add more as needed
+}
+
+def build_linkedin_search_url(keywords, location, posted_hours=None, country=None, max_jobs=None, geoId_map=None):
+    if geoId_map is None:
+        geoId_map = LINKEDIN_GEOID_MAP  # Use global mapping
+    base = "https://www.linkedin.com/jobs/search/"
+    params = {}
+    if keywords:
+        params['keywords'] = keywords.replace(",", " OR ")
+    if location:
+        geoId = geoId_map.get(location, "")
+        if geoId:
+            params['geoId'] = geoId
+        # Optionally, still set 'location' param for UI, but geoId does the work
+        params['location'] = location
+    if posted_hours:
+        # LinkedIn uses f_TPR=rXXXXXX where XXXXXX is seconds
+        try:
+            seconds = int(posted_hours) * 3600
+            params['f_TPR'] = f"r{seconds}"
+        except:
+            pass
+    return f"{base}?{urlencode(params)}"
+
+def build_seek_url(keywords, category, location, daterange=None, salaryrange=None, salarytype="annual"):
+    """
+    Build a SEEK job search URL from user inputs.
+    """
+    # Convert spaces to dashes and lowercase for URL path parts
+    keywords_path = quote(keywords.replace(" ", "-"))
+    category_path = quote(category.strip().replace(" ", "-").lower())
+    location_path = quote(location.strip().replace(" ", "-").lower())
+    base = f"https://www.seek.com.au/{keywords_path}-jobs-in-{category_path}/in-{location_path}"
+    params = {}
+    if daterange:
+        params['daterange'] = str(daterange)
+    if salaryrange:
+        params['salaryrange'] = salaryrange
+    if salarytype:
+        params['salarytype'] = salarytype
+    if params:
+        return f"{base}?{urlencode(params)}"
+    else:
+        return base
 
 # Helper for pretty field labels ===
 FIELD_LABELS = {
@@ -161,6 +217,7 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
 
             # Section 2: LinkedIn/Seek URL Configuration
             st.subheader("2. Job Board URLs")
+            """
             col1, col2 = st.columns(2)
             with col1:
                 linkedin_url = st.text_input(
@@ -176,6 +233,36 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     key="seek_url",
                     help="Paste a Seek job search URL"
                 )
+            """
+
+            # Common keywords box, used for both LinkedIn and SEEK
+            search_keywords = st.text_input(
+                "Job Search Keywords (used for both LinkedIn and SEEK)",
+                key="search_keywords",
+                help="Keywords or job titles to search for. Example: 'Technology Head', 'Software Engineering Manager'"
+            )
+            # LinkedIn uses this and a shared location (if any)
+            # Add any LinkedIn-specific fields here if needed
+            # SEEK-specific options (apart from keywords)
+            seek_category = st.text_input(
+                "SEEK Category",
+                value="information communication technology",
+                key="seek_category",
+                help="SEEK job category, e.g. 'information communication technology', 'Healthcare', etc."
+            )
+            seek_salaryrange = st.text_input(
+                "SEEK Salary Range (e.g. 200000-)",
+                value="",
+                key="seek_salaryrange",
+                help = "Minimum salary (leave blank for any). Format: '100000-' for minimum, '100000-150000' for a range."
+            )
+            seek_salarytype = st.selectbox(
+                "SEEK Salary Type",
+                ["annual", "hourly"],
+                index=0,
+                key="seek_salarytype",
+                help="Choose 'annual' for yearly salaries (most jobs), or 'hourly' for contract/hourly roles."
+            )
 
             # Section 3: Additional Search Parameters
             st.subheader("3. Additional Job Sources")
@@ -201,14 +288,14 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                 location = st.text_input(
                     "Location",
                     key="location",
-                    # value=user_config.get("LOCATION", "Melbourne, VIC")
+                    help="The city or region to search for jobs. Example: 'Melbourne, VIC' or 'Greater Sydney'."
                 )
                 max_jobs = st.number_input(
                     "Max Jobs to Scrape",
                     min_value=1,
                     max_value=50,
                     key="max_jobs",
-                    # value=int(user_config.get("MAX_JOBS_TO_SCRAPE", 10))
+                    help="Maximum number of job ads to retrieve from each board."
                 )
             with col2:
                 hours_old = st.number_input(
@@ -216,22 +303,23 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     min_value=24,
                     max_value=720,
                     key="hours_old",
-                    # value=int(user_config.get("HOURS_OLD", 168))
+                    help="Limit jobs to those posted within the last N hours (e.g. 168 = 7 days)."
                 )
                 results_wanted = st.number_input(
                     "Results Wanted",
                     min_value=1,
                     max_value=50,
                     key="results_wanted",
-                    # value=int(user_config.get("RESULTS_WANTED", 10))
+                    help="How many jobs you want to shortlist for CV matching."
                 )
             with col3:
                 country = st.selectbox(
                     "Country",
-                    ["Australia", "USA", "Canada", "UK", "New Zealand"],
-                    index=["Australia", "USA", "Canada", "UK", "New Zealand"].index(
+                    ["Australia", "USA", "Canada", "UK", "New Zealand", "Hong Kong", "Singapore"],
+                    index=["Australia", "USA", "Canada", "UK", "New Zealand", "Hong Kong", "Singapore"].index(
                         user_config.get("COUNTRY", "Australia")),
-                    key="country"
+                    key="country",
+                    help="Primary country to search jobs in. Used by LinkedIn and other sources."
                 )
 
             # Form submission
@@ -240,9 +328,13 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     st.session_state.require_login = True
                     st.rerun()
 
-                # Validate inputs
-                if not all([linkedin_url, seek_url, search_term]):
-                    st.error("Please fill all required fields")
+                # Validate input: Require LinkedIn keywords, plus at least one other job source
+                if not search_keywords:
+                    st.error("Please enter LinkedIn/Seek search keywords.")
+                    st.stop()
+                if not all([search_term, google_term]):
+                    st.error(
+                        "Please fill at all job sources (Seek, Indeed/Glassdoor, or Google Custom Search).")
                     st.stop()
 
                 if not cv_file and not user_config.get("BASE_CV_PATH"):
@@ -272,6 +364,25 @@ def show_job_search_ui(user_email: str, airtable: AirtableManager):
                     )
 
                     st.success(f"CV saved to: {cv_path}")
+
+                # Build LinkedIn URL from search params
+                linkedin_url = build_linkedin_search_url(
+                    search_keywords,
+                    location,
+                    posted_hours=hours_old,
+                    country=country,
+                    max_jobs=max_jobs,
+                    geoId_map=LINKEDIN_GEOID_MAP
+                )
+
+                seek_url = build_seek_url(
+                    search_keywords,
+                    seek_category,
+                    location,
+                    daterange=int(math.ceil(hours_old/24)),
+                    salaryrange=seek_salaryrange,
+                    salarytype=seek_salarytype,
+                )
 
                 # Build config dictionary
                 config_data = {

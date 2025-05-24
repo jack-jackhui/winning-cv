@@ -42,6 +42,9 @@ class SeekJobScraper:
 
     def scrape_jobs(self):
         """Main method to scrape Seek job listings"""
+        # [DEBUG] Print out the URL being scraped
+        logger.info(f"Scraping Seek jobs from URL: {self.base_url}")
+
         if not self.validate_url(self.base_url):
             logger.error(f"Invalid Seek URL: {self.base_url}")
             return []
@@ -62,10 +65,12 @@ class SeekJobScraper:
                 soup = BeautifulSoup(tab.html, 'html.parser')
 
                 jobs = self._extract_jobs(soup)
+                logger.info(f"Found {len(jobs)} jobs on page {page_count}")
                 if not jobs:
                     logger.info("No more jobs found on page")
                     break
                 all_jobs.extend(jobs)
+                logger.info(f"Total jobs collected so far: {len(all_jobs)}")
                 # Check job limits
                 if len(all_jobs) >= self.max_jobs_to_scrape:
                     logger.info(f"Reached max jobs limit ({self.max_jobs_to_scrape})")
@@ -76,6 +81,7 @@ class SeekJobScraper:
                     break
                 page_count += 1
                 self.random_delay(2, 4)
+            logger.info(f"✔️ Seek added {len(all_jobs)} new jobs")
             return all_jobs[:self.max_jobs_to_scrape]
         except Exception as e:
             logger.error(f"Seek scraping failed: {str(e)}")

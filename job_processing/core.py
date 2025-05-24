@@ -125,7 +125,12 @@ class JobProcessor:
             new_jobs = 0
             for job_data in job_list:
                 job_url = job_data.get("job_url")
-                if not job_url or job_url in existing_links:
+                logger.debug(f"Processing job, url={job_url}")
+                if not job_url:
+                    logger.warning("Job missing 'job_url', skipping.")
+                    continue
+                if job_url in existing_links:
+                    logger.info(f"Job {job_url} already exists, skipping.")
                     continue
                 normalized = self.normalize_seek_job_data(job_data)
                 cleaned_desc = self.content_cleaner.clean_html(normalized["Job Description"])

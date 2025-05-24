@@ -63,23 +63,49 @@ def notify_all(job_count: int, job_titles: list, airtable_link: str):
     """
     Send both Telegram and Email notifications about job updates.
     """
-    jobs_list = "\n".join([f"- {title}" for title in job_titles])
+    def format_job(job):
+        title = job.get('Job Title', 'N/A')
+        link = job.get('Job Link', '')
+        cv = job.get('CV URL', '')
+        score = job.get('Score', '')
+        return (
+            f"*{title}*\n"
+            f"🔗 [Job Link]({link})\n"
+            f"📄 [CV]({cv})\n"
+            f"⭐ Score: {score}"
+        )
+
+    def format_job_email(job):
+        title = job.get('Job Title', 'N/A')
+        link = job.get('Job Link', '')
+        cv = job.get('CV URL', '')
+        score = job.get('Score', '')
+        return (
+            f"{title}\n"
+            f"  Job Link: {link}\n"
+            f"  CV: {cv}\n"
+            f"  Score: {score}"
+        )
+
+    jobs_list = "\n\n".join([format_job(job) for job in job_titles])
+    jobs_list_email = "\n\n".join([format_job_email(job) for job in job_titles])
+
     message = (
         f"📝 **Today's WinningCV Matching Jobs Update!🎉**\n"
         f"*Jobs matching*: {job_count}\n\n"
         f"{jobs_list}\n\n"
         f"Check the details in : {airtable_link}"
     )
-    # Telegram (Markdown, so escape underscores if present)
-    telegram_message = message.replace('_', '\\_')
-    send_telegram_message(telegram_message)
+
+    # Telegram
+    send_telegram_message(message)
 
     # Email (plain text)
     subject = f"WinningCV Update: {job_count} Matching Jobs"
     body = (
         f"Hi,\n\n"
         f"There are {job_count} jobs matching your criteria.\n\n"
-        f"Job titles:\n{jobs_list}\n\n"
+        f"Job titles:\n{jobs_list_email}\n\n"
         f"Check the latest in Airtable: {airtable_link}\n\n"
         f"- From WinningCV Team"
     )

@@ -43,7 +43,7 @@ class Config:
     LOCATION = os.getenv('LOCATION', 'Melbourne, VIC')
     HOURS_OLD = int(os.getenv('HOURS_OLD', 168))
     RESULTS_WANTED = int(os.getenv('RESULTS_WANTED', 10))
-    COUNTRY = os.getenv('COUNTRY', 'australia')
+    COUNTRY = os.getenv('COUNTRY', 'Australia')
 
     #Email and Telegram and Wechat Settings
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -66,3 +66,28 @@ class Config:
     CHROMIUM_PATH = os.getenv('CHROMIUM_PATH')
     CHROME_PATH = os.getenv('CHROME_PATH')
     HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
+
+    SUPPORTED_COUNTRIES = [
+        "Argentina", "Australia", "Austria", "Bahrain",
+        "Belgium", "Brazil", "Canada", "Chile", "China", "Colombia", "Costa Rica", "Czech Republic",
+        "Denmark", "Ecuador", "Egypt", "Finland", "France", "Germany", "Greece", "Hong Kong",
+        "Hungary", "India", "Indonesia", "Ireland", "Israel", "Italy", "Japan", "Kuwait",
+        "Luxembourg", "Malaysia", "Mexico", "Morocco", "Netherlands", "New Zealand", "Nigeria",
+        "Norway", "Oman", "Pakistan", "Panama", "Peru", "Philippines", "Poland", "Portugal",
+        "Qatar", "Romania", "Saudi Arabia", "Singapore", "South Africa", "South Korea", "Spain",
+        "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey", "Ukraine", "United Arab Emirates",
+        "UK", "USA", "Uruguay", "Venezuela", "Vietnam"
+    ]
+
+    @classmethod
+    def validate_country_and_location(cls):
+        country = cls.COUNTRY
+        location = cls.LOCATION
+        if country not in cls.SUPPORTED_COUNTRIES:
+            raise ValueError(
+                f"Invalid country_indeed '{country}'. Must be one of: {', '.join(cls.SUPPORTED_COUNTRIES)}"
+            )
+        if not location or len(location.strip()) < 2:
+            raise ValueError("Location is required and must be a non-empty string.")
+
+Config.validate_country_and_location()

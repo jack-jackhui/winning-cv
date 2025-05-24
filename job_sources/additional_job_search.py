@@ -11,9 +11,20 @@ class AdditionalJobProcessor:
         self.content_cleaner = content_cleaner
         self.config = config
 
+    def _get_config(self, name):
+        # Try lowercase, then uppercase, else error
+        if hasattr(self.config, name):
+            return getattr(self.config, name)
+        elif hasattr(self.config, name.upper()):
+            return getattr(self.config, name.upper())
+        else:
+            raise AttributeError(f"Config has no attribute '{name}' or '{name.upper()}'")
+
     def scrape_and_process_jobs(self) -> List[Dict]:
         """Main method to handle full additional job processing"""
         try:
+            # Validate country and location before scraping
+            # type(self.config).validate_country_and_location()
             jobs_df = self._scrape_jobs()
             if jobs_df.empty:
                 return []
@@ -29,13 +40,13 @@ class AdditionalJobProcessor:
         """Core scraping functionality"""
         return scrape_jobs(
             site_name=["indeed", "glassdoor", "google"],
-            search_term=self.config.additional_search_term,
-            google_search_term=self.config.google_search_term or self.config.additional_search_term,
-            location=self.config.location,
+            search_term=self._get_config('additional_search_term'),
+            google_search_term=self._get_config('google_search_term') or self._get_config('additional_search_term'),
+            location=self._get_config('location'),
             job_type="fulltime",
-            results_wanted=self.config.results_wanted,
-            hours_old=self.config.hours_old,
-            country_indeed=self.config.country
+            results_wanted=self._get_config('results_wanted'),
+            hours_old=self._get_config('hours_old'),
+            country_indeed=self._get_config('country')
         )
 
     def _prepare_for_airtable(self, jobs_df: pd.DataFrame) -> List[Dict]:
