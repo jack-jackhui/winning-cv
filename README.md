@@ -4,7 +4,15 @@
 <h3>English | <a href="README-zh.md">简体中文</a></h3>
 
 </div>
-
+---
+## 🌐 Try It Instantly – No Installation Needed!
+**Use Winning CV right now at:**  
+[https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
+- **No setup required**
+- **Free to use** (subject to fair use & platform limits)
+- **All features available via the web**
+> 💡 **Recommended:** Try the hosted web version before installing locally or via Docker!
+---
 ## Introduction 📌
 Winning CV is an open-source AI app that revolutionizes job applications by automatically matching your qualifications with opportunities and generating tailored resumes. Our smart system:
 
@@ -60,12 +68,13 @@ Winning CV now features an enhanced **web-based user interface** where you can c
    - In the web UI, go to the **"Run Job Search"** section.
    - Upload your base CV (PDF or DOCX).
    - Enter your preferences: location, keywords, number of jobs, etc.
-   - For each supported job board, provide the relevant search URL.
+   - For each supported job board, provide the relevant search parameters.
 
 2. **LinkedIn & Seek Integration**
-   - **LinkedIn:** Paste any LinkedIn job search results URL (for example, after filtering for your desired roles or location on LinkedIn Jobs).
-   - **Seek:** Paste any Seek search results URL (after applying filters on seek.com.au).
-   - The app will scrape jobs from the URLs you provide, so make sure the URLs represent your search criteria.
+   - LinkedIn: Just enter your desired job keywords, location, and other search preferences. The app will automatically construct a LinkedIn job search and retrieve relevant postings – no need to manually copy/paste LinkedIn URLs.
+   - Seek: Similarly, specify your job search parameters (e.g., category, location, salary range), and the app will generate the Seek search behind the scenes.
+   - The app uses your provided search criteria to fetch jobs directly from these platforms, ensuring you always get results matching your preferences.
+   - Linkedin & Seek URLs are still required when running the app in command line
 
 3. **Save & Run**
    - Your configuration is saved per user and updated automatically if you change your preferences.
@@ -79,8 +88,8 @@ Winning CV now features an enhanced **web-based user interface** where you can c
 
 ### Supported Job Platforms
 
-- **LinkedIn:** Paste your custom search results URL.
-- **Seek:** Paste your custom search results URL.
+- **LinkedIn:** Enter your desired search keywords and other parameters.
+- **Seek:** Enter your desired search keywords and other parameters.
 - **Indeed, Glassdoor, Google Jobs:** Enter keywords or search terms for additional AI-driven aggregation.
 
 > **Note:**
@@ -108,14 +117,22 @@ Winning CV now features an enhanced **web-based user interface** where you can c
    - Click **Save & Run Search**.
    - Instantly view all matching jobs with their compatibility scores.
    - Download custom CVs for each match.
-
 ---
 
 ## Why Provide URLs?
-For job boards like LinkedIn and Seek, the app relies on your search URLs to fetch the most relevant jobs for you. This approach:
-- Offers you total control over search filters and criteria.
-- Ensures the app always works with the latest job postings displayed to you.
-- Makes the system compatible with changing user preferences or platform UI.
+
+**Web UI:**
+You no longer need to provide job board URLs! Simply enter your job search keywords, location, and other preferences in the web interface, and the app will automatically generate and use the appropriate search URLs for LinkedIn, Seek, and other platforms. This makes job searching easier and more intuitive.
+
+**Command Line:**
+If you use the command-line interface, you still need to provide the job board search result URLs (such as for LinkedIn or Seek) in your `.env` configuration file. The CLI relies on these URLs to fetch and match relevant jobs according to your criteria.
+
+- **Web UI:** No URL input required—just fill in your preferences.
+- **CLI:** URLs must still be specified in `.env`.
+
+This ensures:
+- Maximum flexibility and ease of use in the web version.
+- Continued support for advanced or automated CLI workflows.
 
 ---
 
