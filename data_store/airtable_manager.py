@@ -28,11 +28,17 @@ class AirtableManager:
             # "created_at" is auto‐populated in Airtable as a "Created Time" field
         }
 
+    def job_exists(self, job_link):
+        # Use formula helper for safety
+        formula = EQ(Field("Job Link"), job_link)
+        records = self.table.all(formula=str(formula))
+        return len(records) > 0
+
     def get_existing_job_links(self):
         """Get all existing job links to prevent duplicates"""
         try:
             records = self.table.all()
-            return {rec['fields'].get('Job Link') for rec in records}
+            return {rec['fields']['Job Link'] for rec in records if 'Job Link' in rec['fields']}
         except Exception as e:
             self.logger.error(f"Failed to fetch existing jobs: {str(e)}")
             return set()
@@ -46,6 +52,8 @@ class AirtableManager:
                 'Job Description': job_data.get('Job Description'),
                 'Job Date': self._format_date(job_data.get('Job Date')),
                 'Job Link': job_data.get('Job Link'),
+                'Company': job_data.get('Company'),
+                'Location': job_data.get('Location'),
                 'Matching Score': job_data.get('score', 0),
                 'CV Link': job_data.get('cv_url', '')
             })
@@ -58,8 +66,12 @@ class AirtableManager:
     def update_cv_info(self, job_link, score, cv_url, reasons=None, suggestions=None):
         """Update matching score and CV link for existing job"""
         try:
+            # record = self.table.first(
+            #    formula=f"FIND('{job_link}', {{Job Link}})",
+            #    fields=["Job Link"]
+            # )
             record = self.table.first(
-                formula=f"FIND('{job_link}', {{Job Link}})",
+                formula=str(EQ(Field("Job Link"), job_link)),
                 fields=["Job Link"]
             )
             if record:

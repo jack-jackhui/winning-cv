@@ -5,11 +5,20 @@ import io
 import logging
 from fpdf import FPDF
 import re
+from urllib.parse import urlparse, urlunparse
 
 class Struct:
     """Convert dict to object for config"""
     def __init__(self, **entries):
         self.__dict__.update(entries)
+
+def canonicalize_url(url):
+    if not url:
+        return url
+    # Remove query parameters and fragments for canonical duplicate check
+    parts = urlparse(url)
+    clean_url = urlunparse((parts.scheme, parts.netloc, parts.path, '', '', ''))
+    return clean_url.rstrip('/')
 
 def extract_text_from_file(file):
     """Extract text from PDF, DOCX, or TXT files with error handling"""

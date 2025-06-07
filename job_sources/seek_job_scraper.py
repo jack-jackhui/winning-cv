@@ -110,6 +110,25 @@ class SeekJobScraper:
             logger.debug(f"Could not find pagination controls: {str(e)}")
         return False
 
+    def _extract_company(self, card):
+        """Extract company name with fallback logic"""
+        # Try primary selector
+        company = self._safe_extract(card, '[data-automation="jobCompany"]', 'text')
+        if company:
+            return company
+
+        # Fallback: sometimes the company might be in a different span or strong tag
+        alt_elem = card.select_one('.job-company, span.company, strong.company')
+        if alt_elem:
+            return alt_elem.get_text(strip=True)
+
+        # As a last resort, try to infer from job card subtitle (if present)
+        subtitle = card.select_one('.job-card__subtitle')
+        if subtitle:
+            return subtitle.get_text(strip=True)
+
+        return "Unknown Company"
+
     def _extract_jobs(self, soup):
         """Extract job listings from current page"""
         job_cards = soup.select('article[data-testid="job-card"]')
@@ -120,7 +139,8 @@ class SeekJobScraper:
                 break
             job = {
                 'title': self._safe_extract(card, '[data-automation="jobTitle"]', 'text'),
-                'company': self._safe_extract(card, '[data-automation="jobCompany"]', 'text'),
+                'company': self._extract_company(card),
+                # 'company': self._safe_extract(card, '[data-automation="jobCompany"]', 'text'),
                 'location': self._clean_location(card),
                 'salary': self._safe_extract(card, '[data-automation="jobSalary"]', 'text'),
                 'posted_date': self._safe_extract(card, '[data-automation="jobListingDate"]', 'text'),

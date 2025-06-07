@@ -97,7 +97,7 @@ class AdditionalJobProcessor:
                 "Job Title": job.get("title", "No Title"),
                 "Job Link": job.get("url", ""),
                 "Job Date": job.get("posted_date", ""),
-                "Company": job.get("company", "Unknown Company"),
+                "Company": job.get("company") or job.get("employer") or "Unknown Company",
                 "Location": job.get("location", ""),
                 "Job Description": job.get("description", ""),
                 "Salary": job.get("salary", ""),
