@@ -65,11 +65,13 @@ def notify_all(job_count: int, job_titles: list, airtable_link: str):
     """
     def format_job(job):
         title = job.get('Job Title', 'N/A')
+        company = job.get('Company', 'N/A')
         link = job.get('Job Link', '')
         cv = job.get('CV URL', '')
         score = job.get('Score', '')
         return (
             f"*{title}*\n"
+            f"*{company}*\n"
             f"🔗 [Job Link]({link})\n"
             f"📄 [CV]({cv})\n"
             f"⭐ Score: {score}"
@@ -77,11 +79,13 @@ def notify_all(job_count: int, job_titles: list, airtable_link: str):
 
     def format_job_email(job):
         title = job.get('Job Title', 'N/A')
+        company = job.get('Company', 'N/A')
         link = job.get('Job Link', '')
         cv = job.get('CV URL', '')
         score = job.get('Score', '')
         return (
             f"{title}\n"
+            f"*{company}*\n"
             f"  Job Link: {link}\n"
             f"  CV: {cv}\n"
             f"  Score: {score}"
