@@ -45,7 +45,12 @@ class LinkedInJobScraper:
 
         try:
             # logger.debug(f"Navigate to LinkedIn URL: {url}")
-            return self.browser_scrape(url)
+            jobs = self.browser_scrape(url)
+            if jobs is None or len(jobs) == 0:
+                logger.warning(f"No jobs parsed from LinkedIn page at {url}")  # [LOG]
+            else:
+                logger.info(f"Parsed {len(jobs)} jobs from LinkedIn page at {url}")  # [LOG]
+            return jobs
         except Exception as e:
             logger.error(f"Scraping failed: {str(e)}")
             return None
@@ -53,7 +58,7 @@ class LinkedInJobScraper:
     def browser_scrape(self, url):
         """Browser-based scraping using DrissionPage"""
         try:
-            logger.debug("Navigating to URL")
+            logger.info(f"Opening LinkedIn search page: {url}")
             tab = self.browser.latest_tab
             tab.get(url)
             self.random_delay(3, 5)
@@ -67,24 +72,26 @@ class LinkedInJobScraper:
             self.accept_cookies(tab)
 
             # Wait for main content using multiple possible selectors
-            logger.debug("Waiting for job search results to load")
+            logger.info("Waiting for job search results to load")
             try:
-                tab.ele('.jobs-search-results', timeout=30)
+                tab.ele('.jobs-search-results', timeout=20)
             except Exception as e:
                 logger.error(f"Error waiting for job search results: {str(e)}")
                 tab.screenshot('jobs_search_results_error.png')
                 raise
 
             # Scroll to load all available jobs
-            logger.debug("Loading all job listings by scrolling")
+            logger.info("Loading all job listings by scrolling")
             self.load_all_jobs(tab)
 
             soup = BeautifulSoup(tab.html, 'html.parser')
-            logger.debug("Successfully loaded page and parsed HTML")
+            logger.info("Successfully loaded page and parsed HTML")
 
             job_listings = self.extract_job_listings(soup)
             if not job_listings:
-                logger.error("No job listings found on the page")
+                logger.warning("No job listings found on the page")
+            else:
+                logger.info(f"Found {len(job_listings)} job listings after HTML parse")
             return job_listings
 
         except Exception as e:
@@ -171,6 +178,8 @@ class LinkedInJobScraper:
         job_listings = []
         job_cards = soup.select("div.base-search-card")
 
+        logger.info(f"Found {len(job_cards)} job cards in the HTML")
+
         # Limit how many total job cards to process
         max_listings = self.max_jobs_to_scrape
 
@@ -208,7 +217,7 @@ class LinkedInJobScraper:
             }
             job_listings.append(job)
 
-        logger.debug(f"Extracted {len(job_listings)} job listings")
+        logger.info(f"Extracted {len(job_listings)} job listings")
         return job_listings
 
     def get_job_description(self, job_url):
@@ -217,6 +226,7 @@ class LinkedInJobScraper:
             return ""
         try:
             # Open job page in new tab
+            logger.info(f"Opening LinkedIn job page for description: {job_url}")
             new_tab = self.browser.new_tab()
             new_tab.get(job_url)
             self.random_delay(3, 5)

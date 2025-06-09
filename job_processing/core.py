@@ -93,12 +93,17 @@ class JobProcessor:
             for url in target_urls:
                 logger.info(f"Scraping LinkedIn jobs from URL: {url}")
                 job_list = self.linkedin_scraper.scrape_job_page(url)
+                logger.info(f"LinkedIn scraper returned {len(job_list) if job_list else 0} jobs for {url}")
                 if not job_list:
                     logger.warning(f"No jobs returned from scraper for URL = {url}")
                     continue
                 for job_data in job_list:
                     job_url = canonicalize_url(job_data.get("job_url"))
-                    if not job_url or job_url in existing_links:
+                    if not job_url:
+                        logger.warning("Job missing 'job_url', skipping.")
+                        continue
+                    if job_url in existing_links:
+                        logger.info(f"Job {job_url} already exists (in-memory dedup), skipping.")
                         continue
                     # Airtable-level check (race condition safety)
                     if self.airtable.job_exists(job_url):
