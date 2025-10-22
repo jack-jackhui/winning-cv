@@ -26,7 +26,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         build-essential gcc g++ python3-dev \
-        chromium chromium-driver libnss3 libgconf-2-4 \
+        chromium chromium-driver libnss3 \
         libfontconfig1 fonts-liberation fonts-noto-cjk \
         libssl-dev libffi-dev && \
     \

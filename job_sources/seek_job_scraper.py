@@ -111,8 +111,13 @@ class SeekJobScraper:
         return False
 
     def _extract_company(self, card):
-        """Extract company name with fallback logic"""
-        # Try primary selector
+        """Extract company name with robust logic for Seek HTML structure"""
+        # First, look for <a> tag with data-automation="jobCompany"
+        company_a = card.select_one('a[data-automation="jobCompany"]')
+        if company_a:
+            return company_a.get_text(strip=True)
+
+        # Fallback: any element with data-automation="jobCompany"
         company = self._safe_extract(card, '[data-automation="jobCompany"]', 'text')
         if company:
             return company

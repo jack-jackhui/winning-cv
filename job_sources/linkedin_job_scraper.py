@@ -196,18 +196,35 @@ class LinkedInJobScraper:
                 break
             job_url = job_card.select_one("a.base-card__full-link")
             job_url = job_url["href"] if job_url else ""
-            # Only fetch description if we haven't hit the limit
             fetch_desc = (processed_descriptions < max_jobs_for_description)
             if fetch_desc:
                 processed_descriptions += 1
                 desc = self.get_job_description(job_url)
             else:
                 desc = ""
+            # Improved company extraction with multiple fallbacks
+            company = ""
+            company_selectors = [
+                "h4.base-search-card__subtitle a",
+                "h4.base-search-card__subtitle",
+                "a.hidden-nested-link",
+                "span.job-search-card__company-name"
+            ]
+            for selector in company_selectors:
+                company_element = job_card.select_one(selector)
+                if company_element:
+                    company = company_element.get_text(strip=True)
+                    if company:
+                        break
+            if not company:
+                logger.warning(f"Could not extract company name for job: {job_url}")
+                # Optionally log the HTML for debugging:
+                # logger.debug(f"Job card HTML: {job_card.prettify()}")
+                company = "Unknown Company"
             job = {
                 "title": job_card.select_one("h3.base-search-card__title").get_text(strip=True)
                 if job_card.select_one("h3.base-search-card__title") else "",
-                "company": job_card.select_one("h4.base-search-card__subtitle a").get_text(strip=True)
-                if job_card.select_one("h4.base-search-card__subtitle a") else "",
+                "company": company,
                 "location": job_card.select_one("span.job-search-card__location").get_text(strip=True)
                 if job_card.select_one("span.job-search-card__location") else "",
                 "posted_date": job_card.select_one("time.job-search-card__listdate").get_text(strip=True)

@@ -140,7 +140,7 @@ class CVGenerator:
                     UserMessage(content=f"Original CV content:\n{cv_content}")
                 ],
                 model=self.model_name,
-                max_tokens=3000,
+                max_tokens=16384,
                 temperature=0.3
             )
 

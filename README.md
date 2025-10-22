@@ -5,14 +5,17 @@
 
 </div>
 ---
-## 🌐 Try It Instantly – No Installation Needed!
-**Use Winning CV right now at:**  
-[https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
+🌐 **Try It Instantly – No Installation Needed!**
+**Use Winning CV right now at:**  [https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
+
 - **No setup required**
 - **Free to use** (subject to fair use & platform limits)
 - **All features available via the web**
+
 > 💡 **Recommended:** Try the hosted web version before installing locally or via Docker!
 ---
+
+
 ## Introduction 📌
 Winning CV is an open-source AI app that revolutionizes job applications by automatically matching your qualifications with opportunities and generating tailored resumes. Our smart system:
 
