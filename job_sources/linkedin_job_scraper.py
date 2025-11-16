@@ -197,12 +197,13 @@ class LinkedInJobScraper:
             job_url = job_card.select_one("a.base-card__full-link")
             job_url = job_url["href"] if job_url else ""
             fetch_desc = (processed_descriptions < max_jobs_for_description)
+            desc = ""
+            company_from_detail = ""
             if fetch_desc:
                 processed_descriptions += 1
-                desc = self.get_job_description(job_url)
-            else:
-                desc = ""
-            # Improved company extraction with multiple fallbacks
+                desc, company_from_detail = self.get_job_description(job_url)
+            
+            # Try to extract company from list page first
             company = ""
             company_selectors = [
                 "h4.base-search-card__subtitle a",
@@ -216,10 +217,14 @@ class LinkedInJobScraper:
                     company = company_element.get_text(strip=True)
                     if company:
                         break
+            
+            # Fallback to company from detail page if available
+            if not company and company_from_detail:
+                company = company_from_detail
+                logger.debug(f"Using company from detail page: {company}")
+            
             if not company:
                 logger.warning(f"Could not extract company name for job: {job_url}")
-                # Optionally log the HTML for debugging:
-                # logger.debug(f"Job card HTML: {job_card.prettify()}")
                 company = "Unknown Company"
             job = {
                 "title": job_card.select_one("h3.base-search-card__title").get_text(strip=True)
@@ -238,36 +243,53 @@ class LinkedInJobScraper:
         return job_listings
 
     def get_job_description(self, job_url):
-        """Fetch job description from individual job page"""
+        """Fetch job description and company name from individual job page"""
         if not job_url:
-            return ""
+            return "", ""
         try:
             # Open job page in new tab
-            logger.info(f"Opening LinkedIn job page for description: {job_url}")
+            logger.info(f"Opening LinkedIn job page for details: {job_url}")
             new_tab = self.browser.new_tab()
             new_tab.get(job_url)
             self.random_delay(3, 5)
             # Handle potential popups in new tab
             self.handle_login_wall(new_tab)
-            # self.accept_cookies(new_tab)
+            
+            # Extract company name from detail page
+            company = ""
+            company_selectors = [
+                '@@tag()=div@@class=job-details-jobs-unified-top-card__company-name',
+                '@@tag()=a@@class=topcard__org-name-link',
+                '@@tag()=span@@class=topcard__flavor--black',
+                '@@tag()=a@@data-tracking-control-name=public_jobs_topcard-org-name'
+            ]
+            for selector in company_selectors:
+                try:
+                    company_element = new_tab.ele(selector, timeout=2)
+                    if company_element:
+                        company = company_element.text.strip()
+                        if company:
+                            logger.debug(f"Extracted company from detail page: {company}")
+                            break
+                except:
+                    continue
 
             # Wait for description content
+            description = ""
             try:
                 logger.debug(f"Extracting job description")
-                description_element = new_tab.ele('@@tag()=div@@class=description__text description__text--rich')
+                description_element = new_tab.ele('@@tag()=div@@class=description__text description__text--rich', timeout=5)
                 description = description_element.text.strip() if description_element else ""
             except Exception as e:
                 logger.warning(f"Could not extract description: {str(e)}")
-                description = ""
 
             # Close the tab and return to main window
-            # logger.debug(f"Extracted job description {description}")
             new_tab.close()
-            return description
+            return description, company
 
         except Exception as e:
-            logger.error(f"Failed to get description from {job_url}: {str(e)}")
-            return ""
+            logger.error(f"Failed to get details from {job_url}: {str(e)}")
+            return "", ""
 
     def validate_url(self, url):
         """Ensure we're only scraping LinkedIn job search URLs"""

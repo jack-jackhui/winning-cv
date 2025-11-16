@@ -145,7 +145,6 @@ class SeekJobScraper:
             job = {
                 'title': self._safe_extract(card, '[data-automation="jobTitle"]', 'text'),
                 'company': self._extract_company(card),
-                # 'company': self._safe_extract(card, '[data-automation="jobCompany"]', 'text'),
                 'location': self._clean_location(card),
                 'salary': self._safe_extract(card, '[data-automation="jobSalary"]', 'text'),
                 'posted_date': self._safe_extract(card, '[data-automation="jobListingDate"]', 'text'),
@@ -154,10 +153,19 @@ class SeekJobScraper:
                 'work_type': self._safe_extract(card, '[data-automation="jobWorkType"]', 'text'),
                 'classification': self._safe_extract(card, '[data-automation="jobClassification"]', 'text')
             }
+            
+            # Fetch full description and potentially better company name from detail page
             if len(jobs) < self.max_jobs_for_description:
-                job['full_description'] = self._get_full_description(job['job_url'])
+                full_desc, company_from_detail = self._get_full_description(job['job_url'])
+                job['full_description'] = full_desc
+                
+                # Use company from detail page if list page extraction failed
+                if company_from_detail and (not job['company'] or job['company'] == "Unknown Company"):
+                    job['company'] = company_from_detail
+                    logger.debug(f"Using company from Seek detail page: {company_from_detail}")
             else:
                 job['full_description'] = ""
+            
             jobs.append(job)
         return jobs
 
@@ -204,9 +212,9 @@ class SeekJobScraper:
         return ', '.join([loc.get_text(strip=True) for loc in locations if loc])
 
     def _get_full_description(self, job_url):
-        """Fetch full description using BeautifulSoup parsing"""
+        """Fetch full description and company name from job detail page"""
         if not job_url:
-            return ""
+            return "", ""
         new_tab = None
         try:
             # Create and switch to new tab
@@ -216,9 +224,26 @@ class SeekJobScraper:
             # Wait for page to fully load
             new_tab.wait.doc_loaded()
             self.random_delay(1.5, 2.5)  # Allow JS execution
+            
             # Get page HTML and parse with BeautifulSoup
             page_html = new_tab.html
             soup = BeautifulSoup(page_html, 'html.parser')
+
+            # Extract company name from detail page with multiple fallbacks
+            company = ""
+            company_selectors = [
+                {'tag': 'span', 'attrs': {'data-automation': 'advertiser-name'}},
+                {'tag': 'a', 'attrs': {'data-automation': 'jobCompany'}},
+                {'tag': 'span', 'class_': lambda x: x and 'company' in x.lower()},
+                {'tag': 'strong', 'class_': lambda x: x and 'advertiser' in x.lower()}
+            ]
+            for selector in company_selectors:
+                company_element = soup.find(**selector)
+                if company_element:
+                    company = company_element.get_text(strip=True)
+                    if company:
+                        logger.debug(f"Extracted company from Seek detail page: {company}")
+                        break
 
             # Find description container with multiple fallbacks
             desc_container = soup.find('div', {'data-automation': 'jobAdDetails'}) or \
@@ -233,14 +258,18 @@ class SeekJobScraper:
             else:
                 logger.warning(f"Description container not found in HTML")
                 desc = ""
-                # For debugging: Save HTML to file
-                with open('debug_page.html', 'w', encoding='utf-8') as f:
-                    f.write(page_html)
 
-            return desc
+            return desc, company
+            
         except Exception as e:
-            logger.error(f"Description extraction failed: {str(e)}")
-            return ""
+            logger.error(f"Detail page extraction failed: {str(e)}")
+            return "", ""
+        finally:
+            if new_tab:
+                try:
+                    new_tab.close()
+                except:
+                    pass
 
     def _go_to_next_page(self, tab):
         """Click next page button if available"""
