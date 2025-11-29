@@ -118,7 +118,7 @@ class AirtableManager:
             )
             return self.table.all(
                 formula=str(formula),
-                fields=["Job Title", "Job Description", "Job Link"]
+                fields=["Job Title", "Job Description", "Job Link", "Company"]
             )
         except Exception as e:
             self.logger.error(f"Fetch unprocessed failed: {str(e)}")
