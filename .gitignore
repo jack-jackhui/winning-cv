@@ -7,8 +7,19 @@ build_and_push.sh
 secrets.toml
 /.idea/
 .DS_Store
-/*/__pycache_ls_/*
-./user_cv/*
-./logs/*
-.streamlit
-./customised_cv/*
+__pycache__/
+*/__pycache__/
+**/__pycache__/
+user_cv/
+logs/
+.streamlit/
+customised_cv/
+customized_cv.pdf
+
+# Playwright and browser automation
+.playwright-mcp/
+
+# Claude Code and AI agent folders
+.claude/
+.serena/
+CLAUDE.md

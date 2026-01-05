@@ -18,6 +18,8 @@ services:
       - HEADLESS=true
     env_file:
       - .env
+    depends_on:
+      - minio
 
   job-runner: # New service for CLI jobs
     image: ghcr.io/jack-jackhui/winning-cv:latest
@@ -32,6 +34,47 @@ services:
     env_file: # Use same env file as webui
       - .env
     command: [ "python", "main.py", "--user-email", "$$USER_EMAIL" ]
+    depends_on:
+      - minio
+
+  minio:
+    image: minio/minio:latest
+    container_name: winning-cv-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API port
+      - "9001:9001"   # MinIO Console (web UI)
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Initialize MinIO bucket on first run
+  minio-init:
+    image: minio/mc:latest
+    container_name: winning-cv-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin123};
+      mc mb myminio/winningcv-cvs --ignore-existing;
+      mc anonymous set none myminio/winningcv-cvs;
+      echo 'MinIO bucket initialized successfully';
+      "
+    env_file:
+      - .env
 
 volumes:
   cv_data:  # Named volume declaration for persistent storage
+  minio_data:  # MinIO data persistence

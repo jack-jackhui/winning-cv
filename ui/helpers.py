@@ -1,6 +1,66 @@
 # ui/helpers.py
+import os
 import re
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
+
+
+def get_storage_backend() -> str:
+    """
+    Determine which storage backend to use.
+
+    Returns: "minio" or "wordpress"
+    """
+    return os.getenv("CV_STORAGE_BACKEND", "minio").lower()
+
+
+def upload_pdf(
+    file_path: str,
+    filename: str,
+    user_id: str = "default",
+    wp_site: str = None,
+    wp_user: str = None,
+    wp_app_password: str = None
+) -> str:
+    """
+    Upload PDF to configured storage backend.
+
+    This is the unified upload function that routes to MinIO or WordPress
+    based on CV_STORAGE_BACKEND environment variable.
+
+    Args:
+        file_path: Local path to the PDF
+        filename: Filename to store as
+        user_id: User identifier (used by MinIO for path isolation)
+        wp_site: WordPress site URL (only for WordPress backend)
+        wp_user: WordPress username (only for WordPress backend)
+        wp_app_password: WordPress app password (only for WordPress backend)
+
+    Returns:
+        URL to access the uploaded file
+    """
+    backend = get_storage_backend()
+
+    if backend == "minio":
+        try:
+            from utils.minio_storage import upload_pdf_to_minio
+            return upload_pdf_to_minio(file_path, filename, user_id)
+        except ImportError:
+            logger.warning("MinIO storage not available, falling back to WordPress")
+            backend = "wordpress"
+        except Exception as e:
+            logger.error(f"MinIO upload failed: {e}, falling back to WordPress")
+            backend = "wordpress"
+
+    if backend == "wordpress":
+        if not all([wp_site, wp_user, wp_app_password]):
+            raise ValueError("WordPress credentials required but not provided")
+        return upload_pdf_to_wordpress(file_path, filename, wp_site, wp_user, wp_app_password)
+
+    raise ValueError(f"Unknown storage backend: {backend}")
+
 
 def format_job_description(desc: str) -> str:
     if not desc:

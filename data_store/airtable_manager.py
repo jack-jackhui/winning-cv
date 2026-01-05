@@ -228,3 +228,92 @@ class AirtableManager:
         except Exception as e:
             self.logger.error(f"Config save failed: {str(e)}")
             return False
+
+    # ──────────────────────────────────────────────────────────
+    # NOTIFICATION PREFERENCES METHODS
+    # ──────────────────────────────────────────────────────────
+    def get_notification_preferences(self, user_email: str) -> dict:
+        """Retrieve user's notification preferences from user_config table"""
+        try:
+            safe_email = user_email.replace("'", "\\'")
+            formula = f"{{user_email}} = '{safe_email}'"
+            records = self.user_config_table.all(
+                formula=formula,
+                max_records=1
+            )
+            if records:
+                fields = records[0]['fields']
+                return {
+                    "email_alerts": fields.get("email_alerts", True),
+                    "telegram_alerts": fields.get("telegram_alerts", False),
+                    "wechat_alerts": fields.get("wechat_alerts", False),
+                    "weekly_digest": fields.get("weekly_digest", True),
+                    "telegram_chat_id": fields.get("telegram_chat_id"),
+                    "wechat_openid": fields.get("wechat_openid"),
+                    "notification_email": fields.get("notification_email"),
+                }
+            return {}
+        except Exception as e:
+            self.logger.error(f"Notification prefs fetch failed: {str(e)}")
+            return {}
+
+    def save_notification_preferences(self, prefs_data: dict) -> bool:
+        """Store/update user notification preferences in user_config table"""
+        try:
+            user_email = prefs_data.get("user_email")
+            if not user_email:
+                self.logger.error("No user_email provided for notification prefs")
+                return False
+
+            safe_email = user_email.replace("'", "\\'")
+            existing = self.user_config_table.first(
+                formula=f"{{user_email}} = '{safe_email}'"
+            )
+
+            # Build notification preference fields
+            notification_fields = {
+                "email_alerts": prefs_data.get("email_alerts", True),
+                "telegram_alerts": prefs_data.get("telegram_alerts", False),
+                "wechat_alerts": prefs_data.get("wechat_alerts", False),
+                "weekly_digest": prefs_data.get("weekly_digest", True),
+                "telegram_chat_id": prefs_data.get("telegram_chat_id") or "",
+                "wechat_openid": prefs_data.get("wechat_openid") or "",
+                "notification_email": prefs_data.get("notification_email") or "",
+            }
+
+            if existing:
+                # Update existing record with notification fields
+                self.user_config_table.update(existing['id'], notification_fields)
+            else:
+                # Create new record with user_email and notification fields
+                notification_fields["user_email"] = user_email
+                self.user_config_table.create(notification_fields)
+
+            self.logger.info(f"Notification preferences saved for {user_email}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Notification prefs save failed: {str(e)}")
+            return False
+
+    def get_users_with_notifications_enabled(self) -> list:
+        """Get all users who have at least one notification channel enabled"""
+        try:
+            # Get all user configs with any notification enabled
+            formula = "OR({email_alerts}, {telegram_alerts}, {wechat_alerts})"
+            records = self.user_config_table.all(formula=formula)
+            return [
+                {
+                    "user_email": rec['fields'].get("user_email"),
+                    "email_alerts": rec['fields'].get("email_alerts", True),
+                    "telegram_alerts": rec['fields'].get("telegram_alerts", False),
+                    "wechat_alerts": rec['fields'].get("wechat_alerts", False),
+                    "weekly_digest": rec['fields'].get("weekly_digest", True),
+                    "telegram_chat_id": rec['fields'].get("telegram_chat_id"),
+                    "wechat_openid": rec['fields'].get("wechat_openid"),
+                    "notification_email": rec['fields'].get("notification_email"),
+                }
+                for rec in records if rec['fields'].get("user_email")
+            ]
+        except Exception as e:
+            self.logger.error(f"Failed to get users with notifications: {str(e)}")
+            return []

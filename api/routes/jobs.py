@@ -1,0 +1,483 @@
+"""
+Job Search routes for WinningCV API.
+Handles job search configuration, execution, and results.
+"""
+import os
+import uuid
+import logging
+import math
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Dict
+from concurrent.futures import ThreadPoolExecutor
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from urllib.parse import urlencode, quote
+
+from api.schemas.auth import UserInfo
+from api.schemas.jobs import (
+    JobConfigRequest,
+    JobConfigResponse,
+    SearchTaskResponse,
+    SearchStatusResponse,
+    SearchStatus,
+    JobResult,
+    JobResultsResponse,
+)
+from api.middleware.auth_middleware import get_current_user
+
+# Import existing functionality
+from data_store.airtable_manager import AirtableManager
+from job_processing.core import JobProcessor
+from config.settings import Config
+from utils.utils import Struct
+from ui.helpers import upload_pdf_to_wordpress
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/jobs", tags=["Job Search"])
+
+# In-memory task storage (in production, use Redis or similar)
+_search_tasks: Dict[str, dict] = {}
+
+# Thread pool for background tasks
+_executor = ThreadPoolExecutor(max_workers=3)
+
+# LinkedIn GeoID mapping
+LINKEDIN_GEOID_MAP = {
+    "Australia": "101452733",
+    "Greater Sydney": "90009524",
+    "Greater Melbourne": "90009521",
+    "United States": "103644278",
+    "United Kingdom": "101165590",
+    "Canada": "101174742",
+    "Hong Kong": "103291313",
+    "Singapore": "102454443"
+}
+
+
+def build_linkedin_search_url(
+    keywords: str,
+    location: str,
+    posted_hours: Optional[int] = None,
+    geoId_map: Optional[dict] = None
+) -> str:
+    """Build LinkedIn job search URL from parameters"""
+    if geoId_map is None:
+        geoId_map = LINKEDIN_GEOID_MAP
+
+    base = "https://www.linkedin.com/jobs/search/"
+    params = {}
+
+    if keywords:
+        params['keywords'] = keywords.replace(",", " OR ")
+    if location:
+        geoId = geoId_map.get(location, "")
+        if geoId:
+            params['geoId'] = geoId
+        params['location'] = location
+    if posted_hours:
+        try:
+            seconds = int(posted_hours) * 3600
+            params['f_TPR'] = f"r{seconds}"
+        except:
+            pass
+
+    return f"{base}?{urlencode(params)}"
+
+
+def build_seek_url(
+    keywords: str,
+    category: str,
+    location: str,
+    daterange: Optional[int] = None,
+    salaryrange: Optional[str] = None,
+    salarytype: str = "annual"
+) -> str:
+    """Build SEEK job search URL from parameters"""
+    keywords_path = quote(keywords.replace(" ", "-"))
+    category_path = quote(category.strip().replace(" ", "-").lower())
+    location_path = quote(location.strip().replace(" ", "-").lower())
+
+    base = f"https://www.seek.com.au/{keywords_path}-jobs-in-{category_path}/in-{location_path}"
+    params = {}
+
+    if daterange:
+        params['daterange'] = str(daterange)
+    if salaryrange:
+        params['salaryrange'] = salaryrange
+    if salarytype:
+        params['salarytype'] = salarytype
+
+    if params:
+        return f"{base}?{urlencode(params)}"
+    return base
+
+
+@router.get("/config", response_model=JobConfigResponse)
+async def get_job_config(
+    user: UserInfo = Depends(get_current_user)
+) -> JobConfigResponse:
+    """
+    Get the user's saved job search configuration.
+
+    Args:
+        user: Authenticated user
+
+    Returns:
+        Job search configuration
+    """
+    try:
+        cfg = Config()
+        airtable = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID
+        )
+
+        user_config = airtable.get_user_config(user.email)
+
+        if not user_config:
+            # Return defaults
+            return JobConfigResponse(
+                user_email=user.email,
+                location=cfg.LOCATION,
+                hours_old=cfg.HOURS_OLD,
+                results_wanted=cfg.RESULTS_WANTED,
+                country=cfg.COUNTRY,
+                max_jobs_to_scrape=cfg.MAX_JOBS_TO_SCRAPE
+            )
+
+        return JobConfigResponse(
+            user_email=user.email,
+            base_cv_path=user_config.get("base_cv_path"),
+            base_cv_link=user_config.get("base_cv_link"),
+            linkedin_job_url=user_config.get("linkedin_job_url"),
+            seek_job_url=user_config.get("seek_job_url"),
+            max_jobs_to_scrape=user_config.get("max_jobs_to_scrape", 10),
+            additional_search_term=user_config.get("additional_search_term"),
+            google_search_term=user_config.get("google_search_term"),
+            location=user_config.get("location", cfg.LOCATION),
+            hours_old=user_config.get("hours_old", cfg.HOURS_OLD),
+            results_wanted=user_config.get("results_wanted", cfg.RESULTS_WANTED),
+            country=user_config.get("country", cfg.COUNTRY)
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get job config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get configuration: {str(e)}"
+        )
+
+
+@router.post("/config", response_model=JobConfigResponse)
+async def save_job_config(
+    config: JobConfigRequest,
+    cv_file: Optional[UploadFile] = File(None),
+    user: UserInfo = Depends(get_current_user)
+) -> JobConfigResponse:
+    """
+    Save job search configuration.
+
+    Args:
+        config: Job search configuration
+        cv_file: Optional CV file to upload
+        user: Authenticated user
+
+    Returns:
+        Saved configuration
+    """
+    try:
+        cfg = Config()
+        airtable = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID
+        )
+
+        # Handle CV upload if provided
+        cv_path = ""
+        cv_url = ""
+        if cv_file:
+            cv_dir = Path(f"user_cv/{user.email}")
+            cv_dir.mkdir(parents=True, exist_ok=True)
+
+            suffix = Path(cv_file.filename).suffix
+            unique_filename = f"base_cv_{uuid.uuid4().hex[:8]}{suffix}"
+            cv_path = str(cv_dir / unique_filename)
+
+            content = await cv_file.read()
+            with open(cv_path, "wb") as f:
+                f.write(content)
+
+            try:
+                cv_url = upload_pdf_to_wordpress(
+                    file_path=cv_path,
+                    filename=unique_filename,
+                    wp_site=cfg.WORDPRESS_SITE,
+                    wp_user=cfg.WORDPRESS_USERNAME,
+                    wp_app_password=cfg.WORDPRESS_APP_PASSWORD
+                )
+            except Exception as e:
+                logger.warning(f"Failed to upload CV to WordPress: {e}")
+
+        # Get existing config to preserve CV path if not uploading new one
+        existing_config = airtable.get_user_config(user.email)
+        if not cv_path and existing_config:
+            cv_path = existing_config.get("base_cv_path", "")
+            cv_url = existing_config.get("base_cv_link", "")
+
+        # Build URLs from search parameters
+        linkedin_url = build_linkedin_search_url(
+            config.search_keywords,
+            config.location,
+            posted_hours=config.hours_old
+        )
+
+        seek_url = build_seek_url(
+            config.search_keywords,
+            config.seek_category,
+            config.location,
+            daterange=int(math.ceil(config.hours_old / 24)),
+            salaryrange=config.seek_salaryrange,
+            salarytype=config.seek_salarytype
+        )
+
+        # Build config dict for Airtable
+        config_data = {
+            "user_email": user.email,
+            "base_cv_path": cv_path,
+            "base_cv_link": cv_url,
+            "linkedin_job_url": linkedin_url,
+            "seek_job_url": seek_url,
+            "max_jobs_to_scrape": config.max_jobs,
+            "additional_search_term": config.search_term,
+            "google_search_term": config.google_term,
+            "location": config.location,
+            "hours_old": config.hours_old,
+            "results_wanted": config.results_wanted,
+            "country": config.country
+        }
+
+        if not airtable.save_user_config(config_data):
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save configuration"
+            )
+
+        return JobConfigResponse(**config_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save job config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save configuration: {str(e)}"
+        )
+
+
+def _run_job_search(task_id: str, user_email: str, config_data: dict):
+    """Background task to run job search"""
+    try:
+        _search_tasks[task_id]["status"] = SearchStatus.RUNNING
+        _search_tasks[task_id]["progress"] = 10
+        _search_tasks[task_id]["message"] = "Initializing search..."
+
+        # Merge with defaults
+        defaults = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
+        merged = {**defaults, **{k.lower(): v for k, v in config_data.items()}}
+        merged["user_email"] = user_email
+
+        _search_tasks[task_id]["progress"] = 20
+        _search_tasks[task_id]["message"] = "Connecting to job boards..."
+
+        # Initialize Airtable manager
+        joblist_mgr = AirtableManager(
+            Config.AIRTABLE_API_KEY,
+            Config.AIRTABLE_BASE_ID,
+            Config.AIRTABLE_TABLE_ID
+        )
+
+        _search_tasks[task_id]["progress"] = 30
+        _search_tasks[task_id]["message"] = "Scraping jobs..."
+
+        # Create processor and run
+        processor = JobProcessor(
+            config=Struct(**merged),
+            airtable=joblist_mgr
+        )
+
+        _search_tasks[task_id]["progress"] = 50
+        _search_tasks[task_id]["message"] = "Processing and matching jobs..."
+
+        results = processor.process_jobs()
+
+        _search_tasks[task_id]["progress"] = 100
+        _search_tasks[task_id]["status"] = SearchStatus.COMPLETED
+        _search_tasks[task_id]["message"] = f"Found {len(results)} matching jobs"
+        _search_tasks[task_id]["results_count"] = len(results)
+
+    except Exception as e:
+        logger.error(f"Job search failed: {e}")
+        _search_tasks[task_id]["status"] = SearchStatus.FAILED
+        _search_tasks[task_id]["message"] = str(e)
+
+
+@router.post("/search", response_model=SearchTaskResponse)
+async def start_job_search(
+    background_tasks: BackgroundTasks,
+    user: UserInfo = Depends(get_current_user)
+) -> SearchTaskResponse:
+    """
+    Start an asynchronous job search.
+
+    Args:
+        user: Authenticated user
+
+    Returns:
+        Task ID to poll for status
+    """
+    try:
+        cfg = Config()
+        airtable = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID
+        )
+
+        # Get user's config
+        user_config = airtable.get_user_config(user.email)
+        if not user_config:
+            raise HTTPException(
+                status_code=400,
+                detail="No job search configuration found. Please configure search settings first."
+            )
+
+        # Create task
+        task_id = str(uuid.uuid4())
+        _search_tasks[task_id] = {
+            "status": SearchStatus.PENDING,
+            "progress": 0,
+            "message": "Task created",
+            "results_count": None,
+            "created_at": datetime.now().isoformat()
+        }
+
+        # Run in background thread (job processing uses blocking I/O)
+        _executor.submit(_run_job_search, task_id, user.email, user_config)
+
+        return SearchTaskResponse(
+            task_id=task_id,
+            status=SearchStatus.PENDING,
+            message="Job search started"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start job search: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start search: {str(e)}"
+        )
+
+
+@router.get("/search/{task_id}/status", response_model=SearchStatusResponse)
+async def get_search_status(
+    task_id: str,
+    user: UserInfo = Depends(get_current_user)
+) -> SearchStatusResponse:
+    """
+    Get the status of a job search task.
+
+    Args:
+        task_id: Task ID from start_job_search
+        user: Authenticated user
+
+    Returns:
+        Current status of the search task
+    """
+    if task_id not in _search_tasks:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+
+    task = _search_tasks[task_id]
+
+    return SearchStatusResponse(
+        task_id=task_id,
+        status=task["status"],
+        progress=task["progress"],
+        message=task["message"],
+        results_count=task.get("results_count")
+    )
+
+
+@router.get("/results", response_model=JobResultsResponse)
+async def get_job_results(
+    user: UserInfo = Depends(get_current_user),
+    limit: int = 100
+) -> JobResultsResponse:
+    """
+    Get the user's job search results.
+
+    Args:
+        user: Authenticated user
+        limit: Maximum number of results
+
+    Returns:
+        List of job results
+    """
+    try:
+        cfg = Config()
+        joblist_manager = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID
+        )
+
+        records = joblist_manager.get_records_by_filter(f"{{User Email}} = '{user.email}'")
+
+        items = []
+        for rec in records[:limit]:
+            fields = rec.get("fields", {})
+
+            # Parse match reasons and suggestions
+            reasons_raw = fields.get("Match Reasons", "")
+            suggestions_raw = fields.get("Match Suggestions", "")
+
+            reasons = reasons_raw.split("\n") if reasons_raw else None
+            suggestions = suggestions_raw.split("\n") if suggestions_raw else None
+
+            items.append(JobResult(
+                id=rec.get("id", ""),
+                job_title=fields.get("Job Title", "Untitled"),
+                company=fields.get("Company", "Unknown"),
+                location=fields.get("Location"),
+                score=float(fields.get("Matching Score", 0)),
+                cv_link=fields.get("CV Link") or None,
+                job_link=fields.get("Job Link", ""),
+                posted_date=fields.get("Job Date"),
+                description=fields.get("Job Description"),
+                match_reasons=reasons,
+                suggestions=suggestions
+            ))
+
+        # Sort by score descending
+        items.sort(key=lambda x: x.score, reverse=True)
+
+        return JobResultsResponse(
+            items=items,
+            total=len(items)
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get job results: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get results: {str(e)}"
+        )

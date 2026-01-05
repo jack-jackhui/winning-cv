@@ -1,0 +1,190 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-text-primary font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-muted;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-accent-500/30 text-text-primary;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Container */
+  .container-default {
+    @apply mx-auto max-w-7xl px-6 lg:px-8;
+  }
+
+  /* Section spacing */
+  .section-padding {
+    @apply py-24 lg:py-32;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-surface border border-border rounded-2xl p-6;
+  }
+
+  .card-elevated {
+    @apply bg-surface-elevated border border-border rounded-2xl p-6;
+  }
+
+  /* Button base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium 
+           transition-all duration-200 focus:outline-none focus:ring-2 
+           focus:ring-accent-500/50 focus:ring-offset-2 focus:ring-offset-background
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent-600 text-white hover:bg-accent-500 
+           active:bg-accent-700 px-6 py-3 min-h-[44px];
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface border border-border text-text-primary 
+           hover:bg-surface-elevated hover:border-text-muted 
+           active:bg-border px-6 py-3 min-h-[44px];
+  }
+
+  .btn-ghost {
+    @apply btn text-text-secondary hover:text-text-primary 
+           hover:bg-surface-elevated px-4 py-2 min-h-[44px];
+  }
+
+  .btn-icon {
+    @apply btn p-3 min-w-[44px] min-h-[44px];
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full bg-surface border border-border rounded-xl px-4 py-3
+           text-text-primary placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-accent-500/50 focus:border-accent-500
+           transition-all duration-200 min-h-[44px];
+  }
+
+  .input-label {
+    @apply block text-sm font-medium text-text-secondary mb-2;
+  }
+
+  /* Link styles */
+  .link {
+    @apply text-accent-400 hover:text-accent-300 transition-colors duration-200;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-accent-500/20 text-accent-400;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-500/20 text-emerald-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-500/20 text-amber-400;
+  }
+
+  .badge-error {
+    @apply badge bg-red-500/20 text-red-400;
+  }
+
+  /* Sidebar navigation */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary
+           hover:bg-surface-elevated hover:text-text-primary
+           transition-all duration-200 min-h-[44px];
+  }
+
+  .nav-item-active {
+    @apply nav-item bg-accent-500/10 text-accent-400 hover:bg-accent-500/15;
+  }
+
+  /* Table styles */
+  .table-header {
+    @apply text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3;
+  }
+
+  .table-cell {
+    @apply px-4 py-4 text-sm text-text-secondary;
+  }
+
+  .table-row {
+    @apply border-b border-border-subtle hover:bg-surface-elevated/50 transition-colors;
+  }
+}
+
+/* Utility styles */
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary;
+  }
+
+  .text-gradient-accent {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-400 to-accent-600;
+  }
+
+  /* Backdrop blur */
+  .glass {
+    @apply bg-background/80 backdrop-blur-xl;
+  }
+
+  /* Animation utilities */
+  .animate-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .slide-up {
+    animation: slideUp 0.5s ease-out forwards;
+  }
+
+  /* Focus visible */
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/50 
+           focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}

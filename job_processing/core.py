@@ -293,12 +293,21 @@ class JobProcessor:
                          if url.strip()]
         return linkedin_urls or [os.getenv("LINKEDIN_JOB_URL")]
 
-    def generate_targeted_cv(self, cv_text: str, job_data: Dict, analysis: Dict) -> str:
+    def generate_targeted_cv(self, cv_text: str, job_data: Dict, analysis: Dict, user_id: str = "default") -> str:
         """
         Generate a custom CV using GPT-based approach in CVGenerator.
-        Returns a WordPress public URL to the new CV.
+        Returns a URL to the new CV (MinIO presigned URL or WordPress public URL).
+
+        Args:
+            cv_text: The user's base CV text
+            job_data: Job information dictionary
+            analysis: Job analysis results
+            user_id: User identifier for storage isolation (default: "default")
+
+        Returns:
+            URL to access the generated CV
         """
-        from ui.helpers import upload_pdf_to_wordpress
+        from ui.helpers import upload_pdf, get_storage_backend
         from config.settings import Config
 
         generator = CVGenerator()
@@ -338,19 +347,21 @@ class JobProcessor:
             return None
         logger.info(f"Generated PDF CV: {pdf_path}")
 
-        # ---- Upload to WP ----
+        # ---- Upload to storage backend (MinIO or WordPress) ----
         try:
-            wp_url = upload_pdf_to_wordpress(
+            cv_url = upload_pdf(
                 file_path=pdf_path,
                 filename=os.path.basename(pdf_filename),
+                user_id=user_id,
                 wp_site=Config.WORDPRESS_SITE,
                 wp_user=Config.WORDPRESS_USERNAME,
                 wp_app_password=Config.WORDPRESS_APP_PASSWORD
             )
-            logger.debug(f"Uploaded CV to web server: {wp_url}")
-            return wp_url
+            backend = get_storage_backend()
+            logger.debug(f"Uploaded CV to {backend}: {cv_url}")
+            return cv_url
         except Exception as e:
-            logger.error(f"Failed to upload PDF to web server: {e}")
+            logger.error(f"Failed to upload PDF to storage: {e}")
             return None
 
     def normalize_job_data(self, scraped_data: Dict) -> Dict:

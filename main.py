@@ -5,7 +5,7 @@ import os
 from config.settings import Config
 from job_processing.core import JobProcessor
 from utils.logger import setup_logger
-from utils.notifications import notify_all
+from utils.notifications import notify_all, notify_specific_user
 
 
 class Struct:
@@ -34,7 +34,14 @@ def main(config_data: dict):
     try:
         processor = JobProcessor(config)
         results = processor.process_jobs()
-        notify_all(len(results), results, config.airtable_ui_url)
+
+        # Send notifications to the specific user running this job search
+        user_email = getattr(config, 'user_email', None)
+        if user_email and results:
+            notify_specific_user(user_email, len(results), results, config.airtable_ui_url)
+        elif results:
+            # Fallback to global notifications if no user specified
+            notify_all(len(results), results, config.airtable_ui_url)
 
         return results
     except Exception as e:
