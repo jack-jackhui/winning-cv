@@ -7,28 +7,23 @@ const footerLinks = {
     { name: 'How It Works', href: '/#how-it-works' },
     { name: 'Pricing', href: '/#pricing' },
   ],
-  company: [
-    { name: 'About', href: '/about' },
-    { name: 'Blog', href: '/blog' },
-    { name: 'Careers', href: '/careers' },
-  ],
   legal: [
-    { name: 'Privacy', href: '/privacy' },
-    { name: 'Terms', href: '/terms' },
+    { name: 'Privacy Policy', href: '/privacy' },
+    { name: 'Terms of Service', href: '/terms' },
   ],
 }
 
 const socialLinks = [
-  { name: 'GitHub', href: '#', icon: Github },
-  { name: 'Twitter', href: '#', icon: Twitter },
-  { name: 'LinkedIn', href: '#', icon: Linkedin },
+  { name: 'GitHub', href: 'https://github.com/jack-jackhui', icon: Github },
+  { name: 'Twitter', href: 'https://www.twitter.com/realjackhui', icon: Twitter },
+  { name: 'LinkedIn', href: 'https://www.linkedin.com/in/jackhui88', icon: Linkedin },
 ]
 
 export default function Footer() {
   return (
     <footer className="bg-surface border-t border-border">
       <div className="container-default py-16 lg:py-20">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-8 lg:gap-12">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
@@ -45,6 +40,8 @@ export default function Footer() {
                 <a
                   key={item.name}
                   href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-text-muted hover:text-text-primary transition-colors"
                   aria-label={item.name}
                 >
@@ -71,35 +68,18 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Company links */}
-          <div>
-            <h3 className="text-sm font-medium text-text-primary mb-4">Company</h3>
-            <ul className="space-y-3">
-              {footerLinks.company.map((item) => (
-                <li key={item.name}>
-                  <a
-                    href={item.href}
-                    className="text-sm text-text-muted hover:text-text-primary transition-colors"
-                  >
-                    {item.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
           {/* Legal links */}
           <div>
             <h3 className="text-sm font-medium text-text-primary mb-4">Legal</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((item) => (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className="text-sm text-text-muted hover:text-text-primary transition-colors"
                   >
                     {item.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>

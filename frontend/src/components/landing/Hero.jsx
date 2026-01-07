@@ -9,9 +9,9 @@ import {
 } from '../ui/AnimatedElements'
 
 const statsData = [
-  { value: '10k+', label: 'CVs Generated' },
-  { value: '85%', label: 'Interview Rate' },
-  { value: '4.9', label: 'User Rating' },
+  { value: 'AI-Powered', label: 'Smart CV Generation' },
+  { value: 'Multi-Platform', label: 'Job Scraping' },
+  { value: 'Real-Time', label: 'Job Matching' },
 ]
 
 const featureHighlights = [

@@ -11,6 +11,8 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import AuthCallback from './pages/AuthCallback'
 import GitHubCallback from './pages/GitHubCallback'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 
 // Protected pages
 import Dashboard from './pages/Dashboard'
@@ -66,6 +68,8 @@ function App() {
       {/* Public routes */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Landing />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route
           path="/login"
           element={
