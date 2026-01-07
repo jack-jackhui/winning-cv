@@ -1,49 +1,94 @@
 services:
-  winning-cv:
-    image: ghcr.io/jack-jackhui/winning-cv:latest
-    container_name: winning-cv
+  # =============================================================================
+  # Frontend - React SPA served by Nginx
+  # =============================================================================
+  frontend:
+    image: ghcr.io/jack-jackhui/winning-cv:frontend
+    container_name: winning-cv-frontend
     restart: unless-stopped
     ports:
-      - "13000:8501"  # Map host port 13000 to container port 8501
+      - "13000:80"  # Only frontend exposed externally
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - winningcv-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # FastAPI Backend - Internal only (accessed via nginx proxy)
+  # =============================================================================
+  api:
+    image: ghcr.io/jack-jackhui/winning-cv:latest
+    container_name: winning-cv-api
+    restart: unless-stopped
+    # NO external ports - accessed via frontend nginx proxy
     volumes:
-      - ./user_cv:/winning-cv/user_cv  # Host directory for input files
-      - cv_data:/winning-cv/customised_cv  # Named volume for persistent output
-      - ./secrets.toml:/winning-cv/.streamlit/secrets.toml
+      - ./user_cv:/winning-cv/user_cv
+      - cv_data:/winning-cv/customised_cv
     environment:
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_HEADLESS=true
+      - API_PORT=8000
+      - API_HOST=0.0.0.0
+      - API_RELOAD=false
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
+      - MINIO_ENDPOINT=minio:9000
     env_file:
       - .env
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
+    command: ["python", "run_api.py"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - winningcv-net
 
-  job-runner: # New service for CLI jobs
+  # =============================================================================
+  # CLI Job Runner - For cronjob execution
+  # =============================================================================
+  job-runner:
     image: ghcr.io/jack-jackhui/winning-cv:latest
     restart: "no"
+    user: "${UID}:${GID}"
     volumes:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
-      - ./secrets.toml:/winning-cv/.streamlit/secrets.toml
     environment:
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
-    env_file: # Use same env file as webui
+      - MINIO_ENDPOINT=minio:9000
+    env_file:
       - .env
-    command: [ "python", "main.py", "--user-email", "$$USER_EMAIL" ]
+    command: ["python", "main.py", "--user-email", "${JOB_USER_EMAIL}"]
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
+    networks:
+      - winningcv-net
+    profiles:
+      - cli  # Only run when explicitly requested: docker compose --profile cli run job-runner
 
+  # =============================================================================
+  # MinIO Object Storage - Internal only
+  # =============================================================================
   minio:
     image: minio/minio:latest
     container_name: winning-cv-minio
     restart: unless-stopped
-    ports:
-      - "9000:9000"   # S3 API port
-      - "9001:9001"   # MinIO Console (web UI)
+    # NO external ports - internal only
+    # Uncomment below for admin console access (localhost only)
+    # ports:
+    #   - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     environment:
@@ -55,15 +100,19 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - winningcv-net
 
-  # Initialize MinIO bucket on first run
+  # =============================================================================
+  # MinIO Bucket Initialization
+  # =============================================================================
   minio-init:
     image: minio/mc:latest
     container_name: winning-cv-minio-init
     restart: "no"
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
       sleep 5;
@@ -72,9 +121,22 @@ services:
       mc anonymous set none myminio/winningcv-cvs;
       echo 'MinIO bucket initialized successfully';
       "
-    env_file:
-      - .env
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+    networks:
+      - winningcv-net
 
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  winningcv-net:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
-  cv_data:  # Named volume declaration for persistent storage
-  minio_data:  # MinIO data persistence
+  cv_data:
+  minio_data:

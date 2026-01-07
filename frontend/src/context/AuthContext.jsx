@@ -218,6 +218,8 @@ export function AuthProvider({ children }) {
 
       if (accessToken) {
         // Exchange Microsoft token with auth backend
+        console.log('MSAL: Got access token, exchanging with backend at:', `${AUTH_SERVICE_URL}/api/dj-rest-auth/microsoft/`)
+
         const authResponse = await fetch(`${AUTH_SERVICE_URL}/api/dj-rest-auth/microsoft/`, {
           method: 'POST',
           headers: {
@@ -236,7 +238,9 @@ export function AuthProvider({ children }) {
           window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key } }))
           return true
         } else {
-          throw new Error('Microsoft authentication failed')
+          const errorText = await authResponse.text()
+          console.error('MSAL: Backend token exchange failed:', authResponse.status, errorText)
+          throw new Error(`Microsoft authentication failed: ${authResponse.status}`)
         }
       }
     } catch (err) {
@@ -373,6 +377,9 @@ export function AuthProvider({ children }) {
       if (provider === 'microsoft') {
         const success = await handleMicrosoftLogin()
         if (success) return
+        // Don't fall back to redirect if popup was attempted but failed
+        // (user already saw the popup, falling back would be confusing)
+        throw new Error('Microsoft authentication failed. Please check browser console for details.')
       }
 
       if (provider === 'github' && handleGitHubLogin()) {

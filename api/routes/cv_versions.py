@@ -6,10 +6,12 @@ Handles CRUD operations for CV versions, smart matching, and analytics.
 import logging
 import tempfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi.responses import StreamingResponse
 
 from api.schemas.auth import UserInfo
 from api.schemas.cv import (
@@ -310,6 +312,71 @@ async def get_download_url(
         "download_url": url,
         "expires_hours": expires_hours
     }
+
+
+@router.get("/{version_id}/file")
+async def stream_cv_file(
+    version_id: str,
+    user: UserInfo = Depends(get_current_user)
+) -> StreamingResponse:
+    """
+    Stream CV file directly through the API (proxy pattern).
+
+    This endpoint proxies the file from MinIO, eliminating the need
+    to expose MinIO ports externally. The file is streamed directly
+    to the client without being fully loaded into memory.
+    """
+    from utils.minio_storage import get_minio_storage
+
+    manager = get_cv_version_manager()
+    version = manager.get_version(version_id, user.email)
+
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    storage_path = version.get('storage_path')
+    if not storage_path:
+        raise HTTPException(status_code=404, detail="File not found in storage")
+
+    try:
+        minio = get_minio_storage()
+
+        # Get the object from MinIO
+        response = minio.client.get_object(minio.bucket, storage_path)
+
+        # Get file info for headers
+        stat = minio.client.stat_object(minio.bucket, storage_path)
+
+        # Determine filename from version name or storage path
+        filename = f"{version.get('version_name', version_id)}.pdf"
+        # Sanitize filename for Content-Disposition header
+        filename = filename.replace('"', '\\"')
+
+        def iterfile():
+            """Generator to stream file in chunks."""
+            try:
+                for chunk in response.stream(32 * 1024):  # 32KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
+
+        return StreamingResponse(
+            iterfile(),
+            media_type=stat.content_type or "application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(stat.size),
+                "Cache-Control": "private, max-age=3600",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to stream CV file {version_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve file from storage"
+        )
 
 
 @router.post("/{version_id}/use")

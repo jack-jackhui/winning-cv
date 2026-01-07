@@ -286,13 +286,17 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
         _search_tasks[task_id]["progress"] = 10
         _search_tasks[task_id]["message"] = "Initializing search..."
 
+        # Progress callback to update task status in real-time
+        def update_progress(progress: int, message: str):
+            _search_tasks[task_id]["progress"] = progress
+            _search_tasks[task_id]["message"] = message
+
         # Merge with defaults
         defaults = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
         merged = {**defaults, **{k.lower(): v for k, v in config_data.items()}}
         merged["user_email"] = user_email
 
-        _search_tasks[task_id]["progress"] = 20
-        _search_tasks[task_id]["message"] = "Connecting to job boards..."
+        update_progress(20, "Connecting to job boards...")
 
         # Initialize Airtable manager
         joblist_mgr = AirtableManager(
@@ -301,23 +305,19 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
             Config.AIRTABLE_TABLE_ID
         )
 
-        _search_tasks[task_id]["progress"] = 30
-        _search_tasks[task_id]["message"] = "Scraping jobs..."
-
-        # Create processor and run
+        # Create processor with progress callback
         processor = JobProcessor(
             config=Struct(**merged),
-            airtable=joblist_mgr
+            airtable=joblist_mgr,
+            progress_callback=update_progress
         )
 
-        _search_tasks[task_id]["progress"] = 50
-        _search_tasks[task_id]["message"] = "Processing and matching jobs..."
-
+        # process_jobs() will now call update_progress internally
         results = processor.process_jobs()
 
         _search_tasks[task_id]["progress"] = 100
         _search_tasks[task_id]["status"] = SearchStatus.COMPLETED
-        _search_tasks[task_id]["message"] = f"Found {len(results)} matching jobs"
+        _search_tasks[task_id]["message"] = f"Complete! Generated {len(results)} tailored CVs"
         _search_tasks[task_id]["results_count"] = len(results)
 
     except Exception as e:

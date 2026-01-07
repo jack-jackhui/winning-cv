@@ -1,5 +1,26 @@
-# Use official Python slim image
-FROM python:3.12-slim AS builder
+# =============================================================================
+# Stage 1: Build Frontend (React/Vite)
+# =============================================================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy package files first for better caching
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci --prefer-offline --no-audit
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Build for production
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Python Backend
+# =============================================================================
+FROM python:3.12-slim AS backend
 
 LABEL authors="jackhui"
 
@@ -11,11 +32,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/usr/local/bin:${PATH}" \
-    STREAMLIT_SERVER_PORT=8501 \
-    STREAMLIT_SERVER_HEADLESS=true \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     CHROMIUM_PATH=/usr/bin/chromium \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    API_PORT=8000
 
 WORKDIR /winning-cv
 
@@ -30,7 +49,7 @@ RUN apt-get update && \
         libfontconfig1 fonts-liberation fonts-noto-cjk \
         libssl-dev libffi-dev && \
     \
-    # Install UV (your faster pip wrapper)
+    # Install UV (faster pip)
     curl -Ls https://astral.sh/uv/install.sh | sh -s -- "$TARGETOS" "$TARGETARCH" && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     \
@@ -40,12 +59,9 @@ RUN apt-get update && \
        --force-reinstall \
        -r requirements.txt && \
     \
-    # -------------------------------------------------------------------------
-    # ✨ NEW STEP: download & install spaCy English model
+    # Download & install spaCy English model
     python -m spacy download en_core_web_sm && \
-    # (optional) verify it’s really there
     python -m spacy validate && \
-    # -------------------------------------------------------------------------
     \
     # Remove build tools & clean up apt caches
     apt-get purge -y --auto-remove \
@@ -62,10 +78,24 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
-EXPOSE 8501
+# Expose FastAPI port
+EXPOSE 8000
 
-# Launch the Streamlit app
-CMD ["streamlit", "run", "webui_new.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--browser.gatherUsageStats=false"]
+# Default: Launch FastAPI server
+CMD ["python", "run_api.py"]
+
+# =============================================================================
+# Stage 3: Frontend with Nginx (for standalone frontend container)
+# =============================================================================
+FROM nginx:alpine AS frontend
+
+# Copy custom nginx config
+COPY nginx/frontend.conf /etc/nginx/conf.d/default.conf
+
+# Copy built frontend from builder stage
+COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+
+# Expose port 80
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

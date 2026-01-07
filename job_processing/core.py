@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from data_store.airtable_manager import AirtableManager
@@ -19,7 +19,12 @@ from cv.cv_generator import CVGenerator
 logger = logging.getLogger(__name__)
 
 class JobProcessor:
-    def __init__(self, config, airtable: AirtableManager = None):
+    def __init__(
+        self,
+        config,
+        airtable: AirtableManager = None,
+        progress_callback: Optional[Callable[[int, str], None]] = None
+    ):
         self.config = config
         self.airtable = airtable or AirtableManager(
             config.airtable_api_key,
@@ -34,26 +39,21 @@ class JobProcessor:
             content_cleaner=self.content_cleaner,
             config=config
         )
+        # Progress callback: (progress_percent, message) -> None
+        self._progress_callback = progress_callback
+
+    def _update_progress(self, progress: int, message: str):
+        """Update progress via callback if available"""
+        if self._progress_callback:
+            try:
+                self._progress_callback(progress, message)
+            except Exception as e:
+                logger.warning(f"Progress callback failed: {e}")
 
     def process_jobs(self) -> List[dict]:
         """Main processing pipeline"""
         logger.info("Starting parallel scraping of all sources")
-
-        """ old code for sequential run
-                try:
-                    total_new = (
-                            self._process_linkedin_jobs() +
-                            self._process_seek_jobs() +
-                            self._process_additional_sources()
-                    )
-
-                    if total_new > 0:
-                        return self._process_job_matches()
-                    return []
-                except Exception as e:
-                    logger.error(f"Processing failed: {str(e)}")
-                    raise
-                """
+        self._update_progress(30, "Scraping jobs from LinkedIn, Seek, and other sources...")
 
         # Define a small mapping of names → methods
         sources = {
@@ -62,6 +62,8 @@ class JobProcessor:
             "Additional Sources": self._process_additional_sources
         }
         results = {}
+        completed_sources = 0
+
         # Spin up a threadpool
         with ThreadPoolExecutor(max_workers=len(sources)) as pool:
             future_to_name = {
@@ -76,10 +78,20 @@ class JobProcessor:
                 except Exception as e:
                     logger.error(f"❌ {name} failed: {e}")
                     results[name] = 0
+
+                completed_sources += 1
+                # Progress: 30-50% for scraping phase
+                scrape_progress = 30 + int((completed_sources / len(sources)) * 20)
+                self._update_progress(scrape_progress, f"Scraped {name} ({completed_sources}/{len(sources)} sources)")
+
         total_new = sum(results.values())
         logger.info(f"🔢 Total new jobs from all sources: {total_new}")
+
         if total_new > 0:
+            self._update_progress(50, f"Found {total_new} new jobs. Starting CV matching...")
             return self._process_job_matches()
+
+        self._update_progress(100, "No new jobs found")
         return []
 
     def _process_linkedin_jobs(self) -> int:
@@ -211,9 +223,11 @@ class JobProcessor:
 
             # Fetch unprocessed jobs (no CV Link & has job desc)
             unprocessed_jobs = self.airtable.get_unprocessed_jobs()
-            logger.info(f"Found {len(unprocessed_jobs)} unprocessed jobs in Airtable.")
+            total_jobs = len(unprocessed_jobs)
+            logger.info(f"Found {total_jobs} unprocessed jobs in Airtable.")
+            self._update_progress(51, f"Analyzing {total_jobs} jobs against your CV...")
 
-            for record in unprocessed_jobs:
+            for idx, record in enumerate(unprocessed_jobs):
                 fields = record['fields']
                 job_desc = fields.get('Job Description', '')
                 job_link = fields.get('Job Link', '')
@@ -274,6 +288,17 @@ class JobProcessor:
                 else:
                     logger.info(
                         f"Score below threshold ({score:.2f} < {self.config.job_match_threshold}) - no CV generated.")
+
+                # Update progress: 51-99% for matching phase
+                if total_jobs > 0:
+                    # Calculate progress: 51% to 99% based on jobs processed
+                    match_progress = 51 + int(((idx + 1) / total_jobs) * 48)
+                    match_progress = min(match_progress, 99)  # Cap at 99% until truly complete
+                    cvs_generated = len(jobs_with_cv)
+                    self._update_progress(
+                        match_progress,
+                        f"Processed {idx + 1}/{total_jobs} jobs • {cvs_generated} CVs generated • Current: {job_title[:40]}..."
+                    )
 
             return jobs_with_cv
 

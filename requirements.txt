@@ -2,8 +2,15 @@
 #    uv pip compile requirements.in -o requirements.txt
 altair==5.5.0
     # via streamlit
+annotated-doc==0.0.4
+    # via fastapi
 annotated-types==0.7.0
     # via pydantic
+anyio==4.12.0
+    # via
+    #   httpx
+    #   starlette
+    #   watchfiles
 apscheduler==3.11.0
     # via -r requirements.in
 argon2-cffi==25.1.0
@@ -46,6 +53,8 @@ catalogue==2.0.10
     #   thinc
 certifi==2025.4.26
     # via
+    #   httpcore
+    #   httpx
     #   minio
     #   requests
     #   selenium
@@ -60,6 +69,7 @@ click==8.1.8
     #   drissionpage
     #   streamlit
     #   typer
+    #   uvicorn
 cloudpathlib==0.21.0
     # via weasel
 commonmark==0.9.1
@@ -101,6 +111,8 @@ faicons==0.2.2
     # via great-tables
 faker==37.1.0
     # via streamlit-faker
+fastapi==0.128.0
+    # via -r requirements.in
 favicon==0.7.0
     # via markdownlit
 feedparser==6.0.11
@@ -120,7 +132,10 @@ gitpython==3.1.44
 great-tables==0.17.0
     # via -r requirements.in
 h11==0.16.0
-    # via wsproto
+    # via
+    #   httpcore
+    #   uvicorn
+    #   wsproto
 htbuilder==0.9.0
     # via
     #   markdownlit
@@ -130,8 +145,16 @@ htmltools==0.6.0
     # via
     #   faicons
     #   great-tables
+httpcore==1.0.9
+    # via httpx
+httptools==0.7.1
+    # via uvicorn
+httpx==0.28.1
+    # via -r requirements.in
 idna==3.10
     # via
+    #   anyio
+    #   httpx
     #   requests
     #   tldextract
     #   trio
@@ -279,6 +302,7 @@ pycryptodome==3.23.0
 pydantic==2.11.4
     # via
     #   confection
+    #   fastapi
     #   pyairtable
     #   python-jobspy
     #   spacy
@@ -313,13 +337,20 @@ python-dateutil==2.9.0.post0
 python-docx==1.1.2
     # via -r requirements.in
 python-dotenv==1.1.0
-    # via webdriver-manager
+    # via
+    #   -r requirements.in
+    #   uvicorn
+    #   webdriver-manager
 python-jobspy==1.1.80
+    # via -r requirements.in
+python-multipart==0.0.21
     # via -r requirements.in
 pytz==2025.2
     # via pandas
 pyyaml==6.0.2
-    # via pymdown-extensions
+    # via
+    #   pymdown-extensions
+    #   uvicorn
 referencing==0.36.2
     # via
     #   jsonschema
@@ -395,6 +426,8 @@ st-annotated-text==4.0.2
     # via streamlit-extras
 st-theme==1.2.3
     # via streamlit-extras
+starlette==0.50.0
+    # via fastapi
 streamlit==1.45.0
     # via
     #   -r requirements.in
@@ -462,10 +495,12 @@ typer==0.15.3
 typing-extensions==4.13.2
     # via
     #   altair
+    #   anyio
     #   azure-ai-inference
     #   azure-core
     #   azure-identity
     #   beautifulsoup4
+    #   fastapi
     #   great-tables
     #   htmltools
     #   minio
@@ -475,6 +510,7 @@ typing-extensions==4.13.2
     #   python-docx
     #   referencing
     #   selenium
+    #   starlette
     #   streamlit
     #   typer
     #   typing-inspection
@@ -494,6 +530,10 @@ urllib3==2.4.0
     #   selenium
 uv==0.7.2
     # via -r requirements.in
+uvicorn==0.40.0
+    # via -r requirements.in
+uvloop==0.22.1
+    # via uvicorn
 validators==0.34.0
     # via streamlit-extras
 wasabi==1.1.3
@@ -501,6 +541,8 @@ wasabi==1.1.3
     #   spacy
     #   thinc
     #   weasel
+watchfiles==1.1.1
+    # via uvicorn
 weasel==0.4.1
     # via spacy
 webdriver-manager==4.0.2
@@ -509,6 +551,8 @@ websocket-client==1.8.0
     # via
     #   drissionpage
     #   selenium
+websockets==15.0.1
+    # via uvicorn
 wrapt==1.17.2
     # via smart-open
 wsproto==1.2.0

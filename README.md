@@ -1,497 +1,442 @@
 <div align="center">
-<h1 align="center">🚀 Winning CV - AI Powered Job Matching & CV Tailoring App</h1>
+<h1 align="center">Winning CV - AI-Powered Job Matching & CV Tailoring</h1>
 
-<h3>English | <a href="README-zh.md">简体中文</a></h3>
+<p align="center">
+  <strong>Stop sending generic resumes. Let AI create the perfect CV for every opportunity.</strong>
+</p>
+
+<p align="center">
+  <a href="https://winning-cv.jackhui.com.au">Try It Free</a> |
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#features">Features</a> |
+  <a href="README-zh.md">简体中文</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/React-18+-61DAFB?logo=react" alt="React 18+">
+  <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker" alt="Docker Ready">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
+</p>
 
 </div>
----
-🌐 **Try It Instantly – No Installation Needed!**
-**Use Winning CV right now at:**  [https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
-
-- **No setup required**
-- **Free to use** (subject to fair use & platform limits)
-- **All features available via the web**
-
-> 💡 **Recommended:** Try the hosted web version before installing locally or via Docker!
----
-
-
-## Introduction 📌
-Winning CV is an open-source AI app that revolutionizes job applications by automatically matching your qualifications with opportunities and generating tailored resumes. Our smart system:
-
-- Scans major job platforms in real-time
-- Analyzes requirements against your base CV
-- Generates customized application materials
-- Alerts you to perfect matches
-
-**Stop sending generic resumes** - Get AI-powered precision targeting for every application!
 
 ---
 
-## Authentication Configuration 🔐
-Winning CV uses Streamlit's built-in authentication system. To configure authentication providers (Google, GitHub, etc.), you'll need to set up a `secrets.toml` file.
+## Try It Now — No Installation Required
 
-### 1. Create secrets.toml
-Create a `.streamlit` directory in your project root and add `secrets.toml`:
+**Use Winning CV instantly at:** [https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
 
-```bash
-mkdir -p .streamlit
-touch .streamlit/secrets.toml
-```
+- **Zero setup** — just sign in and start
+- **Free to use** (fair use limits apply)
+- **All features available** via the web
 
-### 2. Configure Authentication Providers
-Example configuration for Google OAuth:
-```toml
-# .streamlit/secrets.toml
-[connections]
-[connections.google]
-client_id = "your-client-id.apps.googleusercontent.com"
-client_secret = "your-client-secret"
-redirect_uri = "https://your-domain.com/oauth/callback"
-```
-
-For other providers (GitHub, AzureAD, etc.), see [Streamlit Authentication Documentation](https://docs.streamlit.io/develop/concepts/connections/authentication).
+> **Tip:** Try the hosted version first to see the full capabilities before setting up locally!
 
 ---
 
-## New Interactive UI Workflow 🚦
+## What is Winning CV?
 
-### Search for Jobs Directly from the Web App
+Winning CV is an open-source AI application that transforms how you apply for jobs. Instead of manually tailoring resumes for each position, our intelligent system:
 
-Winning CV now features an enhanced **web-based user interface** where you can configure your job search and generate tailored CVs without writing a single line of code!
+1. **Scans job platforms** — LinkedIn, Seek, Indeed, Glassdoor, and Google Jobs
+2. **Analyzes every listing** against your base CV using semantic NLP
+3. **Scores compatibility** (0-10) so you know where to focus
+4. **Generates tailored resumes** optimized for each specific role
+5. **Notifies you instantly** via Email, Telegram, or WeChat when great matches appear
 
-**You can:**
-- Search for jobs directly from the app, across multiple job platforms.
-- Save your search configurations and update them any time.
-- Generate customized CVs for each job with a single click.
-
-### How It Works
-
-1. **Configure Your Search**
-   - In the web UI, go to the **"Run Job Search"** section.
-   - Upload your base CV (PDF or DOCX).
-   - Enter your preferences: location, keywords, number of jobs, etc.
-   - For each supported job board, provide the relevant search parameters.
-
-2. **LinkedIn & Seek Integration**
-   - LinkedIn: Just enter your desired job keywords, location, and other search preferences. The app will automatically construct a LinkedIn job search and retrieve relevant postings – no need to manually copy/paste LinkedIn URLs.
-   - Seek: Similarly, specify your job search parameters (e.g., category, location, salary range), and the app will generate the Seek search behind the scenes.
-   - The app uses your provided search criteria to fetch jobs directly from these platforms, ensuring you always get results matching your preferences.
-   - Linkedin & Seek URLs are still required when running the app in command line
-
-3. **Save & Run**
-   - Your configuration is saved per user and updated automatically if you change your preferences.
-   - Click **"Save & Run Search"** to aggregate job postings from the specified platforms.
-   - The app will analyze each job description against your CV and display a list of matches, complete with compatibility scores and download links for tailored resumes.
-
-4. **View & Manage Results**
-   - See detailed matching breakdowns for each job found.
-   - Download application-ready, AI-tailored CVs instantly.
-   - Edit your search configuration any time to refine your job search.
-
-### Supported Job Platforms
-
-- **LinkedIn:** Enter your desired search keywords and other parameters.
-- **Seek:** Enter your desired search keywords and other parameters.
-- **Indeed, Glassdoor, Google Jobs:** Enter keywords or search terms for additional AI-driven aggregation.
-
-> **Note:**
-> The quality and relevance of jobs depend on the URLs you provide.
-> For best results, use the official job search and filtering tools on each platform to create URLs reflecting your interests, then copy those URLs into the app.
+**The result?** Less time on applications, higher interview rates.
 
 ---
 
-## Example: Using the Web App
+## What's New
 
-1. **Open the Web Dashboard**
-   ```
-   python webui_new.py
-   ```
-   Then visit [http://localhost:8501](http://localhost:8501) in your browser.
+### Modern React Dashboard & REST API
+A completely redesigned frontend experience built with React, Vite, and Tailwind CSS, backed by a robust FastAPI backend:
 
-2. **Configure Your Search**
-   - Upload your base CV.
-   - Paste your job board search URLs:
-     - e.g., `https://www.linkedin.com/jobs/search/?keywords=data+scientist&location=Melbourne`
-     - e.g., `https://www.seek.com.au/data-scientist-jobs/in-Melbourne`
-   - Set job search preferences (location, keywords, etc).
+- **Interactive Dashboard** — Real-time stats: total matches, CVs generated, average match scores
+- **CV Version Library** — Organize, tag, search, and manage all your tailored CVs in one place
+- **Performance Analytics** — Track which CV versions get the best response rates
+- **Job Match Browser** — Filter, sort, and explore matched jobs with one-click CV downloads
 
-3. **Run and Review**
-   - Click **Save & Run Search**.
-   - Instantly view all matching jobs with their compatibility scores.
-   - Download custom CVs for each match.
----
+### CV Version Management System
+Never lose track of your tailored resumes again:
 
-## Why Provide URLs?
+- **Version Control** — Every generated CV is automatically versioned and stored
+- **MinIO Object Storage** — Enterprise-grade S3-compatible storage with secure presigned URLs
+- **Smart Categorization** — Auto-detect role types (Backend, Frontend, Data, etc.)
+- **Custom Tags** — Organize CVs your way with user-defined tags
+- **Fork & Edit** — Create new versions from existing successful CVs
+- **Usage Tracking** — See which CVs you've used and where
+- **Response Analytics** — Track callbacks and calculate response rates per CV version
 
-**Web UI:**
-You no longer need to provide job board URLs! Simply enter your job search keywords, location, and other preferences in the web interface, and the app will automatically generate and use the appropriate search URLs for LinkedIn, Seek, and other platforms. This makes job searching easier and more intuitive.
+### Enhanced Job Scraping
+Improved job discovery with better data extraction:
 
-**Command Line:**
-If you use the command-line interface, you still need to provide the job board search result URLs (such as for LinkedIn or Seek) in your `.env` configuration file. The CLI relies on these URLs to fetch and match relevant jobs according to your criteria.
+- **Company & Location Extraction** — Richer job data for better matching
+- **Duplicate Detection** — Smart deduplication across platforms
+- **Direct Search** — No need to paste URLs in the web UI — just enter keywords
 
-- **Web UI:** No URL input required—just fill in your preferences.
-- **CLI:** URLs must still be specified in `.env`.
+### Multi-Service Docker Stack
+Production-ready deployment with:
 
-This ensures:
-- Maximum flexibility and ease of use in the web version.
-- Continued support for advanced or automated CLI workflows.
-
----
-
-**Upgrade your job search workflow with the new Winning CV web UI and precision job aggregation!**
+- **Streamlit Admin UI** (port 13000) — Full-featured job search and CV management
+- **FastAPI Backend** (port 8000) — REST API with Swagger docs at `/api/docs`
+- **MinIO Storage** (ports 9000/9001) — Secure object storage with web console
+- **CLI Job Runner** — Automated batch processing for power users
 
 ---
 
-## Key Features 🔥
-### 🔍 Smart Job Aggregation
-- Real-time crawling of LinkedIn, Seek, Indeed (with more platforms)
-- Advanced filtering by location, salary, experience level (coming soon)
+## Features
+
+### Smart Job Aggregation
+- Real-time crawling of LinkedIn, Seek, Indeed, Glassdoor, Google Jobs
+- Advanced filtering by location, keywords, and job parameters
 - Automatic duplicate detection and priority sorting
 
-### 🎯 CV-to-Job Matching Engine
-- Semantic analysis of job descriptions vs your base CV
-- Compatibility scoring system (0-10)
-- Skills gap identification with improvement suggestions (coming soon)
+### CV-to-Job Matching Engine
+- Semantic analysis of job descriptions vs. your base CV using spaCy NLP
+- Compatibility scoring system (0-10 scale)
+- Skills gap identification (coming soon)
 
-### ✨ Auto-CV Generation
-- Context-aware resume customization
+### Auto-CV Generation
+- Context-aware resume customization via Azure AI (DeepSeek R1)
 - Position-specific keyword optimization
-- Formatting preservation (PDF/DOCX/TXT)
+- Format preservation (PDF/DOCX)
 - LLM-powered achievement highlighting
 
-### 📬 Multi-Channel Alerts
-- Email/Telegram/WeChat(coming soon) notifications
-- Daily/weekly digest options
-- Instant matching alerts for premium listings
+### CV Version Library
+- Automatic versioning for every generated CV
+- MinIO-powered secure storage with presigned URLs
+- Category detection and custom tagging
+- Fork, archive, restore, and delete versions
+- Usage and response tracking with analytics
 
-### 🌐 Open & Extensible
-- Full control over your data
-- Modular architecture for custom integrations
-- Community plugin support (coming soon)
+### Multi-Channel Alerts
+- Email, Telegram, and WeChat notifications
+- Instant alerts for high-match opportunities
+- Detailed job information in every notification
 
-### 🤖 AI-Powered Core
-- Azure AI integration (DeepSeek R1)
-- Local LLM support via Ollama (coming soon)
-- Customizable prompt engineering
-
-## 🚀 Getting Started
-
-Welcome! Winning CV supports both **easy Docker deployment** (recommended for most users) and **manual local installation** (for developers and advanced users).
-All configuration is managed through a single `.env` file.
-
----
-
-### 🟢 Option 1: Quick Deploy with Docker (**Recommended**)
-
-1. **Clone this repository (optional: or just download the docker-compose.yml and .env.example)**
-   ```bash
-   git clone https://github.com/jack-jackhui/winning-cv.git
-   cd winning-cv
-   ```
-
-2. **Create your `.env` file**
-   ```bash
-   cp env.example .env
-   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   ```
-   Edit `.env` and provide all necessary values (see [Configuration](#configuration) section below for details).
-
-3. **(Optional, but recommended) Review and edit `docker-compose.yml`**
-
-   Example `docker-compose.yml` (see repo for latest sample):
-   ```yaml
-   version: '3.8'
-   services:
-     winning-cv:
-       image: ghcr.io/jack-jackhui/winning-cv:latest
-       container_name: winning-cv
-       restart: unless-stopped
-       ports:
-         - "13000:8501"  # Access UI on host port 13000
-       volumes:
-         - ./user_cv:/winning-cv/user_cv
-         - cv_data:/winning-cv/customised_cv
-         - ./.streamlit/secrets.toml:/winning-cv/.streamlit/secrets.toml  # Auth config
-       env_file:
-         - .env
-   volumes:
-     cv_data:
-   ```
-
-4. **Start the app**
-   ```bash
-   docker compose up -d
-   ```
-
-5. **Access the Web UI**
-   - Open [http://localhost:13000](http://localhost:13000) in your browser.
-
-6. **View logs (optional)**
-   ```bash
-   docker compose logs -f winning-cv
-   ```
-
-> **Note:**
-> You must have a valid `.env` file with all required settings.
-> All configuration (API keys, scraping URLs, notifications, etc.) is loaded from this file.
+### Modern Tech Stack
+- **Frontend:** React 18 + Vite + Tailwind CSS
+- **Backend:** FastAPI with async support
+- **Admin UI:** Streamlit with Google/Microsoft OAuth
+- **Storage:** MinIO (S3-compatible) + Airtable
+- **AI:** Azure AI with local Ollama support (coming soon)
 
 ---
 
-### 🧑‍💻 Option 2: Manual Local Installation (for Developers/Advanced Users)
+## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/jack-jackhui/winning-cv.git
-   cd winning-cv
-   ```
+### Option 1: Docker (Recommended)
 
-2. **Create your `.env` file**
-   ```bash
-   cp env.example .env
-   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   ```
-   Fill in all required configuration (see details below).
+The fastest way to get started with all services running:
 
-3. **Install prerequisites**
-   - **Python 3.10+** required
-   - **Google Chrome** browser must be installed for scraping (see `.env` for path)
-   - [uv](https://github.com/astral-sh/uv) for fast dependency install (or use pip)
+```bash
+# Clone the repository
+git clone https://github.com/jack-jackhui/winning-cv.git
+cd winning-cv
 
-4. **Install Python dependencies**
-   ```bash
-   uv pip install -r requirements.txt
-   ```
+# Create configuration files
+cp env.example .env
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
-5. **Download and install spaCy model**
-   ```bash
-   python -m spacy download en-core-web-sm
-   python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
-   ```
+# Edit .env with your API keys and settings (see Configuration section)
 
-6. **Set browser config in `.env`**
-   For **macOS**:
-   ```ini
-   CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-   HEADLESS=false
-   RUNNING_IN_DOCKER=false
-   ```
-   For **Windows**:
-   ```ini
-   CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
-   HEADLESS=false
-   RUNNING_IN_DOCKER=false
-   ```
+# Start all services
+docker compose up -d
+```
 
-7. **Run the app locally**
-   - Start Web UI:
-     ```bash
-     python webui_new.py
-     ```
-     Then go to [http://localhost:8501](http://localhost:8501)
-   - Run CLI job:
-     ```bash
-     python main.py --user-email <your-email>
-     ```
+**Access points:**
+- **Streamlit Admin UI:** http://localhost:13000
+- **FastAPI Backend:** http://localhost:8000
+- **API Documentation:** http://localhost:8000/api/docs
+- **MinIO Console:** http://localhost:9001
+
+### Option 2: Local Development
+
+For contributors and developers who want full control:
+
+```bash
+# Clone and setup
+git clone https://github.com/jack-jackhui/winning-cv.git
+cd winning-cv
+
+# Create configuration
+cp env.example .env
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+
+# Install Python dependencies (requires Python 3.10+)
+pip install uv  # or: brew install uv
+uv pip install -r requirements.txt
+
+# Install spaCy language model
+python -m spacy download en-core-web-sm
+
+# Configure browser path in .env
+# macOS: CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Windows: CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
+# Set: HEADLESS=false and RUNNING_IN_DOCKER=false
+```
+
+**Run the services:**
+
+```bash
+# Terminal 1: FastAPI Backend
+python run_api.py
+# API at http://localhost:8000, Docs at http://localhost:8000/api/docs
+
+# Terminal 2: React Frontend (for development)
+cd frontend && npm install && npm run dev
+# Frontend at http://localhost:3000
+
+# Terminal 3: Streamlit Admin UI
+python webui_new.py
+# Admin UI at http://localhost:8501
+
+# Or run CLI job search
+python main.py --user-email your@email.com
+```
 
 ---
 
-## ⚙️ Configuration
-All configuration is managed via the `.env` file in your project root.
-**Copy** `.env.example` to `.env` and fill in your settings.
+## How It Works
+
+### Web UI Workflow
+
+1. **Sign In** — Use Google or Microsoft OAuth
+2. **Configure Search** — Enter job keywords, location, and preferences (no URLs needed!)
+3. **Upload Base CV** — Your master resume for AI analysis
+4. **Run Search** — System scrapes jobs and scores matches in real-time
+5. **Review Matches** — Browse jobs with compatibility scores
+6. **Download CVs** — Get AI-tailored resumes optimized for each role
+7. **Manage Library** — Track all versions, see analytics, and optimize your approach
+
+### CLI Workflow
+
+```bash
+# Set job search URLs in .env
+LINKEDIN_JOB_URL=https://linkedin.com/jobs/search?keywords=...
+SEEK_JOB_URL=https://seek.com.au/...
+
+# Run the job processor
+python main.py --user-email your@email.com
+```
+
+Jobs are analyzed, CVs generated, and notifications sent automatically.
+
+---
+
+## Configuration
+
+All settings are managed via `.env` file. Copy `.env.example` and configure:
 
 <details>
-<summary>Click to view a full <code>.env.example</code> template</summary>
+<summary><strong>Click to expand full configuration reference</strong></summary>
 
 ```ini
-# === Base CV Configuration ===
-BASE_CV_PATH=Path-to-your-base-CV-file
+# === Base CV ===
+BASE_CV_PATH=user_cv/my_resume.docx
 
-# === Airtable Configuration ===
-AIRTABLE_PAT=your-airtable-personal-access-token
+# === Airtable (Data Storage) ===
+AIRTABLE_PAT=your-personal-access-token
 AIRTABLE_BASE_ID=your-base-id
-AIRTABLE_TABLE_ID=your-main-table-id
-AIRTABLE_TABLE_ID_HISTORY=your-history-table-id
+AIRTABLE_TABLE_ID=main-jobs-table-id
+AIRTABLE_TABLE_ID_HISTORY=history-table-id
+AIRTABLE_TABLE_ID_CV_VERSIONS=cv-versions-table-id
 
-# === Linkedin & Seek URLs for Scraping Jobs ===
-LINKEDIN_JOB_URL=https://linkedin.com
-SEEK_JOB_URL=https://seek.com
+# === MinIO (CV File Storage) ===
+MINIO_ENDPOINT=localhost:9000       # or minio:9000 in Docker
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+MINIO_BUCKET=winningcv-cvs
 
-# === Azure AI Configuration ===
-AZURE_AI_ENDPOINT=https://your-azure-endpoint.openai.azure.com
-AZURE_AI_API_KEY=your-azure-ai-api-key
-AZURE_DEPLOYMENT=your-deployment-name
+# === Job Board URLs (CLI mode) ===
+LINKEDIN_JOB_URL=https://linkedin.com/jobs/search?...
+SEEK_JOB_URL=https://seek.com.au/...
 
-# === Notification Settings ===
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token
-TELEGRAM_CHAT_ID=your-telegram-chat-id
-WECHAT_API_KEY=your-wechat-api-key
-WECHAT_BOT_URL=https://your-wechat-webhook-url
-EMAIL_USER=your-email@domain.com
-EMAIL_PASSWORD=your-email-password
-SMTP_SERVER=your-smtp-server.com
-DEFAULT_FROM_EMAIL=no-reply@yourdomain.com
-DEFAULT_TO_EMAIL=user@domain.com
+# === Azure AI ===
+AZURE_AI_ENDPOINT=https://your-endpoint.openai.azure.com
+AZURE_AI_API_KEY=your-api-key
+AZURE_DEPLOYMENT=deployment-name
 
-# === Job Search Parameters ===
+# === Notifications ===
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+EMAIL_USER=your@email.com
+EMAIL_PASSWORD=your-password
+SMTP_SERVER=smtp.server.com
+
+# === Search Parameters ===
 LOCATION=Melbourne,VIC
 COUNTRY=australia
-HOURS_OLD=168
-RESULTS_WANTED=10
-JOB_MATCH_THRESHOLD=7
+HOURS_OLD=168          # Jobs from last 7 days
+RESULTS_WANTED=10      # Jobs per platform
+JOB_MATCH_THRESHOLD=7  # Minimum match score (0-10)
 MAX_JOBS_TO_SCRAPE=50
-CHECK_INTERVAL_MIN=60
 
-# === Browser Configuration ===
-CHROME_PATH="/path/to/chrome"      # Local development only
-CHROMIUM_PATH="/usr/bin/chromium"  # Docker only
-HEADLESS="true"                    # true for Docker, false for local
-RUNNING_IN_DOCKER="false"          # Auto-set in Docker
-
-# === Advanced Configuration ===
-ADDITIONAL_SEARCH_TERM='AI IT (manager OR head OR director) "software engineering" leadership'
-GOOGLE_SEARCH_TERM='head of IT or IT manager jobs near [Location] since last week'
+# === Browser (Local Development) ===
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+HEADLESS=false
+RUNNING_IN_DOCKER=false
 ```
+
 </details>
 
----
+### Authentication Setup
 
-### 🔑 Configuration Values Reference
-
-- **BASE_CV_PATH**: Path to your base CV document (e.g. `user_cv/my_cv.docx`)
-- **Airtable Credentials**: `AIRTABLE_PAT`, `AIRTABLE_BASE_ID`, `AIRTABLE_TABLE_ID`, `AIRTABLE_TABLE_ID_HISTORY`
-- **Job Board URLs**:
-  - `LINKEDIN_JOB_URL`: Your LinkedIn job search results URL (with preferred filters)
-  - `SEEK_JOB_URL`: Your Seek job search results URL
-- **Azure AI**: `AZURE_AI_ENDPOINT`, `AZURE_AI_API_KEY`, `AZURE_DEPLOYMENT`
-- **Notification Channels**:
-  - Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-  - WeChat: `WECHAT_API_KEY`, `WECHAT_BOT_URL`
-  - Email: `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `DEFAULT_FROM_EMAIL`, `DEFAULT_TO_EMAIL`
-- **Job Search Parameters**:
-  - `LOCATION` (e.g. "Melbourne,VIC")
-  - `COUNTRY` (e.g. "australia")
-  - `HOURS_OLD`, `RESULTS_WANTED`, `JOB_MATCH_THRESHOLD`, `MAX_JOBS_TO_SCRAPE`, `CHECK_INTERVAL_MIN`
-- **Browser Configuration**:
-  - For **Docker**: `CHROMIUM_PATH=/usr/bin/chromium`, `HEADLESS=true`, `RUNNING_IN_DOCKER=true`
-  - For **Local**:  `CHROME_PATH`, `HEADLESS=false`, `RUNNING_IN_DOCKER=false`
-
-> **Tip:**
-> Most parameters have sensible defaults.
-> For best results, review and update your job search URLs and notification channels.
-
----
-
-### Authentication Secrets
-| Key | Description | Example |
-|-----|-------------|---------|
-| `[connections.google]` | Google OAuth credentials | `client_id = "1234.apps.googleusercontent.com"` |
-| `[email]` | Email restrictions | `allowed = ["@company.com"]` |
-
-<details>
-<summary>Full secrets.toml example</summary>
+Configure OAuth providers in `.streamlit/secrets.toml`:
 
 ```toml
-# .streamlit/secrets.toml
-[connections]
 [connections.google]
 client_id = "your-google-client-id"
 client_secret = "your-google-secret"
 redirect_uri = "https://your-domain.com/oauth/callback"
 
-[connections.github]
-client_id = "your-github-client-id"
-client_secret = "your-github-secret"
-
+[connections.microsoft]
+client_id = "your-microsoft-client-id"
+client_secret = "your-microsoft-secret"
 ```
-</details>
+
+See [Streamlit Authentication Docs](https://docs.streamlit.io/develop/concepts/connections/authentication) for setup guides.
 
 ---
 
-### 🛡️ Security & Best Practices
-- **Never commit sensitive files**:
-  ```bash
-  echo ".env" >> .gitignore
-  echo ".streamlit/secrets.toml" >> .gitignore
-  ```
-- Set strict file permissions:
-  ```bash
-  chmod 600 .env .streamlit/secrets.toml
-  ```
+## Architecture
+
+```
+winning-cv/
+├── frontend/              # React + Vite + Tailwind dashboard
+│   └── src/
+│       ├── pages/         # Dashboard, CVLibrary, Analytics, etc.
+│       ├── components/    # Reusable UI components
+│       └── services/      # API client
+├── api/                   # FastAPI REST backend
+│   ├── routes/            # auth, cv, cv_versions, jobs, profile
+│   ├── middleware/        # Authentication middleware
+│   └── schemas/           # Pydantic models
+├── job_processing/        # Core matching engine
+├── job_sources/           # Platform scrapers (LinkedIn, Seek, etc.)
+├── data_store/            # Airtable + CV version manager
+├── utils/                 # MinIO storage, notifications, logging
+├── webui_new.py           # Streamlit admin application
+├── main.py                # CLI interface
+└── run_api.py             # FastAPI server entry point
+```
+
+### Services (Docker Compose)
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `winning-cv` | 13000 | Streamlit admin UI |
+| `api` | 8000 | FastAPI REST backend |
+| `job-runner` | - | CLI batch processor |
+| `minio` | 9000/9001 | S3-compatible storage |
+
+---
+
+## Security Best Practices
+
+```bash
+# Never commit secrets
+echo ".env" >> .gitignore
+echo ".streamlit/secrets.toml" >> .gitignore
+
+# Restrict file permissions
+chmod 600 .env .streamlit/secrets.toml
+```
+
 - Rotate credentials regularly
-- Use environment variables for CI/CD systems
-- Review Streamlit's [security recommendations](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
-- Treat your API keys, tokens, and credentials as secrets
-- Use named Docker volumes for persistent output storage
-- For collaborative development, update `.env.example` if a new setting is introduced
+- Use environment variables in CI/CD
+- Keep API keys and tokens secure
+- Review [Streamlit security recommendations](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
 
 ---
 
-## 🚦 Usage
+## API Reference
 
-**Web Dashboard**
-- **Docker:** Visit [http://localhost:13000](http://localhost:13000)
-- **Local:** Run `python webui_new.py` and open [http://localhost:8501](http://localhost:8501)
+The FastAPI backend provides a complete REST API:
 
-**Run CLI Job (Docker):**
-```bash
-docker compose run --rm job-runner
-```
-**Run CLI Job (Local):**
-```bash
-python main.py --user-email <your@email.com>
-```
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check |
+| `POST /api/v1/auth/login` | User authentication |
+| `GET /api/v1/jobs/results` | List matched jobs |
+| `GET /api/v1/cv/versions` | List CV versions |
+| `POST /api/v1/cv/versions` | Create CV version |
+| `GET /api/v1/cv/versions/{id}/download` | Get download URL |
+| `GET /api/v1/cv/analytics` | CV performance analytics |
+| `GET /api/v1/profile` | User profile |
+
+Full interactive docs at: `http://localhost:8000/api/docs`
 
 ---
 
-## Summary
+## Roadmap
 
-- **Docker deployment:** Fast, portable, recommended for most users
-- **Manual installation:** Full control, ideal for contributors and advanced users
-- **All configuration:** Managed via `.env` (copy from `.env.example`)
-- **Security:** Keep secrets out of version control
-
-## Roadmap 🗺️
-- [ ] Add more job sources integration
 - [ ] Local LLM support with Ollama
 - [ ] Browser extension for one-click applications
 - [ ] Salary negotiation assistant
-- [ ] Application success analytics
+- [ ] Application success analytics dashboard
 - [ ] Mobile app (iOS/Android)
+- [ ] More job platforms integration
 - [ ] Community plugin marketplace
 
-## Contribution & Support 🤝
-We welcome developers to join our mission! Here's how you can help:
-- Report issues in GitHub Issues
-- Submit PRs for new features/bug fixes
-- Develop platform connectors
-- Improve documentation
-- Create tutorial content
+---
 
-**Before contributing,** please read our [Contribution Guidelines](CONTRIBUTING.md).
+## Contributing
 
-## License 📄
-Released under [MIT License](LICENSE). 
+We welcome contributions! Here's how you can help:
 
-## Disclaimer ⚠️
+- **Report bugs** via [GitHub Issues](https://github.com/jack-jackhui/winning-cv/issues)
+- **Submit PRs** for features and fixes
+- **Develop platform connectors** for new job sites
+- **Improve documentation** and tutorials
+- **Share your success stories**
+
+Please read our [Contribution Guidelines](CONTRIBUTING.md) before submitting PRs.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+## Disclaimer
+
 - Job data comes from third-party platforms
-- Users are responsible for complying with platform ToS
-- Always verify generated CVs before submission
-- Not affiliated with LinkedIn/Seek/Indeed
+- Users must comply with each platform's Terms of Service
+- Always review generated CVs before submission
+- Not affiliated with LinkedIn, Seek, Indeed, or other job platforms
 
 ---
-**Transform Your Job Search** - Star ⭐ this repo to support development!
----
-## Acknowledgments 🙏
-This project stands on the shoulders of these amazing open-source technologies:
 
-- **[JobSpy](https://github.com/speedyapply/JobSpy)** - Jobs scraper library for LinkedIn, Indeed, Glassdoor, Google, Bayt, & Naukri
-- **[Docker](https://www.docker.com)** - Containerization magic
-- **[Azure AI](https://azure.microsoft.com/en-us/products/ai-services)** - Core LLM capabilities
-- **[spaCy](https://spacy.io)** - NLP processing backbone
-- **[Ollama](https://ollama.ai)** - Local LLM integration (upcoming)
-- **[LinkedIn/Seek](https://www.linkedin.com/)** - Job data sources
+<div align="center">
+
+**Transform Your Job Search Today**
+
+[Try Winning CV Free](https://winning-cv.jackhui.com.au) | [View Documentation](https://github.com/jack-jackhui/winning-cv)
+
+**Star this repo to support development!**
+
+</div>
+
+---
+
+## Acknowledgments
+
+Built with these amazing open-source technologies:
+
+- **[JobSpy](https://github.com/speedyapply/JobSpy)** — Multi-platform job scraping
+- **[FastAPI](https://fastapi.tiangolo.com)** — Modern Python web framework
+- **[React](https://react.dev)** — UI component library
+- **[Streamlit](https://streamlit.io)** — Rapid dashboard development
+- **[MinIO](https://min.io)** — S3-compatible object storage
+- **[spaCy](https://spacy.io)** — Industrial NLP
+- **[Azure AI](https://azure.microsoft.com/products/ai-services)** — LLM capabilities
+- **[Docker](https://docker.com)** — Containerization
 
 *Special thanks to all open-source maintainers and contributors who make projects like this possible.*
-
----
