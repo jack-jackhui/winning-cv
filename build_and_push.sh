@@ -17,7 +17,8 @@ source .env.build_config
 # Variables
 IMAGE_NAME="winning-cv"
 VERSION_TAG="latest"
-GHCR_URL="ghcr.io/$GITHUB_USER/$IMAGE_NAME"
+FRONTEND_TAG="frontend"
+GHCR_URL="ghcr.io/${GITHUB_USER}/${IMAGE_NAME}"
 
 # Parse command line argument
 BUILD_TARGET="${1:-all}"
@@ -39,32 +40,36 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
 
 # Function to build backend
 build_backend() {
+    local BACKEND_IMAGE="${GHCR_URL}:${VERSION_TAG}"
     echo ""
     echo "=========================================="
     echo "Building Backend Image (Python/FastAPI)..."
     echo "=========================================="
+    echo "Target image: ${BACKEND_IMAGE}"
     docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --target backend \
-        -t "$GHCR_URL:$VERSION_TAG" \
+        -t "${BACKEND_IMAGE}" \
         . --push
 
-    echo "Backend image pushed: $GHCR_URL:$VERSION_TAG"
+    echo "Backend image pushed: ${BACKEND_IMAGE}"
 }
 
 # Function to build frontend
 build_frontend() {
+    local FRONTEND_IMAGE="${GHCR_URL}:${FRONTEND_TAG}"
     echo ""
     echo "=========================================="
     echo "Building Frontend Image (React/Nginx)..."
     echo "=========================================="
+    echo "Target image: ${FRONTEND_IMAGE}"
     docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --target frontend \
-        -t "$GHCR_URL:frontend" \
+        -t "${FRONTEND_IMAGE}" \
         . --push
 
-    echo "Frontend image pushed: $GHCR_URL:frontend"
+    echo "Frontend image pushed: ${FRONTEND_IMAGE}"
 }
 
 # Execute based on target
@@ -88,8 +93,8 @@ echo "=========================================="
 echo ""
 echo "Images available:"
 if [[ "$BUILD_TARGET" == "all" || "$BUILD_TARGET" == "backend" ]]; then
-    echo "  - $GHCR_URL:$VERSION_TAG (Backend/CLI)"
+    echo "  - ${GHCR_URL}:${VERSION_TAG} (Backend/CLI)"
 fi
 if [[ "$BUILD_TARGET" == "all" || "$BUILD_TARGET" == "frontend" ]]; then
-    echo "  - $GHCR_URL:frontend (Frontend)"
+    echo "  - ${GHCR_URL}:${FRONTEND_TAG} (Frontend)"
 fi

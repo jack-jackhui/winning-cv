@@ -99,10 +99,16 @@ datarecorder==3.6.2
     # via downloadkit
 defusedxml==0.7.1
     # via fpdf2
+dnspython==2.8.0
+    # via email-validator
 downloadkit==2.0.7
     # via drissionpage
 drissionpage==4.1.0.18
     # via -r requirements.in
+email-validator==2.3.0
+    # via
+    #   -r requirements.in
+    #   pydantic
 entrypoints==0.4
     # via streamlit-extras
 et-xmlfile==2.0.0
@@ -154,6 +160,7 @@ httpx==0.28.1
 idna==3.10
     # via
     #   anyio
+    #   email-validator
     #   httpx
     #   requests
     #   tldextract
@@ -301,6 +308,7 @@ pycryptodome==3.23.0
     # via minio
 pydantic==2.11.4
     # via
+    #   -r requirements.in
     #   confection
     #   fastapi
     #   pyairtable
