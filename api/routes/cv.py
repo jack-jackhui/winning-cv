@@ -1,6 +1,7 @@
 """
 CV Generation routes for WinningCV API.
 Handles CV generation, upload, and history.
+Uses MinIO for file storage.
 """
 import os
 import uuid
@@ -26,8 +27,9 @@ from api.middleware.auth_middleware import get_current_user, get_optional_user
 
 # Import existing functionality
 from cv.cv_generator import CVGenerator
-from utils.utils import extract_text_from_file, create_pdf
-from ui.helpers import upload_pdf_to_wordpress, extract_title_from_jd
+from utils.utils import extract_text_from_file, create_pdf, create_docx
+from utils.minio_storage import get_minio_storage
+from ui.helpers import extract_title_from_jd
 from data_store.airtable_manager import AirtableManager
 from config.settings import Config
 
@@ -96,40 +98,59 @@ async def generate_cv(
         generator = CVGenerator()
         raw_md = generator.generate_cv(orig_cv, job_description, instructions or "")
 
-        # Create PDF
+        # Generate file names
         job_title = extract_title_from_jd(job_description)
         safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
         today = datetime.now().strftime("%Y-%m-%d")
         unique_id = uuid.uuid4().hex[:8]
 
-        # Create temp directory for PDF
+        # Create temp directory for files
         output_dir = Path("customised_cv")
         output_dir.mkdir(exist_ok=True)
 
-        pdf_filename = f"{today}_{safe_title}_{unique_id}_cv.pdf"
+        base_filename = f"{today}_{safe_title}_{unique_id}_cv"
+        pdf_filename = f"{base_filename}.pdf"
+        docx_filename = f"{base_filename}.docx"
         pdf_path = output_dir / pdf_filename
+        docx_path = output_dir / docx_filename
 
+        # Generate PDF
         pdf_result = create_pdf(raw_md, str(pdf_path))
-
         if not pdf_result:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate PDF"
             )
 
-        # Upload to WordPress
+        # Generate DOCX
+        docx_result = create_docx(raw_md, str(docx_path))
+        if not docx_result:
+            logger.warning("Failed to generate DOCX, continuing with PDF only")
+
+        # Upload to MinIO storage
+        minio = get_minio_storage()
         cv_pdf_url = ""
+        cv_docx_url = ""
+
+        # Upload PDF to MinIO
         try:
-            cv_pdf_url = upload_pdf_to_wordpress(
-                file_path=str(pdf_path),
-                filename=pdf_filename,
-                wp_site=Config.WORDPRESS_SITE,
-                wp_user=Config.WORDPRESS_USERNAME,
-                wp_app_password=Config.WORDPRESS_APP_PASSWORD
-            )
+            pdf_object_name = f"cv/{user.email}/{pdf_filename}"
+            minio.upload_file(str(pdf_path), pdf_object_name)
+            cv_pdf_url = minio.get_presigned_url(pdf_object_name, expires_hours=24)
+            logger.info(f"Uploaded PDF to MinIO: {pdf_object_name}")
         except Exception as e:
-            logger.error(f"Failed to upload PDF to WordPress: {e}")
+            logger.error(f"Failed to upload PDF to MinIO: {e}")
             # Continue without URL - file is still available locally
+
+        # Upload DOCX to MinIO
+        if docx_result:
+            try:
+                docx_object_name = f"cv/{user.email}/{docx_filename}"
+                minio.upload_file(str(docx_path), docx_object_name)
+                cv_docx_url = minio.get_presigned_url(docx_object_name, expires_hours=24)
+                logger.info(f"Uploaded DOCX to MinIO: {docx_object_name}")
+            except Exception as e:
+                logger.error(f"Failed to upload DOCX to MinIO: {e}")
 
         # Save to history
         try:
@@ -155,6 +176,7 @@ async def generate_cv(
         return CVGenerateResponse(
             cv_markdown=raw_md,
             cv_pdf_url=cv_pdf_url,
+            cv_docx_url=cv_docx_url if cv_docx_url else None,
             job_title=job_title
         )
 
@@ -203,23 +225,21 @@ async def upload_cv(
         unique_filename = f"base_cv_{uuid.uuid4().hex[:8]}{suffix}"
         cv_path = cv_dir / unique_filename
 
-        # Save file
+        # Save file locally
         content = await cv_file.read()
         with open(cv_path, "wb") as f:
             f.write(content)
 
-        # Upload to WordPress for web access
+        # Upload to MinIO for web access
         cv_url = ""
         try:
-            cv_url = upload_pdf_to_wordpress(
-                file_path=str(cv_path),
-                filename=unique_filename,
-                wp_site=Config.WORDPRESS_SITE,
-                wp_user=Config.WORDPRESS_USERNAME,
-                wp_app_password=Config.WORDPRESS_APP_PASSWORD
-            )
+            minio = get_minio_storage()
+            object_name = f"base_cv/{user.email}/{unique_filename}"
+            minio.upload_file(str(cv_path), object_name)
+            cv_url = minio.get_presigned_url(object_name, expires_hours=24)
+            logger.info(f"Uploaded base CV to MinIO: {object_name}")
         except Exception as e:
-            logger.warning(f"Failed to upload CV to WordPress: {e}")
+            logger.warning(f"Failed to upload CV to MinIO: {e}")
 
         return CVUploadResponse(
             path=str(cv_path),

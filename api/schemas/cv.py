@@ -12,7 +12,8 @@ class CVGenerateRequest(BaseModel):
 class CVGenerateResponse(BaseModel):
     """Response from CV generation"""
     cv_markdown: str
-    cv_pdf_url: str
+    cv_pdf_url: str  # Presigned MinIO URL for PDF download
+    cv_docx_url: Optional[str] = None  # Presigned MinIO URL for DOCX download
     job_title: str
     preview_html: Optional[str] = None
     version_id: Optional[str] = None  # New: reference to saved version

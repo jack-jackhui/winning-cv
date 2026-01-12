@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   FileText,
   Download,
@@ -12,6 +12,7 @@ import {
   ExternalLink,
   FolderOpen,
   Plus,
+  ChevronDown,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
@@ -40,6 +41,19 @@ export default function GenerateCV() {
   // Preview state
   const [showPreview, setShowPreview] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const downloadMenuRef = useRef(null)
+
+  // Close download menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target)) {
+        setShowDownloadMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -159,9 +173,12 @@ export default function GenerateCV() {
     }
   }
 
-  const handleDownload = () => {
-    if (result?.cv_pdf_url) {
+  const handleDownload = (format = 'pdf') => {
+    setShowDownloadMenu(false)
+    if (format === 'pdf' && result?.cv_pdf_url) {
       cvService.downloadFromUrl(result.cv_pdf_url, `${result.job_title}_cv.pdf`)
+    } else if (format === 'docx' && result?.cv_docx_url) {
+      cvService.downloadFromUrl(result.cv_docx_url, `${result.job_title}_cv.docx`)
     }
   }
 
@@ -219,11 +236,39 @@ export default function GenerateCV() {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3">
-            {result.cv_pdf_url && (
-              <button onClick={handleDownload} className="btn-primary">
-                <Download className="w-5 h-5" />
-                Download PDF
-              </button>
+            {(result.cv_pdf_url || result.cv_docx_url) && (
+              <div className="relative" ref={downloadMenuRef}>
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  className="btn-primary"
+                >
+                  <Download className="w-5 h-5" />
+                  Download
+                  <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showDownloadMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showDownloadMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-48 rounded-lg bg-surface-elevated border border-border shadow-lg z-10">
+                    {result.cv_pdf_url && (
+                      <button
+                        onClick={() => handleDownload('pdf')}
+                        className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-surface-hover flex items-center gap-2 first:rounded-t-lg"
+                      >
+                        <FileText className="w-4 h-4 text-red-400" />
+                        Download as PDF
+                      </button>
+                    )}
+                    {result.cv_docx_url && (
+                      <button
+                        onClick={() => handleDownload('docx')}
+                        className="w-full px-4 py-2.5 text-left text-sm text-text-primary hover:bg-surface-hover flex items-center gap-2 last:rounded-b-lg"
+                      >
+                        <FileText className="w-4 h-4 text-blue-400" />
+                        Download as Word
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             <button onClick={handleCopyMarkdown} className="btn-secondary">
               {copied ? (
