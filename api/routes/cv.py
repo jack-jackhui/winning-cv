@@ -22,11 +22,21 @@ from api.schemas.cv import (
     CVUploadResponse,
     CVHistoryItem,
     CVHistoryResponse,
+    CVAnalysisResponse,
+    KeywordMatchSchema,
+    TechnicalSkillsSchema,
+    SoftSkillsSchema,
+    SkillsCoverageSchema,
+    ExperienceRelevanceSchema,
+    ATSOptimizationSchema,
+    GapAnalysisSchema,
+    TalkingPointsSchema,
 )
 from api.middleware.auth_middleware import get_current_user, get_optional_user
 
 # Import existing functionality
 from cv.cv_generator import CVGenerator
+from cv.cv_analyzer import CVAnalyzer, analyze_cv_fit
 from utils.utils import extract_text_from_file, create_pdf, create_docx
 from utils.minio_storage import get_minio_storage
 from ui.helpers import extract_title_from_jd
@@ -36,6 +46,61 @@ from config.settings import Config
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cv", tags=["CV Generation"])
+
+
+# ──────────────────────────────────────────────────────────
+# BACKGROUND TASK FOR CV ANALYSIS
+# ──────────────────────────────────────────────────────────
+
+def run_cv_analysis_background(
+    history_id: str,
+    cv_markdown: str,
+    job_description: str
+):
+    """
+    Background task to analyze CV-JD fit after CV generation.
+
+    Args:
+        history_id: Airtable record ID to update with analysis
+        cv_markdown: Generated CV content
+        job_description: Job description used for generation
+    """
+    import json
+
+    logger.info(f"Starting background CV analysis for history_id={history_id}")
+
+    try:
+        cfg = Config()
+        history_at = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+
+        # Run the analysis
+        analyzer = CVAnalyzer()
+        analysis = analyzer.analyze(cv_markdown, job_description)
+
+        # Store as JSON in Airtable
+        analysis_json = json.dumps(analysis.to_dict())
+        history_at.update_history_analysis(history_id, analysis_json, status="ready")
+
+        logger.info(f"CV analysis complete for history_id={history_id}, score={analysis.overall_score}")
+
+    except Exception as e:
+        logger.error(f"CV analysis failed for history_id={history_id}: {e}")
+
+        # Update status to failed
+        try:
+            cfg = Config()
+            history_at = AirtableManager(
+                cfg.AIRTABLE_API_KEY,
+                cfg.AIRTABLE_BASE_ID,
+                cfg.AIRTABLE_TABLE_ID_HISTORY
+            )
+            history_at.update_history_analysis(history_id, json.dumps({"error": str(e)}), status="failed")
+        except Exception as update_error:
+            logger.error(f"Failed to update analysis status: {update_error}")
 
 
 class FileWrapper:
@@ -51,6 +116,7 @@ class FileWrapper:
 
 @router.post("/generate", response_model=CVGenerateResponse)
 async def generate_cv(
+    background_tasks: BackgroundTasks,
     job_description: str = Form(..., min_length=50),
     cv_file: UploadFile = File(...),
     instructions: Optional[str] = Form(None),
@@ -58,15 +124,17 @@ async def generate_cv(
 ) -> CVGenerateResponse:
     """
     Generate a tailored CV based on job description and user's CV.
+    Also triggers background analysis of CV-JD fit.
 
     Args:
+        background_tasks: FastAPI background tasks handler
         job_description: The job description to tailor the CV for
         cv_file: The user's current CV (PDF/DOCX/TXT)
         instructions: Optional special instructions for CV generation
         user: Authenticated user
 
     Returns:
-        Generated CV in markdown format and PDF URL
+        Generated CV in markdown format, PDF URL, and history_id for analysis lookup
     """
     # Validate file type
     allowed_types = [
@@ -134,10 +202,13 @@ async def generate_cv(
 
         # Upload PDF to MinIO
         try:
-            pdf_object_name = f"cv/{user.email}/{pdf_filename}"
-            minio.upload_file(str(pdf_path), pdf_object_name)
-            cv_pdf_url = minio.get_presigned_url(pdf_object_name, expires_hours=24)
-            logger.info(f"Uploaded PDF to MinIO: {pdf_object_name}")
+            pdf_object_path = minio.upload_cv(
+                file_path=str(pdf_path),
+                user_id=user.email,
+                filename=pdf_filename
+            )
+            cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
+            logger.info(f"Uploaded PDF to MinIO: {pdf_object_path}")
         except Exception as e:
             logger.error(f"Failed to upload PDF to MinIO: {e}")
             # Continue without URL - file is still available locally
@@ -145,14 +216,19 @@ async def generate_cv(
         # Upload DOCX to MinIO
         if docx_result:
             try:
-                docx_object_name = f"cv/{user.email}/{docx_filename}"
-                minio.upload_file(str(docx_path), docx_object_name)
-                cv_docx_url = minio.get_presigned_url(docx_object_name, expires_hours=24)
-                logger.info(f"Uploaded DOCX to MinIO: {docx_object_name}")
+                docx_object_path = minio.upload_cv(
+                    file_path=str(docx_path),
+                    user_id=user.email,
+                    filename=docx_filename,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
+                logger.info(f"Uploaded DOCX to MinIO: {docx_object_path}")
             except Exception as e:
                 logger.error(f"Failed to upload DOCX to MinIO: {e}")
 
-        # Save to history
+        # Save to history and get record ID for analysis
+        history_id = None
         try:
             cfg = Config()
             history_at = AirtableManager(
@@ -167,8 +243,20 @@ async def generate_cv(
                 "instructions": instructions or "",
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
+                "analysis_status": "pending",  # Mark as pending analysis
             }
-            history_at.create_history_record(history_data)
+            history_id = history_at.create_history_record(history_data)
+
+            # Trigger background analysis if history was saved
+            if history_id:
+                background_tasks.add_task(
+                    run_cv_analysis_background,
+                    history_id=history_id,
+                    cv_markdown=raw_md,
+                    job_description=job_description
+                )
+                logger.info(f"Queued background analysis for history_id={history_id}")
+
         except Exception as e:
             logger.error(f"Failed to save history: {e}")
             # Continue - generation was successful
@@ -177,7 +265,8 @@ async def generate_cv(
             cv_markdown=raw_md,
             cv_pdf_url=cv_pdf_url,
             cv_docx_url=cv_docx_url if cv_docx_url else None,
-            job_title=job_title
+            job_title=job_title,
+            history_id=history_id  # Return for frontend to poll analysis status
         )
 
     except HTTPException:
@@ -234,10 +323,19 @@ async def upload_cv(
         cv_url = ""
         try:
             minio = get_minio_storage()
-            object_name = f"base_cv/{user.email}/{unique_filename}"
-            minio.upload_file(str(cv_path), object_name)
-            cv_url = minio.get_presigned_url(object_name, expires_hours=24)
-            logger.info(f"Uploaded base CV to MinIO: {object_name}")
+            # Determine content type from suffix
+            content_type = "application/pdf"
+            if suffix.lower() == ".docx":
+                content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+            object_path = minio.upload_cv(
+                file_path=str(cv_path),
+                user_id=user.email,
+                filename=unique_filename,
+                content_type=content_type
+            )
+            cv_url = minio.get_download_url_by_path(object_path, expires_hours=24)
+            logger.info(f"Uploaded base CV to MinIO: {object_path}")
         except Exception as e:
             logger.warning(f"Failed to upload CV to MinIO: {e}")
 
@@ -337,3 +435,122 @@ async def download_cv(
         filename=safe_filename,
         media_type="application/pdf"
     )
+
+
+# ──────────────────────────────────────────────────────────
+# CV-JD FIT ANALYSIS ENDPOINT
+# ──────────────────────────────────────────────────────────
+
+@router.get("/analysis/{history_id}", response_model=CVAnalysisResponse)
+async def get_cv_analysis(
+    history_id: str,
+    user: UserInfo = Depends(get_current_user)
+) -> CVAnalysisResponse:
+    """
+    Get the CV-JD fit analysis for a generated CV.
+
+    Args:
+        history_id: Airtable record ID from CV generation
+        user: Authenticated user
+
+    Returns:
+        Analysis status and results if ready
+    """
+    import json
+
+    try:
+        cfg = Config()
+        history_at = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+
+        # Get the history record
+        record = history_at.get_history_record(history_id)
+
+        if not record:
+            raise HTTPException(status_code=404, detail="History record not found")
+
+        fields = record.get("fields", {})
+
+        # Verify ownership
+        if fields.get("user_email") != user.email:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Check analysis status
+        status = fields.get("analysis_status", "pending")
+        analysis_json = fields.get("cv_analysis")
+
+        if status == "pending" or not analysis_json:
+            return CVAnalysisResponse(status="pending")
+
+        if status == "failed":
+            error_data = json.loads(analysis_json) if analysis_json else {}
+            return CVAnalysisResponse(
+                status="failed",
+                error=error_data.get("error", "Analysis failed")
+            )
+
+        # Parse the analysis JSON
+        try:
+            analysis_data = json.loads(analysis_json)
+        except json.JSONDecodeError:
+            return CVAnalysisResponse(status="failed", error="Invalid analysis data")
+
+        # Build response with nested schemas
+        return CVAnalysisResponse(
+            status="ready",
+            overall_score=analysis_data.get("overall_score"),
+            summary=analysis_data.get("summary"),
+            keyword_match=KeywordMatchSchema(
+                score=analysis_data["keyword_match"]["score"],
+                matched=analysis_data["keyword_match"]["matched"],
+                missing=analysis_data["keyword_match"]["missing"],
+                density_assessment=analysis_data["keyword_match"]["density_assessment"]
+            ) if analysis_data.get("keyword_match") else None,
+            skills_coverage=SkillsCoverageSchema(
+                score=analysis_data["skills_coverage"]["score"],
+                technical_skills=TechnicalSkillsSchema(
+                    matched=analysis_data["skills_coverage"]["technical_skills"]["matched"],
+                    partial=analysis_data["skills_coverage"]["technical_skills"]["partial"],
+                    missing=analysis_data["skills_coverage"]["technical_skills"]["missing"]
+                ),
+                soft_skills=SoftSkillsSchema(
+                    matched=analysis_data["skills_coverage"]["soft_skills"]["matched"],
+                    demonstrated=analysis_data["skills_coverage"]["soft_skills"]["demonstrated"]
+                )
+            ) if analysis_data.get("skills_coverage") else None,
+            experience_relevance=ExperienceRelevanceSchema(
+                score=analysis_data["experience_relevance"]["score"],
+                aligned_roles=analysis_data["experience_relevance"]["aligned_roles"],
+                relevant_achievements=analysis_data["experience_relevance"]["relevant_achievements"],
+                years_alignment=analysis_data["experience_relevance"]["years_alignment"]
+            ) if analysis_data.get("experience_relevance") else None,
+            ats_optimization=ATSOptimizationSchema(
+                score=analysis_data["ats_optimization"]["score"],
+                format_check=analysis_data["ats_optimization"]["format_check"],
+                keyword_density=analysis_data["ats_optimization"]["keyword_density"],
+                section_structure=analysis_data["ats_optimization"]["section_structure"],
+                recommendations=analysis_data["ats_optimization"]["recommendations"]
+            ) if analysis_data.get("ats_optimization") else None,
+            gap_analysis=GapAnalysisSchema(
+                critical_gaps=analysis_data["gap_analysis"]["critical_gaps"],
+                minor_gaps=analysis_data["gap_analysis"]["minor_gaps"],
+                mitigation_suggestions=analysis_data["gap_analysis"]["mitigation_suggestions"]
+            ) if analysis_data.get("gap_analysis") else None,
+            talking_points=TalkingPointsSchema(
+                strengths_to_highlight=analysis_data["talking_points"]["strengths_to_highlight"],
+                questions_to_prepare=analysis_data["talking_points"]["questions_to_prepare"],
+                stories_to_ready=analysis_data["talking_points"]["stories_to_ready"]
+            ) if analysis_data.get("talking_points") else None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get analysis: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get analysis: {str(e)}"
+        )

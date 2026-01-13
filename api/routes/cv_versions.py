@@ -84,6 +84,7 @@ async def list_versions(
     List all CV versions for the authenticated user.
 
     Supports filtering by category and tags, with pagination.
+    Optimized to minimize Airtable API calls.
     """
     manager = get_cv_version_manager()
 
@@ -91,33 +92,49 @@ async def list_versions(
     if tags:
         tag_list = [t.strip() for t in tags.split(',') if t.strip()]
 
-    versions = manager.list_versions(
+    # Fetch all versions in a single query, then apply pagination in memory
+    # This avoids making separate queries for count, categories, and tags
+    all_versions = manager.list_versions(
         user_email=user.email,
         include_archived=include_archived,
         category=category,
         tags=tag_list,
-        limit=limit,
-        offset=offset
+        limit=1000,  # Fetch all matching, paginate in memory
+        offset=0
     )
 
-    # Get all versions count for total (without pagination)
-    all_versions = manager.list_versions(
-        user_email=user.email,
-        include_archived=include_archived,
-        limit=1000
-    )
+    total = len(all_versions)
 
-    # Get categories and tags for filtering UI
-    categories = manager.get_categories(user.email)
-    all_tags = manager.get_all_tags(user.email)
+    # Apply pagination in memory
+    paginated_versions = all_versions[offset:offset + limit]
 
-    items = [_version_to_response(v) for v in versions]
+    # Extract categories and tags from fetched data (no extra API calls)
+    categories_set = set()
+    tags_set = set()
+    for v in all_versions:
+        cat = v.get('auto_category', '').strip() if v.get('auto_category') else ''
+        if cat:
+            categories_set.add(cat)
+
+        tags_raw = v.get('user_tags', '')
+        if tags_raw:
+            if isinstance(tags_raw, str):
+                for tag in tags_raw.split(','):
+                    tag = tag.strip()
+                    if tag:
+                        tags_set.add(tag)
+            elif isinstance(tags_raw, list):
+                for tag in tags_raw:
+                    if tag and str(tag).strip():
+                        tags_set.add(str(tag).strip())
+
+    items = [_version_to_response(v) for v in paginated_versions]
 
     return CVVersionListResponse(
         items=items,
-        total=len(all_versions),
-        categories=categories,
-        tags=all_tags
+        total=total,
+        categories=sorted(list(categories_set)),
+        tags=sorted(list(tags_set))
     )
 
 

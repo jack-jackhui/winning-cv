@@ -17,6 +17,7 @@ class CVGenerateResponse(BaseModel):
     job_title: str
     preview_html: Optional[str] = None
     version_id: Optional[str] = None  # New: reference to saved version
+    history_id: Optional[str] = None  # Airtable record ID for analysis lookup
 
 
 class CVUploadResponse(BaseModel):
@@ -152,3 +153,80 @@ class CVVersionBulkActionResponse(BaseModel):
     success_count: int
     failed_count: int
     failed_ids: List[str] = []
+
+
+# ──────────────────────────────────────────────────────────
+# CV-JD FIT ANALYSIS SCHEMAS
+# ──────────────────────────────────────────────────────────
+
+class KeywordMatchSchema(BaseModel):
+    """Keyword match analysis"""
+    score: int = Field(..., ge=0, le=100)
+    matched: List[str] = []
+    missing: List[str] = []
+    density_assessment: str = "Good"
+
+
+class TechnicalSkillsSchema(BaseModel):
+    """Technical skills breakdown"""
+    matched: List[str] = []
+    partial: List[str] = []
+    missing: List[str] = []
+
+
+class SoftSkillsSchema(BaseModel):
+    """Soft skills analysis"""
+    matched: List[str] = []
+    demonstrated: List[str] = []
+
+
+class SkillsCoverageSchema(BaseModel):
+    """Skills coverage analysis"""
+    score: int = Field(..., ge=0, le=100)
+    technical_skills: TechnicalSkillsSchema
+    soft_skills: SoftSkillsSchema
+
+
+class ExperienceRelevanceSchema(BaseModel):
+    """Experience relevance analysis"""
+    score: int = Field(..., ge=0, le=100)
+    aligned_roles: List[str] = []
+    relevant_achievements: List[str] = []
+    years_alignment: str = ""
+
+
+class ATSOptimizationSchema(BaseModel):
+    """ATS optimization analysis"""
+    score: int = Field(..., ge=0, le=100)
+    format_check: bool = True
+    keyword_density: str = "Good"
+    section_structure: str = "Clear"
+    recommendations: List[str] = []
+
+
+class GapAnalysisSchema(BaseModel):
+    """Gap analysis"""
+    critical_gaps: List[str] = []
+    minor_gaps: List[str] = []
+    mitigation_suggestions: List[str] = []
+
+
+class TalkingPointsSchema(BaseModel):
+    """Interview talking points"""
+    strengths_to_highlight: List[str] = []
+    questions_to_prepare: List[str] = []
+    stories_to_ready: List[str] = []
+
+
+class CVAnalysisResponse(BaseModel):
+    """Complete CV-JD fit analysis response"""
+    status: str = Field(..., description="pending | ready | failed")
+    overall_score: Optional[int] = Field(None, ge=0, le=100)
+    summary: Optional[str] = None
+    keyword_match: Optional[KeywordMatchSchema] = None
+    skills_coverage: Optional[SkillsCoverageSchema] = None
+    experience_relevance: Optional[ExperienceRelevanceSchema] = None
+    ats_optimization: Optional[ATSOptimizationSchema] = None
+    gap_analysis: Optional[GapAnalysisSchema] = None
+    talking_points: Optional[TalkingPointsSchema] = None
+    error: Optional[str] = None

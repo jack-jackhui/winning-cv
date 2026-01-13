@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
 from urllib.parse import urlencode, quote
 
 from api.schemas.auth import UserInfo
@@ -33,6 +33,7 @@ from job_processing.core import JobProcessor
 from config.settings import Config
 from utils.utils import Struct
 from ui.helpers import upload_pdf_to_wordpress
+from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,18 @@ async def get_job_config(
 
 @router.post("/config", response_model=JobConfigResponse)
 async def save_job_config(
-    config: JobConfigRequest,
+    # Form fields instead of Pydantic model (frontend sends FormData)
+    search_keywords: str = Form(..., min_length=2, description="Keywords for job search"),
+    location: str = Form(..., description="Job location"),
+    search_term: str = Form(default="", description="Indeed/Glassdoor search terms"),
+    google_term: str = Form(default="", description="Google custom search terms"),
+    seek_category: str = Form(default="information communication technology"),
+    seek_salaryrange: Optional[str] = Form(default=None),
+    seek_salarytype: str = Form(default="annual"),
+    max_jobs: int = Form(default=10, ge=1, le=50),
+    hours_old: int = Form(default=168, ge=24, le=720),
+    results_wanted: int = Form(default=10, ge=1, le=50),
+    country: str = Form(default="Australia"),
     cv_file: Optional[UploadFile] = File(None),
     user: UserInfo = Depends(get_current_user)
 ) -> JobConfigResponse:
@@ -182,7 +194,7 @@ async def save_job_config(
     Save job search configuration.
 
     Args:
-        config: Job search configuration
+        Form fields for job search configuration
         cv_file: Optional CV file to upload
         user: Authenticated user
 
@@ -231,18 +243,18 @@ async def save_job_config(
 
         # Build URLs from search parameters
         linkedin_url = build_linkedin_search_url(
-            config.search_keywords,
-            config.location,
-            posted_hours=config.hours_old
+            search_keywords,
+            location,
+            posted_hours=hours_old
         )
 
         seek_url = build_seek_url(
-            config.search_keywords,
-            config.seek_category,
-            config.location,
-            daterange=int(math.ceil(config.hours_old / 24)),
-            salaryrange=config.seek_salaryrange,
-            salarytype=config.seek_salarytype
+            search_keywords,
+            seek_category,
+            location,
+            daterange=int(math.ceil(hours_old / 24)),
+            salaryrange=seek_salaryrange,
+            salarytype=seek_salarytype
         )
 
         # Build config dict for Airtable
@@ -252,13 +264,13 @@ async def save_job_config(
             "base_cv_link": cv_url,
             "linkedin_job_url": linkedin_url,
             "seek_job_url": seek_url,
-            "max_jobs_to_scrape": config.max_jobs,
-            "additional_search_term": config.search_term,
-            "google_search_term": config.google_term,
-            "location": config.location,
-            "hours_old": config.hours_old,
-            "results_wanted": config.results_wanted,
-            "country": config.country
+            "max_jobs_to_scrape": max_jobs,
+            "additional_search_term": search_term,
+            "google_search_term": google_term,
+            "location": location,
+            "hours_old": hours_old,
+            "results_wanted": results_wanted,
+            "country": country
         }
 
         if not airtable.save_user_config(config_data):
@@ -480,4 +492,53 @@ async def get_job_results(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get results: {str(e)}"
+        )
+
+
+@router.get("/linkedin/status")
+async def get_linkedin_status(
+    user: UserInfo = Depends(get_current_user)
+) -> dict:
+    """
+    Check LinkedIn authentication status.
+
+    Returns information about whether LinkedIn cookies are saved
+    and when they were last updated.
+
+    Args:
+        user: Authenticated user
+
+    Returns:
+        LinkedIn authentication status
+    """
+    try:
+        cookie_manager = get_cookie_manager()
+
+        if not cookie_manager.has_cookies():
+            return {
+                "authenticated": False,
+                "message": "No LinkedIn session saved. Run the login utility to enable authenticated access.",
+                "instructions": "python -m job_sources.linkedin_login"
+            }
+
+        info = cookie_manager.get_cookie_info()
+        if info:
+            return {
+                "authenticated": True,
+                "saved_at": info.get("saved_at"),
+                "cookie_count": info.get("cookie_count"),
+                "message": "LinkedIn session available. Scraping will use authenticated access."
+            }
+        else:
+            return {
+                "authenticated": False,
+                "message": "Could not read saved session. Try re-authenticating.",
+                "instructions": "python -m job_sources.linkedin_login --clear && python -m job_sources.linkedin_login"
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to check LinkedIn status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check status: {str(e)}"
         )

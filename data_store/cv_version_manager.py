@@ -12,6 +12,7 @@ from pyairtable.formulas import AND, OR, Field, EQ, NE, FIND
 
 from config.settings import Config
 from utils.minio_storage import get_minio_storage, MinIOStorage
+from utils.airtable_client import get_airtable_api
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class CVVersionManager:
     - user_email (Single line text)
     - version_name (Single line text)
     - auto_category (Single line text) - detected role type
-    - user_tags (Long text) - JSON array of tags
+    - user_tags (multipleSelects) - Array of tag options
     - storage_path (Single line text) - MinIO path
     - created_at (Created time)
     - updated_at (Last modified time)
@@ -56,7 +57,8 @@ class CVVersionManager:
     }
 
     def __init__(self):
-        self.api = Api(Config.AIRTABLE_API_KEY)
+        # Use robust API client with timeouts and retries
+        self.api = get_airtable_api()
         self.table = self.api.table(
             Config.AIRTABLE_BASE_ID,
             Config.AIRTABLE_TABLE_ID_CV_VERSIONS
@@ -118,28 +120,51 @@ class CVVersionManager:
         )
 
         # Create Airtable record
+        # Note: Omit empty string values - Airtable may reject them for certain field types
         record_data = {
             "version_id": version_id,
             "user_email": user_email,
             "version_name": version_name,
-            "auto_category": auto_category or "",
-            "user_tags": ",".join(user_tags) if user_tags else "",
             "storage_path": storage_path,
-            "parent_version_id": parent_version_id or "",
             "is_archived": False,
             "usage_count": 0,
             "response_count": 0,
-            "source_job_link": source_job_link or "",
-            "source_job_title": source_job_title or "",
             "file_size": file_size,
             "content_hash": content_hash,
         }
+        # Only add optional fields if they have values
+        if auto_category:
+            record_data["auto_category"] = auto_category
+        if user_tags:
+            # user_tags is a multipleSelects field in Airtable - needs array of option names
+            record_data["user_tags"] = user_tags if isinstance(user_tags, list) else [user_tags]
+        if parent_version_id:
+            record_data["parent_version_id"] = parent_version_id
+        if source_job_link:
+            record_data["source_job_link"] = source_job_link
+        if source_job_title:
+            record_data["source_job_title"] = source_job_title
 
         try:
             record = self.table.create(record_data)
             logger.info(f"Created CV version: {version_id} for {user_email}")
             return self._record_to_dict(record)
         except Exception as e:
+            error_str = str(e)
+            # Handle Airtable select field errors - retry without problematic fields
+            if "INVALID_MULTIPLE_CHOICE_OPTIONS" in error_str or "INVALID_VALUE_FOR_COLUMN" in error_str:
+                logger.warning(f"Airtable select field error, retrying without select fields: {e}")
+                # Remove select fields that may have invalid options
+                record_data.pop("auto_category", None)
+                record_data.pop("user_tags", None)
+                try:
+                    record = self.table.create(record_data)
+                    logger.info(f"Created CV version (without select fields): {version_id} for {user_email}")
+                    return self._record_to_dict(record)
+                except Exception as retry_error:
+                    logger.error(f"Retry also failed: {retry_error}")
+                    # Fall through to cleanup
+
             logger.error(f"Failed to create CV version: {e}")
             # Cleanup MinIO on failure
             try:
@@ -202,7 +227,10 @@ class CVVersionManager:
             if tags:
                 filtered = []
                 for r in records:
-                    record_tags = r['fields'].get('user_tags', '').split(',')
+                    # user_tags is multipleSelects - returns as array
+                    record_tags = r['fields'].get('user_tags', [])
+                    if isinstance(record_tags, str):
+                        record_tags = [t.strip() for t in record_tags.split(',') if t.strip()]
                     if any(tag in record_tags for tag in tags):
                         filtered.append(r)
                 records = filtered
@@ -238,9 +266,13 @@ class CVVersionManager:
         if not filtered_updates:
             return None
 
-        # Convert tags list to comma-separated string
-        if 'user_tags' in filtered_updates and isinstance(filtered_updates['user_tags'], list):
-            filtered_updates['user_tags'] = ','.join(filtered_updates['user_tags'])
+        # user_tags is a multipleSelects field - keep as array
+        if 'user_tags' in filtered_updates:
+            if isinstance(filtered_updates['user_tags'], str):
+                # Convert comma-separated string to array
+                filtered_updates['user_tags'] = [t.strip() for t in filtered_updates['user_tags'].split(',') if t.strip()]
+            elif not isinstance(filtered_updates['user_tags'], list):
+                filtered_updates['user_tags'] = [filtered_updates['user_tags']] if filtered_updates['user_tags'] else []
 
         try:
             formula = AND(
@@ -344,7 +376,7 @@ class CVVersionManager:
                 file_path=new_file_path,
                 version_name=new_name,
                 auto_category=source.get('auto_category'),
-                user_tags=source.get('user_tags', '').split(',') if source.get('user_tags') else None,
+                user_tags=self._parse_tags(source.get('user_tags')),
                 parent_version_id=source_version_id
             )
             return new_version
@@ -440,20 +472,35 @@ class CVVersionManager:
 
             tags = set()
             for r in records:
-                tag_str = r['fields'].get('user_tags', '')
-                if tag_str:
-                    for tag in tag_str.split(','):
-                        tag = tag.strip()
-                        if tag:
-                            tags.add(tag)
+                # user_tags is multipleSelects - returns as array
+                tag_list = r['fields'].get('user_tags', [])
+                if isinstance(tag_list, str):
+                    tag_list = [t.strip() for t in tag_list.split(',') if t.strip()]
+                for tag in tag_list:
+                    if tag:
+                        tags.add(tag)
 
             return sorted(list(tags))
         except Exception as e:
             logger.error(f"Failed to get tags for {user_email}: {e}")
             return []
 
+    def _parse_tags(self, tags_value) -> Optional[List[str]]:
+        """Parse tags from various formats to list."""
+        if not tags_value:
+            return None
+        if isinstance(tags_value, list):
+            return [t.strip() for t in tags_value if t and str(t).strip()]
+        if isinstance(tags_value, str):
+            return [t.strip() for t in tags_value.split(',') if t.strip()]
+        return None
+
     def get_analytics(self, user_email: str) -> Dict[str, Any]:
-        """Get analytics summary for user's CV versions."""
+        """Get analytics summary for user's CV versions.
+
+        Optimized to use a single Airtable query and extract categories/tags
+        from the fetched data rather than making separate API calls.
+        """
         try:
             versions = self.list_versions(user_email, include_archived=True, limit=1000)
 
@@ -469,9 +516,32 @@ class CVVersionManager:
 
             # Top performing versions (by response rate)
             performing = []
+            # Extract categories and tags from fetched versions (avoid extra API calls)
+            categories_set = set()
+            tags_set = set()
+
             for v in versions:
                 usage = v.get('usage_count', 0)
                 responses = v.get('response_count', 0)
+
+                # Collect categories
+                cat = v.get('auto_category', '').strip() if v.get('auto_category') else ''
+                if cat:
+                    categories_set.add(cat)
+
+                # Collect tags
+                tags_raw = v.get('user_tags', '')
+                if tags_raw:
+                    if isinstance(tags_raw, str):
+                        for tag in tags_raw.split(','):
+                            tag = tag.strip()
+                            if tag:
+                                tags_set.add(tag)
+                    elif isinstance(tags_raw, list):
+                        for tag in tags_raw:
+                            if tag and str(tag).strip():
+                                tags_set.add(str(tag).strip())
+
                 if usage >= 3:  # Minimum usage threshold
                     rate = responses / usage * 100
                     performing.append({
@@ -492,8 +562,8 @@ class CVVersionManager:
                 'total_responses': total_responses,
                 'overall_response_rate': round(response_rate, 1),
                 'top_performing': performing[:5],
-                'categories': self.get_categories(user_email),
-                'tags': self.get_all_tags(user_email)
+                'categories': sorted(list(categories_set)),
+                'tags': sorted(list(tags_set))
             }
         except Exception as e:
             logger.error(f"Failed to get analytics for {user_email}: {e}")
@@ -502,13 +572,16 @@ class CVVersionManager:
     def _record_to_dict(self, record: Dict) -> Dict[str, Any]:
         """Convert Airtable record to clean dictionary."""
         fields = record.get('fields', {})
+        # user_tags is a multipleSelects field - Airtable returns array, convert to comma-separated
+        user_tags_raw = fields.get('user_tags', [])
+        user_tags = ','.join(user_tags_raw) if isinstance(user_tags_raw, list) else user_tags_raw
         return {
             'id': record.get('id'),
             'version_id': fields.get('version_id', ''),
             'user_email': fields.get('user_email', ''),
             'version_name': fields.get('version_name', ''),
             'auto_category': fields.get('auto_category', ''),
-            'user_tags': fields.get('user_tags', ''),
+            'user_tags': user_tags,
             'storage_path': fields.get('storage_path', ''),
             'parent_version_id': fields.get('parent_version_id', ''),
             'is_archived': fields.get('is_archived', False),

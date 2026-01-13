@@ -22,13 +22,17 @@ import {
   Edit3,
   BarChart3,
   Upload,
+  Send,
+  MessageCircle,
 } from 'lucide-react'
 import { cvVersionsService } from '../services/api'
 
 // CV Version Card Component
-function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, onDelete, onFork, onEdit }) {
+function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, onDelete, onFork, onEdit, onLogApplication, onLogResponse }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [loggingApp, setLoggingApp] = useState(false)
+  const [loggingResponse, setLoggingResponse] = useState(false)
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -36,6 +40,24 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
       await onDownload(version)
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleLogApplication = async () => {
+    setLoggingApp(true)
+    try {
+      await onLogApplication(version)
+    } finally {
+      setLoggingApp(false)
+    }
+  }
+
+  const handleLogResponse = async () => {
+    setLoggingResponse(true)
+    try {
+      await onLogResponse(version)
+    } finally {
+      setLoggingResponse(false)
     }
   }
 
@@ -88,15 +110,31 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
           </div>
         </div>
 
-        <div className="flex items-center gap-6 text-sm">
-          <div className="text-center">
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            onClick={handleLogApplication}
+            disabled={loggingApp || version.is_archived}
+            className="text-center px-3 py-1 rounded-lg hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Click to log application"
+          >
             <p className="font-medium text-text-primary">{version.usage_count}</p>
-            <p className="text-text-muted text-xs">Uses</p>
-          </div>
-          <div className="text-center">
+            <p className="text-text-muted text-xs flex items-center gap-1">
+              {loggingApp ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              Uses
+            </p>
+          </button>
+          <button
+            onClick={handleLogResponse}
+            disabled={loggingResponse || version.is_archived || version.usage_count === 0}
+            className="text-center px-3 py-1 rounded-lg hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={version.usage_count === 0 ? "Log an application first" : "Click to log response"}
+          >
             <p className="font-medium text-text-primary">{responseRate}%</p>
-            <p className="text-text-muted text-xs">Response</p>
-          </div>
+            <p className="text-text-muted text-xs flex items-center gap-1">
+              {loggingResponse ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageCircle className="w-3 h-3" />}
+              Response
+            </p>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -246,14 +284,30 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="bg-surface-elevated rounded-lg p-2 text-center">
+        <button
+          onClick={handleLogApplication}
+          disabled={loggingApp || version.is_archived}
+          className="bg-surface-elevated rounded-lg p-2 text-center hover:bg-surface-elevated/80 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Click to log a new application"
+        >
           <p className="text-lg font-semibold text-text-primary">{version.usage_count}</p>
-          <p className="text-xs text-text-muted">Applications</p>
-        </div>
-        <div className="bg-surface-elevated rounded-lg p-2 text-center">
+          <p className="text-xs text-text-muted flex items-center justify-center gap-1">
+            {loggingApp ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            Applications
+          </p>
+        </button>
+        <button
+          onClick={handleLogResponse}
+          disabled={loggingResponse || version.is_archived || version.usage_count === 0}
+          className="bg-surface-elevated rounded-lg p-2 text-center hover:bg-surface-elevated/80 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+          title={version.usage_count === 0 ? "Log an application first" : "Click to log a response/interview"}
+        >
           <p className="text-lg font-semibold text-text-primary">{responseRate}%</p>
-          <p className="text-xs text-text-muted">Response Rate</p>
-        </div>
+          <p className="text-xs text-text-muted flex items-center justify-center gap-1">
+            {loggingResponse ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageCircle className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            Response Rate
+          </p>
+        </button>
       </div>
 
       <div className="flex gap-2">
@@ -413,6 +467,120 @@ function UploadModal({ isOpen, onClose, onUpload }) {
   )
 }
 
+// Edit Modal Component
+function EditModal({ isOpen, version, onClose, onSave }) {
+  const [versionName, setVersionName] = useState('')
+  const [category, setCategory] = useState('')
+  const [tags, setTags] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (version) {
+      setVersionName(version.version_name || '')
+      setCategory(version.auto_category || '')
+      setTags(Array.isArray(version.user_tags) ? version.user_tags.join(', ') : '')
+      setError(null)
+    }
+  }, [version])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!versionName) return
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      await onSave(version.version_id, {
+        versionName,
+        autoCategory: category || null,
+        userTags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      })
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Failed to update CV version')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!isOpen || !version) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-lg p-6 mx-4 shadow-xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-text-primary">Edit CV Version</h2>
+          <button onClick={onClose} className="btn-icon text-text-muted hover:text-text-primary">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Version Name */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Version Name</label>
+            <input
+              type="text"
+              value={versionName}
+              onChange={(e) => setVersionName(e.target.value)}
+              className="input"
+              placeholder="e.g., Backend Engineer - Python Focus"
+              required
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Category (optional)</label>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="input"
+              placeholder="e.g., Software Engineer"
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Tags (optional)</label>
+            <input
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              className="input"
+              placeholder="python, backend, startup (comma-separated)"
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!versionName || saving}
+              className="btn-primary flex-1"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // Fork Modal Component
 function ForkModal({ isOpen, version, onClose, onFork }) {
   const [newName, setNewName] = useState('')
@@ -491,6 +659,7 @@ export default function CVLibrary() {
   // Modals
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [forkModalOpen, setForkModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedVersion, setSelectedVersion] = useState(null)
 
   const loadVersions = useCallback(async () => {
@@ -578,8 +747,33 @@ export default function CVLibrary() {
   }
 
   const handleEdit = (version) => {
-    // TODO: Implement edit modal
-    console.log('Edit:', version)
+    setSelectedVersion(version)
+    setEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async (versionId, updates) => {
+    await cvVersionsService.updateVersion(versionId, updates)
+    await loadVersions()
+  }
+
+  const handleLogApplication = async (version) => {
+    try {
+      await cvVersionsService.recordUsage(version.version_id)
+      await loadVersions()
+      await loadAnalytics()
+    } catch (err) {
+      console.error('Failed to log application:', err)
+    }
+  }
+
+  const handleLogResponse = async (version) => {
+    try {
+      await cvVersionsService.recordResponse(version.version_id)
+      await loadVersions()
+      await loadAnalytics()
+    } catch (err) {
+      console.error('Failed to log response:', err)
+    }
   }
 
   const filteredVersions = versions.filter((v) =>
@@ -748,6 +942,8 @@ export default function CVLibrary() {
               onDelete={handleDelete}
               onFork={(v) => { setSelectedVersion(v); setForkModalOpen(true) }}
               onEdit={handleEdit}
+              onLogApplication={handleLogApplication}
+              onLogResponse={handleLogResponse}
             />
           ))}
         </div>
@@ -763,6 +959,8 @@ export default function CVLibrary() {
               onRestore={handleRestore}
               onDelete={handleDelete}
               onFork={(v) => { setSelectedVersion(v); setForkModalOpen(true) }}
+              onLogApplication={handleLogApplication}
+              onLogResponse={handleLogResponse}
               onEdit={handleEdit}
             />
           ))}
@@ -781,6 +979,13 @@ export default function CVLibrary() {
         version={selectedVersion}
         onClose={() => { setForkModalOpen(false); setSelectedVersion(null) }}
         onFork={handleFork}
+      />
+
+      <EditModal
+        isOpen={editModalOpen}
+        version={selectedVersion}
+        onClose={() => { setEditModalOpen(false); setSelectedVersion(null) }}
+        onSave={handleSaveEdit}
       />
     </div>
   )

@@ -22,6 +22,19 @@ CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "csrftoken")
 session_cookie = APIKeyCookie(name=SESSION_COOKIE_NAME, auto_error=False)
 auth_header = APIKeyHeader(name="Authorization", auto_error=False)
 
+# HTTP client configuration
+HTTP_TIMEOUT = httpx.Timeout(
+    connect=5.0,    # Connection timeout
+    read=10.0,      # Read timeout
+    write=5.0,      # Write timeout
+    pool=5.0        # Pool timeout
+)
+HTTP_LIMITS = httpx.Limits(
+    max_keepalive_connections=5,
+    max_connections=10,
+    keepalive_expiry=30.0  # Close idle connections after 30s
+)
+
 
 class AuthMiddleware:
     """Middleware to verify authentication with external auth service"""
@@ -31,10 +44,62 @@ class AuthMiddleware:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client"""
+        """Get or create HTTP client with proper connection management"""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            self._client = httpx.AsyncClient(
+                timeout=HTTP_TIMEOUT,
+                limits=HTTP_LIMITS,
+            )
         return self._client
+
+    async def _reset_client(self):
+        """Reset client to recover from connection errors"""
+        if self._client and not self._client.is_closed:
+            try:
+                await self._client.aclose()
+            except Exception:
+                pass
+        self._client = None
+
+    async def _make_auth_request(
+        self,
+        headers: dict,
+        cookies: Optional[dict] = None,
+        max_retries: int = 2
+    ) -> Optional[httpx.Response]:
+        """
+        Make auth request with retry on connection errors.
+
+        Handles "Server disconnected without sending a response" by
+        resetting the client and retrying with a fresh connection.
+        """
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                client = await self.get_client()
+                response = await client.get(
+                    f"{self.auth_service_url}/api/sehs/user-info/",
+                    headers=headers,
+                    cookies=cookies or {},
+                )
+                return response
+
+            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+                # Connection was closed by server - reset and retry
+                last_error = e
+                logger.warning(f"Auth request connection error (attempt {attempt + 1}): {e}")
+                await self._reset_client()
+                continue
+
+            except httpx.RequestError as e:
+                last_error = e
+                logger.error(f"Auth request failed: {e}")
+                break
+
+        if last_error:
+            logger.error(f"Auth request failed after {max_retries} attempts: {last_error}")
+        return None
 
     async def verify_token(self, token: str) -> Optional[UserInfo]:
         """
@@ -51,17 +116,16 @@ class AuthMiddleware:
             return None
 
         try:
-            client = await self.get_client()
-
-            # Call auth service's user info endpoint with token
-            response = await client.get(
-                f"{self.auth_service_url}/api/sehs/user-info/",
+            response = await self._make_auth_request(
                 headers={
                     "Authorization": f"Token {token}",
                     "Accept": "application/json",
                     "Content-Type": "application/json",
                 }
             )
+
+            if response is None:
+                return None
 
             if response.status_code == 200:
                 data = response.json()
@@ -73,9 +137,6 @@ class AuthMiddleware:
                 logger.warning(f"Auth service returned {response.status_code}")
                 return None
 
-        except httpx.RequestError as e:
-            logger.error(f"Failed to verify token: {e}")
-            return None
         except Exception as e:
             logger.error(f"Unexpected error verifying token: {e}")
             return None
@@ -96,22 +157,21 @@ class AuthMiddleware:
             return None
 
         try:
-            client = await self.get_client()
-
             # Build cookies dict
             cookies = {SESSION_COOKIE_NAME: session_id}
             if csrf_token:
                 cookies[CSRF_COOKIE_NAME] = csrf_token
 
-            # Call auth service's user info endpoint
-            response = await client.get(
-                f"{self.auth_service_url}/api/sehs/user-info/",
-                cookies=cookies,
+            response = await self._make_auth_request(
                 headers={
                     "Accept": "application/json",
                     "X-Requested-With": "XMLHttpRequest",
-                }
+                },
+                cookies=cookies,
             )
+
+            if response is None:
+                return None
 
             if response.status_code == 200:
                 data = response.json()
@@ -123,9 +183,6 @@ class AuthMiddleware:
                 logger.warning(f"Auth service returned {response.status_code}")
                 return None
 
-        except httpx.RequestError as e:
-            logger.error(f"Failed to verify session: {e}")
-            return None
         except Exception as e:
             logger.error(f"Unexpected error verifying session: {e}")
             return None

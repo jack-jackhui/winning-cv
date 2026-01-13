@@ -76,7 +76,8 @@ class MinIOStorage:
         self.secure = secure or os.getenv("MINIO_SECURE", "false").lower() == "true"
 
         # External endpoint for generating presigned URLs (accessible from browser)
-        self.external_endpoint = os.getenv("MINIO_EXTERNAL_ENDPOINT", self.endpoint)
+        # Format: "https://domain.com/storage" (with /storage prefix for nginx proxy)
+        self.external_endpoint = os.getenv("MINIO_EXTERNAL_ENDPOINT", "")
 
         self.client = Minio(
             self.endpoint,
@@ -97,6 +98,27 @@ class MinIOStorage:
         except S3Error as e:
             logger.error(f"Failed to create/check bucket: {e}")
             raise
+
+    def _transform_url_for_external(self, internal_url: str) -> str:
+        """
+        Transform internal MinIO URL to external URL accessible from browser.
+
+        Internal URL format: http://minio:9000/bucket/path?signature...
+        External URL format: https://domain.com/storage/bucket/path?signature...
+
+        The nginx proxy at /storage/ rewrites to MinIO root.
+        """
+        if not self.external_endpoint:
+            return internal_url
+
+        parsed = urlparse(internal_url)
+        # parsed.path = /bucket/object/path, parsed.query = signature params
+        external_url = f"{self.external_endpoint}{parsed.path}"
+        if parsed.query:
+            external_url += f"?{parsed.query}"
+
+        logger.debug(f"Transformed URL: {internal_url[:50]}... -> {external_url[:50]}...")
+        return external_url
 
     def _get_object_path(self, user_id: str, filename: str, version_id: Optional[str] = None) -> str:
         """
@@ -221,9 +243,8 @@ class MinIOStorage:
                 expires=timedelta(hours=expires_hours)
             )
 
-            # Replace internal endpoint with external if configured
-            if self.external_endpoint != self.endpoint:
-                url = url.replace(self.endpoint, self.external_endpoint)
+            # Transform internal URL to external (browser-accessible) URL
+            url = self._transform_url_for_external(url)
 
             logger.debug(f"Generated presigned URL for: {object_path}")
             return url
@@ -254,8 +275,8 @@ class MinIOStorage:
                 expires=timedelta(hours=expires_hours)
             )
 
-            if self.external_endpoint != self.endpoint:
-                url = url.replace(self.endpoint, self.external_endpoint)
+            # Transform internal URL to external (browser-accessible) URL
+            url = self._transform_url_for_external(url)
 
             return url
 

@@ -237,6 +237,11 @@ export const cvService = {
     a.click()
     document.body.removeChild(a)
   },
+
+  // Get CV-JD fit analysis
+  async getAnalysis(historyId) {
+    return fetchAPI(`/api/v1/cv/analysis/${historyId}`)
+  },
 }
 
 // History Service - handles CV history management

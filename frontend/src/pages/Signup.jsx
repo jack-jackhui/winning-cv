@@ -52,13 +52,13 @@ export default function Signup() {
 
         <p className="mt-6 text-sm text-text-muted">
           By signing up, you agree to our{' '}
-          <a href="#" className="link">
+          <Link to="/terms" className="link">
             Terms of Service
-          </a>{' '}
+          </Link>{' '}
           and{' '}
-          <a href="#" className="link">
+          <Link to="/privacy" className="link">
             Privacy Policy
-          </a>
+          </Link>
         </p>
 
         {/* Back to home */}

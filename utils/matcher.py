@@ -62,8 +62,8 @@ class JobMatcher:
                     UserMessage(content=user_prompt)
                 ],
                 model=Config.AZURE_DEPLOYMENT,
-                temperature=0.2,
-                max_tokens=2000
+                # Note: temperature not supported by reasoning models (o1, o3-mini)
+                model_extras={"max_completion_tokens": 2000}
             )
 
             # Add response validation

@@ -1,6 +1,7 @@
 from pyairtable import Api
 from pyairtable.formulas import AND, Field, EQ, NE
 from utils.logger import setup_logger
+from utils.airtable_client import create_airtable_api
 from datetime import datetime
 import os
 import logging
@@ -8,7 +9,8 @@ from config.settings import Config
 
 class AirtableManager:
     def __init__(self, api_key, base_id, table_id):
-        self.api = Api(api_key)
+        # Use robust API client with timeouts and retries
+        self.api = create_airtable_api(api_key=api_key)
         self.base_id = base_id
         self.table = self.api.table(base_id, table_id)
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -25,6 +27,8 @@ class AirtableManager:
             "instructions": "Instructions",
             "cv_markdown": "cv_markdown",
             "cv_pdf_url": "cv_pdf_url",
+            "cv_analysis": "cv_analysis",  # JSON string of fit analysis
+            "analysis_status": "analysis_status",  # pending | ready | failed
             # "created_at" is auto‐populated in Airtable as a "Created Time" field
         }
 
@@ -127,8 +131,10 @@ class AirtableManager:
     # ──────────────────────────────────────────────────────────
     # HISTORY TABLE METHODS
     # ──────────────────────────────────────────────────────────
-    def create_history_record(self, data: dict) -> bool:
+    def create_history_record(self, data: dict) -> str | None:
         """
+        Create a history record and return the record ID.
+
         data keys (snake_case) expected:
           - user_email
           - job_title
@@ -136,7 +142,11 @@ class AirtableManager:
           - instructions
           - cv_markdown
           - cv_pdf_url
+          - analysis_status (optional)
         'created_at' is auto‐populated in Airtable as a Created Time field.
+
+        Returns:
+            Record ID if successful, None otherwise
         """
         # map to actual Airtable field names
         airtable_fields = {}
@@ -147,10 +157,50 @@ class AirtableManager:
         try:
             rec = self.table.create(airtable_fields)
             self.logger.info("History record created: %s", rec["id"])
-            return True
+            return rec["id"]
         except Exception as e:
             self.logger.error("create_history_record error: %s", e)
+            return None
+
+    def update_history_analysis(self, record_id: str, analysis_json: str, status: str = "ready") -> bool:
+        """
+        Update a history record with CV-JD fit analysis.
+
+        Args:
+            record_id: Airtable record ID
+            analysis_json: JSON string of the analysis results
+            status: Analysis status (pending, ready, failed)
+
+        Returns:
+            True if successful
+        """
+        try:
+            self.table.update(record_id, {
+                "cv_analysis": analysis_json,
+                "analysis_status": status
+            })
+            self.logger.info("History analysis updated: %s status=%s", record_id, status)
+            return True
+        except Exception as e:
+            self.logger.error("update_history_analysis error: %s", e)
             return False
+
+    def get_history_record(self, record_id: str) -> dict | None:
+        """
+        Get a single history record by ID.
+
+        Args:
+            record_id: Airtable record ID
+
+        Returns:
+            Record dict with 'id' and 'fields', or None if not found
+        """
+        try:
+            rec = self.table.get(record_id)
+            return rec
+        except Exception as e:
+            self.logger.error("get_history_record error: %s", e)
+            return None
 
     def get_all_records(self) -> list:
         """Return all records in whichever table this instance points at."""

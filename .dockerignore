@@ -51,3 +51,6 @@ build_and_push.sh
 
 # venv files
 ./.venv/
+
+# LinkedIn session cookies (mounted as volume, not built into image)
+./cookies/

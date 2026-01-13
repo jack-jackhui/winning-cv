@@ -23,3 +23,6 @@ customized_cv.pdf
 .claude/
 .serena/
 CLAUDE.md
+
+# LinkedIn session cookies (synced manually to production)
+cookies/

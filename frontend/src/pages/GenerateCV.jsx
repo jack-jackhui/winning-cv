@@ -13,9 +13,11 @@ import {
   FolderOpen,
   Plus,
   ChevronDown,
+  BarChart3,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
+import AnalysisModal from '../components/cv/AnalysisModal'
 
 export default function GenerateCV() {
   // CV source state: 'library' | 'upload'
@@ -44,6 +46,12 @@ export default function GenerateCV() {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const downloadMenuRef = useRef(null)
 
+  // Analysis state
+  const [analysisStatus, setAnalysisStatus] = useState('idle') // idle | pending | ready | failed
+  const [analysis, setAnalysis] = useState(null)
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false)
+  const analysisPollingRef = useRef(null)
+
   // Close download menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -53,6 +61,56 @@ export default function GenerateCV() {
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Cleanup analysis polling on unmount
+  useEffect(() => {
+    return () => {
+      if (analysisPollingRef.current) {
+        clearInterval(analysisPollingRef.current)
+      }
+    }
+  }, [])
+
+  // Poll for analysis status
+  const startAnalysisPolling = useCallback((historyId) => {
+    if (!historyId) return
+
+    setAnalysisStatus('pending')
+    setAnalysis(null)
+
+    // Poll every 3 seconds
+    analysisPollingRef.current = setInterval(async () => {
+      try {
+        const response = await cvService.getAnalysis(historyId)
+
+        if (response.status === 'ready') {
+          clearInterval(analysisPollingRef.current)
+          setAnalysisStatus('ready')
+          setAnalysis(response)
+        } else if (response.status === 'failed') {
+          clearInterval(analysisPollingRef.current)
+          setAnalysisStatus('failed')
+          setAnalysis(null)
+        }
+        // If still pending, continue polling
+      } catch (err) {
+        console.error('Failed to fetch analysis:', err)
+        // Don't stop polling on transient errors
+      }
+    }, 3000)
+
+    // Also do an immediate check
+    cvService.getAnalysis(historyId).then(response => {
+      if (response.status === 'ready') {
+        clearInterval(analysisPollingRef.current)
+        setAnalysisStatus('ready')
+        setAnalysis(response)
+      } else if (response.status === 'failed') {
+        clearInterval(analysisPollingRef.current)
+        setAnalysisStatus('failed')
+      }
+    }).catch(() => {})
   }, [])
 
   const handleDrag = useCallback((e) => {
@@ -166,6 +224,11 @@ export default function GenerateCV() {
       }
 
       setResult(response)
+
+      // Start polling for analysis if history_id is available
+      if (response.history_id) {
+        startAnalysisPolling(response.history_id)
+      }
     } catch (err) {
       setError(err.message || 'Failed to generate CV. Please try again.')
     } finally {
@@ -195,6 +258,11 @@ export default function GenerateCV() {
   }
 
   const handleReset = () => {
+    // Stop any ongoing analysis polling
+    if (analysisPollingRef.current) {
+      clearInterval(analysisPollingRef.current)
+    }
+
     setCvSource('library')
     setCvFile(null)
     setSelectedVersion(null)
@@ -202,6 +270,8 @@ export default function GenerateCV() {
     setInstructions('')
     setResult(null)
     setError(null)
+    setAnalysisStatus('idle')
+    setAnalysis(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -280,6 +350,41 @@ export default function GenerateCV() {
                 <>
                   <Copy className="w-5 h-5" />
                   Copy Markdown
+                </>
+              )}
+            </button>
+            {/* View Analysis Button */}
+            <button
+              onClick={() => setShowAnalysisModal(true)}
+              disabled={analysisStatus === 'pending' || analysisStatus === 'idle'}
+              className={`btn-secondary ${
+                analysisStatus === 'ready' ? 'ring-2 ring-accent-500/50' : ''
+              }`}
+            >
+              {analysisStatus === 'pending' ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : analysisStatus === 'ready' ? (
+                <>
+                  <BarChart3 className="w-5 h-5" />
+                  View Analysis
+                  {analysis?.overall_score && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded bg-accent-500/20 text-accent-400">
+                      {analysis.overall_score}%
+                    </span>
+                  )}
+                </>
+              ) : analysisStatus === 'failed' ? (
+                <>
+                  <AlertCircle className="w-5 h-5" />
+                  Analysis Failed
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-5 h-5" />
+                  View Analysis
                 </>
               )}
             </button>
@@ -494,6 +599,14 @@ export default function GenerateCV() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Analysis Modal */}
+      {showAnalysisModal && analysis && (
+        <AnalysisModal
+          analysis={analysis}
+          onClose={() => setShowAnalysisModal(false)}
+        />
       )}
     </div>
   )

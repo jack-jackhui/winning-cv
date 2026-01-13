@@ -148,13 +148,13 @@ export default function Login() {
         <div className="text-center text-sm text-text-muted space-y-4">
           <p>
             By signing in, you agree to our{' '}
-            <a href="#" className="link">
+            <Link to="/terms" className="link">
               Terms of Service
-            </a>{' '}
+            </Link>{' '}
             and{' '}
-            <a href="#" className="link">
+            <Link to="/privacy" className="link">
               Privacy Policy
-            </a>
+            </Link>
           </p>
           <p className="text-xs">
             Your data is securely handled through our authentication service.

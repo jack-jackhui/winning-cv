@@ -30,6 +30,7 @@ services:
     volumes:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
+      - ./cookies:/winning-cv/cookies  # LinkedIn session cookies
     environment:
       - API_PORT=8000
       - API_HOST=0.0.0.0
@@ -63,6 +64,7 @@ services:
     volumes:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
+      - ./cookies:/winning-cv/cookies  # LinkedIn session cookies
     environment:
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true

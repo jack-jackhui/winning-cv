@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from DrissionPage import Chromium, ChromiumOptions
 from config.settings import Config
+from job_sources.linkedin_cookie_manager import get_cookie_manager
 import logging
 import os
 
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 class LinkedInJobScraper:
     def __init__(self, base_url=None):
         self.browser = None
+        self.cookie_manager = get_cookie_manager()
+        self.has_valid_session = False
         self.init_drission()
         self.max_jobs_for_description = Config.MAX_JOBS_FOR_DESCRIPTION
         self.max_jobs_to_scrape = Config.MAX_JOBS_TO_SCRAPE
@@ -37,6 +40,69 @@ class LinkedInJobScraper:
 
         self.browser = Chromium(options)
 
+        # Load saved cookies if available
+        self._load_cookies()
+
+    def _load_cookies(self):
+        """Load saved LinkedIn cookies into the browser session."""
+        if not self.cookie_manager.has_cookies():
+            logger.info("No saved LinkedIn cookies found. Will use anonymous scraping.")
+            logger.info("Tip: Run 'python -m job_sources.linkedin_login' to enable authenticated access.")
+            return False
+
+        cookies = self.cookie_manager.load_cookies()
+        if not cookies:
+            logger.warning("Failed to load cookies from file.")
+            return False
+
+        try:
+            # First, navigate to LinkedIn to set the cookie domain
+            tab = self.browser.latest_tab
+            tab.get("https://www.linkedin.com")
+            self.random_delay(1, 2)
+
+            # Apply each cookie
+            for cookie in cookies:
+                try:
+                    tab.set.cookies(cookie)
+                except Exception as e:
+                    logger.debug(f"Could not set cookie {cookie.get('name', 'unknown')}: {e}")
+
+            logger.info(f"Applied {len(cookies)} LinkedIn cookies to browser session")
+            self.has_valid_session = True
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to apply cookies: {e}")
+            return False
+
+    def _verify_session(self, tab) -> bool:
+        """Verify if the current session is authenticated."""
+        try:
+            # Check for login wall indicators
+            login_indicators = [
+                'authwall',
+                'login',
+                'sign-in'
+            ]
+            current_url = tab.url.lower()
+
+            for indicator in login_indicators:
+                if indicator in current_url:
+                    return False
+
+            # Check for authenticated content indicators
+            try:
+                # Look for job search results (authenticated users see more)
+                if tab.ele('.jobs-search-results', timeout=5):
+                    return True
+            except:
+                pass
+
+            return self.has_valid_session
+        except:
+            return False
+
     def scrape_job_page(self, url):
         """Main method to scrape job details from LinkedIn URL"""
         if not self.validate_url(url):
@@ -58,18 +124,27 @@ class LinkedInJobScraper:
     def browser_scrape(self, url):
         """Browser-based scraping using DrissionPage"""
         try:
-            logger.info(f"Opening LinkedIn search page: {url}")
+            session_type = "authenticated" if self.has_valid_session else "anonymous"
+            logger.info(f"Opening LinkedIn search page ({session_type}): {url}")
+
             tab = self.browser.latest_tab
             tab.get(url)
             self.random_delay(3, 5)
 
-            # Handle LinkedIn login wall
-            logger.debug("Handling login wall if present")
-            self.handle_login_wall(tab)
-
-            # Handle cookie consent
+            # Handle cookie consent first
             logger.debug("Handling cookie consent if present")
             self.accept_cookies(tab)
+
+            # Check if we need to handle login wall
+            if not self.has_valid_session:
+                logger.debug("Handling login wall if present (no saved session)")
+                self.handle_login_wall(tab)
+            else:
+                # Verify our session is still valid
+                if not self._verify_session(tab):
+                    logger.warning("Saved session appears invalid. Falling back to anonymous mode.")
+                    self.has_valid_session = False
+                    self.handle_login_wall(tab)
 
             # Wait for main content using multiple possible selectors
             logger.info("Waiting for job search results to load")
