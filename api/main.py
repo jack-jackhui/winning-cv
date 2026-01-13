@@ -17,18 +17,58 @@ from fastapi.responses import JSONResponse
 from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, profile_router
 from api.middleware.auth_middleware import auth_middleware
 from utils.logger import setup_logger
+from scheduler.job_scheduler import JobScheduler
 
 # Configure logging
 setup_logger(log_file="logs/api.log", level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+# Global scheduler instance
+scheduler = None
+
+
+def setup_cookie_health_monitoring():
+    """Set up LinkedIn cookie health monitoring with alerts."""
+    global scheduler
+    try:
+        from job_sources.linkedin_cookie_health import run_cookie_health_check, get_check_interval_hours
+
+        # Get initial check interval based on current cookie status
+        initial_interval_hours = get_check_interval_hours()
+        initial_interval_minutes = initial_interval_hours * 60
+
+        scheduler = JobScheduler()
+        scheduler.add_job(
+            lambda: run_cookie_health_check(send_alert=True, test_session=False),
+            interval_minutes=initial_interval_minutes,
+            name="linkedin_cookie_health_check"
+        )
+        scheduler.start()
+
+        # Run an initial check on startup (without alerting - just log status)
+        logger.info("Running initial LinkedIn cookie health check...")
+        health_info = run_cookie_health_check(send_alert=False, test_session=False)
+        logger.info(f"Cookie status: {health_info['status'].value} - {health_info['message']}")
+        logger.info(f"Cookie health check scheduled every {initial_interval_hours} hours")
+
+    except Exception as e:
+        logger.warning(f"Could not set up cookie health monitoring: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("Starting WinningCV API server")
+
+    # Set up cookie health monitoring
+    setup_cookie_health_monitoring()
+
     yield
+
     # Cleanup
+    if scheduler:
+        scheduler.shutdown()
     await auth_middleware.close()
     logger.info("Shutting down WinningCV API server")
 

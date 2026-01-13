@@ -542,3 +542,59 @@ async def get_linkedin_status(
             status_code=500,
             detail=f"Failed to check status: {str(e)}"
         )
+
+
+@router.get("/linkedin/health")
+async def get_linkedin_cookie_health(
+    user: UserInfo = Depends(get_current_user)
+) -> dict:
+    """
+    Get detailed LinkedIn cookie health status.
+
+    Returns comprehensive information about cookie age, health status,
+    and whether refresh is recommended.
+
+    Args:
+        user: Authenticated user
+
+    Returns:
+        Cookie health information including status, age, and recommendations
+    """
+    try:
+        from job_sources.linkedin_cookie_health import check_cookie_health, CookieStatus
+
+        health = check_cookie_health()
+
+        # Convert enum to string for JSON serialization
+        return {
+            "status": health["status"].value,
+            "age_days": health["age_days"],
+            "age_hours": health["age_hours"],
+            "saved_at": health["saved_at"],
+            "cookie_count": health["cookie_count"],
+            "message": health["message"],
+            "needs_refresh": health["needs_refresh"],
+            "status_level": _get_status_level(health["status"]),
+            "instructions": "python -m job_sources.linkedin_login" if health["needs_refresh"] else None
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to check LinkedIn cookie health: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check cookie health: {str(e)}"
+        )
+
+
+def _get_status_level(status) -> str:
+    """Map cookie status to severity level for UI display."""
+    from job_sources.linkedin_cookie_health import CookieStatus
+    level_map = {
+        CookieStatus.HEALTHY: "success",
+        CookieStatus.AGING: "info",
+        CookieStatus.STALE: "warning",
+        CookieStatus.EXPIRED: "error",
+        CookieStatus.MISSING: "error",
+        CookieStatus.INVALID: "error",
+    }
+    return level_map.get(status, "unknown")

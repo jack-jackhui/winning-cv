@@ -28,15 +28,22 @@ class LinkedInJobScraper:
 
         options.auto_port(True) \
             .headless(config.HEADLESS) \
-            .no_imgs(True) \
+            .no_imgs(False) \
             .mute(True) \
-            .incognito(True) \
             .set_paths(browser_path=config.CHROMIUM_PATH or config.CHROME_PATH) \
             .set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+        # Anti-detection flags to avoid LinkedIn blocking
+        options.set_argument('--disable-blink-features=AutomationControlled')
+        options.set_argument('--disable-infobars')
+        options.set_argument('--disable-extensions')
+        options.set_argument('--disable-dev-shm-usage')
+        options.set_argument('--window-size=1920,1080')
 
         if config.RUNNING_IN_DOCKER:
             options.set_argument('--no-sandbox')
             options.set_argument('--disable-gpu')
+            options.set_argument('--single-process')
 
         self.browser = Chromium(options)
 
