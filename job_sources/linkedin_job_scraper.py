@@ -184,31 +184,38 @@ class LinkedInJobScraper:
         """Scroll page until 'See more jobs' button appears and load all listings"""
         max_attempts = 2
         attempts = 0
-        previous_max_row = 0
+        previous_job_count = 0
 
         while attempts < max_attempts:
             # Scroll to bottom of page
-            tab.actions.scroll(100000,10)
+            tab.actions.scroll(100000, 10)
             self.random_delay(1, 2)
 
-            # Check how many job elements are present so far
-            job_cards = tab.eles('@class=base-card relative w-full hover:no-underline '
-                                 'focus:no-underline base-card--link base-search-card '
-                                 'base-search-card--link job-search-card')
+            # Check how many job elements are present
+            # Try authenticated view first (data-job-id)
+            job_cards = tab.eles('@data-job-id')
+
+            # Try anonymous view with new structure
+            if not job_cards:
+                job_cards = tab.eles('@data-chameleon-result-urn')
+
+            # Fallback to old selector
+            if not job_cards:
+                job_cards = tab.eles('@class=base-card relative w-full hover:no-underline '
+                                     'focus:no-underline base-card--link base-search-card '
+                                     'base-search-card--link job-search-card')
+
             job_count = len(job_cards)
+            logger.debug(f"Current job count: {job_count}, Previous: {previous_job_count}")
+
             # If we've loaded enough job cards, we can break early
             if job_count >= self.max_jobs_to_scrape:
                 logger.debug(f"Loaded enough job cards: {job_count}. Stopping early...")
                 break
 
-            # Check current maximum data-row value
-            current_rows = [int(ele.attr('data-row')) for ele in tab.eles('@class=base-card relative w-full hover:no-underline focus:no-underline base-card--link base-search-card base-search-card--link job-search-card')]
-            current_max = max(current_rows) if current_rows else 0
-
-            logger.debug(f"Current max data-row: {current_max}, Previous: {previous_max_row}")
             # Check if new jobs were loaded
-            if current_max > previous_max_row:
-                previous_max_row = current_max
+            if job_count > previous_job_count:
+                previous_job_count = job_count
                 attempts = 0
             else:
                 attempts += 1
@@ -256,70 +263,188 @@ class LinkedInJobScraper:
             logger.debug("No cookie consent button found or could not click it: {str(e)}")
 
     def extract_job_listings(self, soup):
-        """Extract job listings from the search results page"""
-        job_listings = []
-        job_cards = soup.select("div.base-search-card")
+        """Extract job listings from the search results page.
 
-        logger.info(f"Found {len(job_cards)} job cards in the HTML")
+        Supports multiple LinkedIn HTML structures:
+        1. Job Search view (authenticated): div[data-job-id] with artdeco-entity-lockup structure
+        2. My Jobs/Saved Jobs view: div[data-chameleon-result-urn] with obfuscated classes
+        3. Public/anonymous view (fallback): div.base-search-card
+        """
+        job_listings = []
+
+        # Strategy 1: Authenticated view - job cards with data-job-id attribute
+        job_cards = soup.select("div[data-job-id]")
+        selector_used = "authenticated (data-job-id)"
+
+        # Strategy 2: Anonymous view with new structure
+        if not job_cards:
+            job_cards = soup.select("div[data-chameleon-result-urn]")
+            selector_used = "anonymous-new (data-chameleon-result-urn)"
+
+        # Strategy 3: Old anonymous structure (fallback)
+        if not job_cards:
+            job_cards = soup.select("div.base-search-card")
+            selector_used = "anonymous-old (base-search-card)"
+
+        logger.info(f"Using {selector_used} selector: Found {len(job_cards)} job cards")
 
         # Limit how many total job cards to process
         max_listings = self.max_jobs_to_scrape
-
-        # Limit number of jobs to process descriptions for
         max_jobs_for_description = self.max_jobs_for_description
 
-        processed_cards = 0  # track total processed job listings
-        processed_descriptions = 0  # track how many have descriptions
+        processed_cards = 0
+        processed_descriptions = 0
 
         for job_card in job_cards:
             processed_cards += 1
             if processed_cards > max_listings:
-                # Don't parse more than the user-defined limit
                 break
-            job_url = job_card.select_one("a.base-card__full-link")
-            job_url = job_url["href"] if job_url else ""
+
+            # Extract job URL - multiple strategies
+            job_url = ""
+            job_link = None
+
+            # Try authenticated view selector first
+            job_link = job_card.select_one("a.job-card-container__link[href*='/jobs/view/']")
+            if not job_link:
+                # Try generic /jobs/view/ link
+                job_link = job_card.select_one("a[href*='/jobs/view/']")
+            if not job_link:
+                # Fallback to old structure
+                job_link = job_card.select_one("a.base-card__full-link")
+
+            if job_link:
+                job_url = job_link.get("href", "")
+
+            # Fetch description for limited number of jobs
             fetch_desc = (processed_descriptions < max_jobs_for_description)
             desc = ""
             company_from_detail = ""
-            if fetch_desc:
+            if fetch_desc and job_url:
                 processed_descriptions += 1
                 desc, company_from_detail = self.get_job_description(job_url)
-            
-            # Try to extract company from list page first
+
+            # Extract title - multiple strategies
+            title = ""
+            if job_link:
+                # Authenticated view: title in span[aria-hidden] > strong
+                title_strong = job_link.select_one("span[aria-hidden='true'] strong")
+                if title_strong:
+                    title = title_strong.get_text(strip=True)
+                else:
+                    # Try span[aria-hidden] directly
+                    title_span = job_link.select_one("span[aria-hidden='true']")
+                    if title_span:
+                        title = title_span.get_text(strip=True)
+                    else:
+                        # Get text from link directly
+                        title = job_link.get_text(strip=True)
+            # Fallback to old structure
+            if not title:
+                title_elem = job_card.select_one("h3.base-search-card__title")
+                title = title_elem.get_text(strip=True) if title_elem else ""
+
+            # Extract company - multiple strategies
             company = ""
-            company_selectors = [
-                "h4.base-search-card__subtitle a",
-                "h4.base-search-card__subtitle",
-                "a.hidden-nested-link",
-                "span.job-search-card__company-name"
-            ]
-            for selector in company_selectors:
-                company_element = job_card.select_one(selector)
-                if company_element:
-                    company = company_element.get_text(strip=True)
-                    if company:
-                        break
-            
-            # Fallback to company from detail page if available
+
+            # Authenticated view: company in artdeco-entity-lockup__subtitle
+            subtitle_elem = job_card.select_one(".artdeco-entity-lockup__subtitle span")
+            if subtitle_elem:
+                company = subtitle_elem.get_text(strip=True)
+
+            # Try company tracking link
+            if not company:
+                company_link = job_card.select_one("a[data-tracking-control-name*='company']")
+                if company_link:
+                    company = company_link.get_text(strip=True)
+
+            # Try /company/ link
+            if not company:
+                company_link = job_card.select_one("a[href*='/company/']")
+                if company_link:
+                    company = company_link.get_text(strip=True)
+
+            # Fallback to old structure selectors
+            if not company:
+                company_selectors = [
+                    "h4.base-search-card__subtitle a",
+                    "h4.base-search-card__subtitle",
+                    "a.hidden-nested-link",
+                    "span.job-search-card__company-name"
+                ]
+                for selector in company_selectors:
+                    company_element = job_card.select_one(selector)
+                    if company_element:
+                        company = company_element.get_text(strip=True)
+                        if company:
+                            break
+
+            # Fallback to company from detail page
             if not company and company_from_detail:
                 company = company_from_detail
                 logger.debug(f"Using company from detail page: {company}")
-            
+
             if not company:
                 logger.warning(f"Could not extract company name for job: {job_url}")
                 company = "Unknown Company"
-            job = {
-                "title": job_card.select_one("h3.base-search-card__title").get_text(strip=True)
-                if job_card.select_one("h3.base-search-card__title") else "",
-                "company": company,
-                "location": job_card.select_one("span.job-search-card__location").get_text(strip=True)
-                if job_card.select_one("span.job-search-card__location") else "",
-                "posted_date": job_card.select_one("time.job-search-card__listdate").get_text(strip=True)
-                if job_card.select_one("time.job-search-card__listdate") else "",
-                "job_url": job_url,
-                "description": desc
-            }
-            job_listings.append(job)
+
+            # Extract location - multiple strategies
+            location = ""
+
+            # Authenticated view: location in artdeco-entity-lockup__caption
+            caption_elem = job_card.select_one(".artdeco-entity-lockup__caption li span")
+            if caption_elem:
+                location = caption_elem.get_text(strip=True)
+
+            # Try metadata wrapper
+            if not location:
+                metadata_elem = job_card.select_one(".job-card-container__metadata-wrapper li span")
+                if metadata_elem:
+                    location = metadata_elem.get_text(strip=True)
+
+            # Try span with location class
+            if not location:
+                location_elem = job_card.select_one("span[class*='location']")
+                if location_elem:
+                    location = location_elem.get_text(strip=True)
+
+            # Look for location patterns in all spans
+            if not location:
+                all_spans = job_card.find_all("span")
+                for span in all_spans:
+                    text = span.get_text(strip=True)
+                    if text and any(loc in text.lower() for loc in ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'remote', 'hybrid', 'on-site', 'nsw', 'vic', 'qld', 'wa', 'sa']):
+                        location = text
+                        break
+
+            # Fallback to old structure
+            if not location:
+                location_elem = job_card.select_one("span.job-search-card__location")
+                location = location_elem.get_text(strip=True) if location_elem else ""
+
+            # Extract posted date
+            posted_date = ""
+            time_elem = job_card.select_one("time")
+            if time_elem:
+                posted_date = time_elem.get_text(strip=True)
+            if not posted_date:
+                time_elem = job_card.select_one("time.job-search-card__listdate")
+                posted_date = time_elem.get_text(strip=True) if time_elem else ""
+
+            # Only add if we have at least a title or URL
+            if title or job_url:
+                job = {
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "posted_date": posted_date,
+                    "job_url": job_url,
+                    "description": desc
+                }
+                job_listings.append(job)
+                logger.debug(f"Extracted job: {title} at {company} ({location})")
+            else:
+                logger.warning(f"Skipping job card with no title or URL")
 
         logger.info(f"Extracted {len(job_listings)} job listings")
         return job_listings
@@ -329,6 +454,10 @@ class LinkedInJobScraper:
         if not job_url:
             return "", ""
         try:
+            # Convert relative URLs to absolute
+            if job_url.startswith('/'):
+                job_url = f"https://www.linkedin.com{job_url}"
+
             # Open job page in new tab
             logger.info(f"Opening LinkedIn job page for details: {job_url}")
             new_tab = self.browser.new_tab()
