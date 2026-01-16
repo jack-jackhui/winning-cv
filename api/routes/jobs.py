@@ -29,6 +29,8 @@ from api.middleware.auth_middleware import get_current_user
 
 # Import existing functionality
 from data_store.airtable_manager import AirtableManager
+from data_store.cv_version_manager import get_cv_version_manager
+from utils.minio_storage import MinIOStorage
 from job_processing.core import JobProcessor
 from config.settings import Config
 from utils.utils import Struct
@@ -188,6 +190,7 @@ async def save_job_config(
     results_wanted: int = Form(default=10, ge=1, le=50),
     country: str = Form(default="Australia"),
     cv_file: Optional[UploadFile] = File(None),
+    selected_cv_version_id: Optional[str] = Form(None, description="ID of CV version from library to use as base CV"),
     user: UserInfo = Depends(get_current_user)
 ) -> JobConfigResponse:
     """
@@ -195,7 +198,8 @@ async def save_job_config(
 
     Args:
         Form fields for job search configuration
-        cv_file: Optional CV file to upload
+        cv_file: Optional CV file to upload (takes priority over selected_cv_version_id)
+        selected_cv_version_id: Optional CV version ID from library to use as base CV
         user: Authenticated user
 
     Returns:
@@ -209,10 +213,12 @@ async def save_job_config(
             cfg.AIRTABLE_TABLE_ID
         )
 
-        # Handle CV upload if provided
+        # Handle CV: either upload new file or select from library
         cv_path = ""
         cv_url = ""
+
         if cv_file:
+            # Option 1: Upload new CV file
             cv_dir = Path(f"user_cv/{user.email}")
             cv_dir.mkdir(parents=True, exist_ok=True)
 
@@ -235,7 +241,45 @@ async def save_job_config(
             except Exception as e:
                 logger.warning(f"Failed to upload CV to WordPress: {e}")
 
-        # Get existing config to preserve CV path if not uploading new one
+        elif selected_cv_version_id:
+            # Option 2: Use CV from library
+            try:
+                cv_manager = get_cv_version_manager()
+                version = cv_manager.get_version(selected_cv_version_id, user.email)
+
+                if not version:
+                    raise HTTPException(status_code=404, detail="Selected CV version not found")
+
+                storage_path = version.get('storage_path')
+                if not storage_path:
+                    raise HTTPException(status_code=404, detail="CV file not found in storage")
+
+                # Download from MinIO to local path
+                cv_dir = Path(f"user_cv/{user.email}")
+                cv_dir.mkdir(parents=True, exist_ok=True)
+
+                # Determine file extension from storage path
+                suffix = Path(storage_path).suffix or '.pdf'
+                unique_filename = f"base_cv_{uuid.uuid4().hex[:8]}{suffix}"
+                cv_path = str(cv_dir / unique_filename)
+
+                # Download from MinIO using the full storage path
+                minio = MinIOStorage()
+                if not minio.download_cv_by_path(storage_path, cv_path):
+                    raise HTTPException(status_code=404, detail="Failed to download CV from storage")
+
+                # Get presigned URL for the version
+                cv_url = cv_manager.get_download_url(selected_cv_version_id, user.email)
+
+                logger.info(f"Using CV from library: {version.get('version_name')} -> {cv_path}")
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to use CV from library: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to load CV from library: {str(e)}")
+
+        # Get existing config to preserve CV path if not uploading/selecting new one
         existing_config = airtable.get_user_config(user.email)
         if not cv_path and existing_config:
             cv_path = existing_config.get("base_cv_path", "")

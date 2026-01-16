@@ -374,6 +374,108 @@ class MinIOStorage:
                 return False
             raise
 
+    def download_cv_to_local(
+        self,
+        user_id: str,
+        filename: str,
+        local_path: str,
+        version_id: Optional[str] = None
+    ) -> bool:
+        """
+        Download a CV file from MinIO to local filesystem.
+
+        Args:
+            user_id: User identifier
+            filename: Filename to download
+            local_path: Local path to save the file
+            version_id: Optional version identifier
+
+        Returns:
+            True if downloaded successfully, False otherwise
+        """
+        object_path = self._get_object_path(user_id, filename, version_id)
+
+        try:
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            # Download file
+            self.client.fget_object(self.bucket, object_path, local_path)
+            logger.info(f"Downloaded CV from MinIO: {object_path} -> {local_path}")
+            return True
+
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                logger.warning(f"CV not found in MinIO: {object_path}")
+                return False
+            logger.error(f"Failed to download CV from MinIO: {e}")
+            return False
+
+    def download_cv_by_path(
+        self,
+        storage_path: str,
+        local_path: str
+    ) -> bool:
+        """
+        Download a CV file from MinIO using the full storage path.
+
+        Args:
+            storage_path: Full MinIO object path (e.g., "user@email.com/versions/file.docx")
+            local_path: Local path to save the file
+
+        Returns:
+            True if downloaded successfully, False otherwise
+        """
+        try:
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            # Download file directly using the storage path
+            self.client.fget_object(self.bucket, storage_path, local_path)
+            logger.info(f"Downloaded CV from MinIO: {storage_path} -> {local_path}")
+            return True
+
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                logger.warning(f"CV not found in MinIO: {storage_path}")
+                return False
+            logger.error(f"Failed to download CV from MinIO: {e}")
+            return False
+
+    def download_cv_bytes(
+        self,
+        user_id: str,
+        filename: str,
+        version_id: Optional[str] = None
+    ) -> Optional[bytes]:
+        """
+        Download a CV file from MinIO as bytes.
+
+        Args:
+            user_id: User identifier
+            filename: Filename to download
+            version_id: Optional version identifier
+
+        Returns:
+            File content as bytes, or None if not found
+        """
+        object_path = self._get_object_path(user_id, filename, version_id)
+
+        try:
+            response = self.client.get_object(self.bucket, object_path)
+            data = response.read()
+            response.close()
+            response.release_conn()
+            logger.info(f"Downloaded CV bytes from MinIO: {object_path} ({len(data)} bytes)")
+            return data
+
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                logger.warning(f"CV not found in MinIO: {object_path}")
+                return None
+            logger.error(f"Failed to download CV bytes from MinIO: {e}")
+            return None
+
 
 # Global instance for convenience
 _storage_instance: Optional[MinIOStorage] = None
