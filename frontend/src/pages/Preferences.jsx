@@ -14,8 +14,10 @@ import {
   Globe,
   DollarSign,
   ExternalLink,
+  FolderOpen,
 } from 'lucide-react'
 import { jobService, cvService } from '../services/api'
+import CVLibraryPicker from '../components/cv/CVLibraryPicker'
 
 const countries = [
   { id: 'Australia', label: 'Australia' },
@@ -65,6 +67,8 @@ export default function Preferences() {
   // CV file state
   const [cvFile, setCvFile] = useState(null)
   const [existingCvUrl, setExistingCvUrl] = useState(null)
+  const [selectedCvVersion, setSelectedCvVersion] = useState(null)
+  const [showUploadInput, setShowUploadInput] = useState(false)
   const fileInputRef = useRef(null)
 
   // Config state
@@ -127,6 +131,7 @@ export default function Preferences() {
       ]
       if (validTypes.includes(file.type)) {
         setCvFile(file)
+        setSelectedCvVersion(null) // Clear library selection when uploading new file
         setError(null)
       } else {
         setError('Please upload a PDF or DOCX file')
@@ -134,8 +139,20 @@ export default function Preferences() {
     }
   }
 
+  const handleSelectCvVersion = (version) => {
+    setSelectedCvVersion(version)
+    setCvFile(null) // Clear file upload when selecting from library
+    setShowUploadInput(false)
+  }
+
+  const handleShowUploadInput = () => {
+    setShowUploadInput(true)
+    setSelectedCvVersion(null)
+  }
+
   const handleRemoveFile = () => {
     setCvFile(null)
+    setShowUploadInput(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -162,9 +179,18 @@ export default function Preferences() {
         seek_salarytype: config.seekSalaryType,
       }
 
-      await jobService.saveConfig(configData, cvFile)
+      // Pass either uploaded file or selected CV version ID
+      const selectedVersionId = selectedCvVersion?.version_id || null
+      await jobService.saveConfig(configData, cvFile, selectedVersionId)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+
+      // Reset upload states after successful save
+      if (cvFile || selectedCvVersion) {
+        setCvFile(null)
+        setShowUploadInput(false)
+        // Keep selectedCvVersion to show what was selected
+      }
 
       // Reload to get updated URLs
       await loadConfig()
@@ -182,6 +208,35 @@ export default function Preferences() {
     setError(null)
 
     try {
+      // Auto-save config before starting search if there are unsaved CV changes
+      if (cvFile || selectedCvVersion) {
+        setSearchStatus({ status: 'pending', message: 'Saving configuration...', progress: 5 })
+        const configData = {
+          search_keywords: config.searchKeywords,
+          location: config.location,
+          country: config.country,
+          hours_old: config.hoursOld,
+          max_jobs: config.maxJobs,
+          results_wanted: config.resultsWanted,
+          search_term: config.searchKeywords,
+          google_term: config.googleSearchTerm,
+          seek_category: config.seekCategory,
+          seek_salaryrange: config.seekSalaryRange,
+          seek_salarytype: config.seekSalaryType,
+        }
+        const selectedVersionId = selectedCvVersion?.version_id || null
+        await jobService.saveConfig(configData, cvFile, selectedVersionId)
+
+        // Reset file states after auto-save
+        if (cvFile) {
+          setCvFile(null)
+          setShowUploadInput(false)
+        }
+
+        // Reload config to get updated CV URL
+        await loadConfig()
+      }
+
       const response = await jobService.startSearch()
       const taskId = response.task_id
 
@@ -238,7 +293,7 @@ export default function Preferences() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Base CV Upload */}
+        {/* Base CV Selection */}
         <div className="card space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
@@ -246,14 +301,15 @@ export default function Preferences() {
             </div>
             <div>
               <h2 className="font-medium text-text-primary">Base CV</h2>
-              <p className="text-sm text-text-muted">Upload your CV for job matching</p>
+              <p className="text-sm text-text-muted">Select a CV from your library or upload a new one</p>
             </div>
           </div>
 
-          {existingCvUrl && !cvFile && (
+          {/* Existing CV indicator */}
+          {existingCvUrl && !cvFile && !selectedCvVersion && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              <span className="text-sm text-emerald-400">CV already uploaded</span>
+              <span className="text-sm text-emerald-400">CV already configured</span>
               <a
                 href={existingCvUrl}
                 target="_blank"
@@ -265,45 +321,82 @@ export default function Preferences() {
             </div>
           )}
 
-          <div className="relative">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx"
-              onChange={handleFileSelect}
-              className="hidden"
-              id="cv-upload"
-            />
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="cv-upload"
+          />
 
-            {cvFile ? (
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border">
-                <FileText className="w-6 h-6 text-accent-400" />
-                <div className="flex-1">
-                  <p className="font-medium text-text-primary">{cvFile.name}</p>
-                  <p className="text-sm text-text-muted">
-                    {(cvFile.size / 1024).toFixed(1)} KB
-                  </p>
+          {/* Show file upload UI if file selected or upload mode active */}
+          {(cvFile || showUploadInput) ? (
+            <div className="space-y-3">
+              {cvFile ? (
+                <div className="flex items-center gap-3 p-4 rounded-xl border border-accent-500 bg-accent-500/5">
+                  <FileText className="w-6 h-6 text-accent-400" />
+                  <div className="flex-1">
+                    <p className="font-medium text-text-primary">{cvFile.name}</p>
+                    <p className="text-sm text-text-muted">
+                      {(cvFile.size / 1024).toFixed(1)} KB - Ready to upload
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveFile}
+                    className="p-1 hover:bg-surface-elevated rounded-lg"
+                  >
+                    <X className="w-5 h-5 text-text-muted" />
+                  </button>
                 </div>
+              ) : (
+                <label
+                  htmlFor="cv-upload"
+                  className="flex items-center justify-center gap-3 p-6 rounded-xl border-2 border-dashed border-border hover:border-accent-400 cursor-pointer transition-colors"
+                >
+                  <Upload className="w-6 h-6 text-text-muted" />
+                  <div className="text-center">
+                    <p className="text-text-secondary font-medium">Click to select file</p>
+                    <p className="text-xs text-text-muted mt-1">PDF or DOCX format</p>
+                  </div>
+                </label>
+              )}
+              {!cvFile && (
                 <button
                   type="button"
-                  onClick={handleRemoveFile}
-                  className="p-1 hover:bg-surface-elevated rounded-lg"
+                  onClick={() => setShowUploadInput(false)}
+                  className="text-sm text-text-muted hover:text-text-secondary"
                 >
-                  <X className="w-5 h-5 text-text-muted" />
+                  Cancel and select from library
                 </button>
+              )}
+            </div>
+          ) : (
+            /* CV Library Picker */
+            <CVLibraryPicker
+              selectedVersionId={selectedCvVersion?.version_id}
+              onSelectVersion={handleSelectCvVersion}
+              onUploadNew={handleShowUploadInput}
+              existingCvUrl={existingCvUrl}
+            />
+          )}
+
+          {/* Show selected version info */}
+          {selectedCvVersion && !showUploadInput && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-accent-500/10 border border-accent-500/30">
+              <FolderOpen className="w-5 h-5 text-accent-400" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-text-primary">
+                  Selected: {selectedCvVersion.version_name}
+                </p>
+                {selectedCvVersion.auto_category && (
+                  <p className="text-xs text-accent-400">{selectedCvVersion.auto_category}</p>
+                )}
               </div>
-            ) : (
-              <label
-                htmlFor="cv-upload"
-                className="flex items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed border-border hover:border-text-muted cursor-pointer transition-colors"
-              >
-                <Upload className="w-5 h-5 text-text-muted" />
-                <span className="text-text-secondary">
-                  {existingCvUrl ? 'Upload new CV' : 'Upload your base CV'}
-                </span>
-              </label>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Search Keywords */}

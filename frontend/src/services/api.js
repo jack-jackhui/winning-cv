@@ -85,7 +85,8 @@ export const jobService = {
   },
 
   // Save job search configuration
-  async saveConfig(config, cvFile = null) {
+  // cvOption can be: { type: 'file', file: File } or { type: 'version', versionId: string } or null
+  async saveConfig(config, cvFile = null, selectedCvVersionId = null) {
     const formData = new FormData()
 
     // Add config fields
@@ -95,9 +96,13 @@ export const jobService = {
       }
     })
 
-    // Add CV file if provided
+    // Add CV file if provided (upload new CV)
     if (cvFile) {
       formData.append('cv_file', cvFile)
+    }
+    // Or add selected CV version ID (use from library)
+    else if (selectedCvVersionId) {
+      formData.append('selected_cv_version_id', selectedCvVersionId)
     }
 
     return fetchAPI('/api/v1/jobs/config', {

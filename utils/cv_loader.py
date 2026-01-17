@@ -8,6 +8,40 @@ import tempfile
 logger = logging.getLogger(__name__)
 
 
+def _download_from_minio_by_path(storage_path: str) -> str:
+    """
+    Download CV from MinIO using a direct storage path.
+
+    Args:
+        storage_path: Full MinIO object path (e.g., "user@example.com/versions/cv.docx")
+
+    Returns:
+        Local temp file path if successful, empty string otherwise
+    """
+    try:
+        from utils.minio_storage import get_minio_storage
+
+        storage = get_minio_storage()
+        filename = os.path.basename(storage_path)
+
+        # Always use temp directory for direct MinIO downloads
+        temp_dir = tempfile.mkdtemp(prefix="cv_download_")
+        download_path = os.path.join(temp_dir, filename)
+
+        logger.info(f"Downloading CV from MinIO path: {storage_path}")
+
+        if storage.download_cv_by_path(storage_path, download_path):
+            logger.info(f"Successfully downloaded CV from MinIO to {download_path}")
+            return download_path
+
+        logger.warning(f"CV not found in MinIO at path: {storage_path}")
+        return ""
+
+    except Exception as e:
+        logger.error(f"MinIO direct download failed: {str(e)}")
+        return ""
+
+
 def _try_download_from_minio(file_path: str) -> str:
     """
     Attempt to download CV from MinIO storage when local file is missing.
@@ -63,23 +97,35 @@ def _try_download_from_minio(file_path: str) -> str:
 def load_cv_content(file_path="user_cv/CV_Jack_HUI_08042025_EL.docx"):
     """
     Load CV content using unified text extraction.
-    
-    First tries to load from local filesystem. If file not found,
-    attempts to download from MinIO storage (for Docker deployments
-    where local files may not persist).
+
+    Supports multiple path formats:
+    - minio://{storage_path}: Direct MinIO storage path (from CV library selection)
+    - user_cv/{email}/{filename}: Local path with MinIO fallback
+
+    For Docker deployments where local files may not persist, automatically
+    falls back to MinIO storage.
     """
     try:
-        logger.info(f"Loading CV from: {os.path.abspath(file_path)}")
-
-        # Try local filesystem first
-        if not os.path.exists(file_path):
-            logger.warning(f"Local file not found: {os.path.abspath(file_path)}")
-            
-            # Try to download from MinIO
-            file_path = _try_download_from_minio(file_path)
+        # Check for direct MinIO path (from CV library selection)
+        if file_path.startswith("minio://"):
+            storage_path = file_path[8:]  # Remove "minio://" prefix
+            logger.info(f"Loading CV from MinIO storage path: {storage_path}")
+            file_path = _download_from_minio_by_path(storage_path)
             if not file_path:
-                logger.error("CV not found locally or in MinIO storage")
+                logger.error("CV not found in MinIO storage")
                 return ""
+        else:
+            logger.info(f"Loading CV from: {os.path.abspath(file_path)}")
+
+            # Try local filesystem first
+            if not os.path.exists(file_path):
+                logger.warning(f"Local file not found: {os.path.abspath(file_path)}")
+
+                # Try to download from MinIO
+                file_path = _try_download_from_minio(file_path)
+                if not file_path:
+                    logger.error("CV not found locally or in MinIO storage")
+                    return ""
 
         # Create file-like object for utils processing
         with open(file_path, 'rb') as f:

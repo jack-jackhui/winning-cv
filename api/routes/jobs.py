@@ -230,16 +230,34 @@ async def save_job_config(
             with open(cv_path, "wb") as f:
                 f.write(content)
 
+            # Upload to MinIO for persistent storage (survives container restarts)
             try:
-                cv_url = upload_pdf_to_wordpress(
+                minio = MinIOStorage()
+                content_type = "application/pdf"
+                if suffix.lower() == ".docx":
+                    content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+                object_path = minio.upload_cv(
                     file_path=cv_path,
+                    user_id=user.email,
                     filename=unique_filename,
-                    wp_site=cfg.WORDPRESS_SITE,
-                    wp_user=cfg.WORDPRESS_USERNAME,
-                    wp_app_password=cfg.WORDPRESS_APP_PASSWORD
+                    content_type=content_type
                 )
+                cv_url = minio.get_download_url_by_path(object_path, expires_hours=24)
+                logger.info(f"Uploaded base CV to MinIO: {object_path}")
             except Exception as e:
-                logger.warning(f"Failed to upload CV to WordPress: {e}")
+                logger.warning(f"Failed to upload CV to MinIO: {e}")
+                # Fallback to WordPress (deprecated)
+                try:
+                    cv_url = upload_pdf_to_wordpress(
+                        file_path=cv_path,
+                        filename=unique_filename,
+                        wp_site=cfg.WORDPRESS_SITE,
+                        wp_user=cfg.WORDPRESS_USERNAME,
+                        wp_app_password=cfg.WORDPRESS_APP_PASSWORD
+                    )
+                except Exception as wp_e:
+                    logger.warning(f"Failed to upload CV to WordPress: {wp_e}")
 
         elif selected_cv_version_id:
             # Option 2: Use CV from library
@@ -254,19 +272,9 @@ async def save_job_config(
                 if not storage_path:
                     raise HTTPException(status_code=404, detail="CV file not found in storage")
 
-                # Download from MinIO to local path
-                cv_dir = Path(f"user_cv/{user.email}")
-                cv_dir.mkdir(parents=True, exist_ok=True)
-
-                # Determine file extension from storage path
-                suffix = Path(storage_path).suffix or '.pdf'
-                unique_filename = f"base_cv_{uuid.uuid4().hex[:8]}{suffix}"
-                cv_path = str(cv_dir / unique_filename)
-
-                # Download from MinIO using the full storage path
-                minio = MinIOStorage()
-                if not minio.download_cv_by_path(storage_path, cv_path):
-                    raise HTTPException(status_code=404, detail="Failed to download CV from storage")
+                # Use a special path format that cv_loader can recognize as MinIO storage path
+                # Format: minio://{storage_path} - cv_loader will handle this specially
+                cv_path = f"minio://{storage_path}"
 
                 # Get presigned URL for the version
                 cv_url = cv_manager.get_download_url(selected_cv_version_id, user.email)
