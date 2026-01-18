@@ -36,7 +36,7 @@ export default function Profile() {
     wechatAlerts: false,
     weeklyDigest: true,
     telegramChatId: '',
-    wechatOpenId: '',
+    wechatId: '',
     notificationEmail: '',
   })
 
@@ -52,7 +52,7 @@ export default function Profile() {
           wechatAlerts: prefs.wechat_alerts ?? false,
           weeklyDigest: prefs.weekly_digest ?? true,
           telegramChatId: prefs.telegram_chat_id || '',
-          wechatOpenId: prefs.wechat_openid || '',
+          wechatId: prefs.wechat_id || prefs.wechat_openid || '',
           notificationEmail: prefs.notification_email || user?.email || '',
         })
       } catch (err) {
@@ -115,6 +115,9 @@ export default function Profile() {
     setTestResult(null)
 
     try {
+      // Save preferences first to ensure chat_id/settings are in database before testing
+      await profileService.updateNotificationPreferences(notifications)
+
       const result = await profileService.testNotification(channel)
       setTestResult({
         success: result.success,
@@ -382,7 +385,7 @@ export default function Profile() {
                   <div>
                     <p className="font-medium text-text-primary">WeChat Alerts</p>
                     <p className="text-sm text-text-muted">
-                      Get notifications through WeChat Work
+                      Get direct notifications on WeChat
                     </p>
                   </div>
                 </div>
@@ -400,13 +403,26 @@ export default function Profile() {
               </label>
               {notifications.wechatAlerts && (
                 <div className="pl-8 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Your WeChat ID (wxid)"
+                    value={notifications.wechatId}
+                    onChange={(e) =>
+                      setNotifications({
+                        ...notifications,
+                        wechatId: e.target.value,
+                      })
+                    }
+                    className="input text-sm"
+                    required
+                  />
                   <p className="text-xs text-text-muted">
-                    WeChat notifications are sent via the configured WeChat Work webhook
+                    Enter your WeChat ID (wxid) to receive direct messages
                   </p>
                   <button
                     type="button"
                     onClick={() => handleTestNotification('wechat')}
-                    disabled={testingChannel === 'wechat'}
+                    disabled={testingChannel === 'wechat' || !notifications.wechatId}
                     className="btn-secondary text-sm py-1.5 px-3"
                   >
                     {testingChannel === 'wechat' ? (

@@ -47,6 +47,7 @@ async def get_notification_preferences(
         manager = get_airtable_manager()
         prefs = manager.get_notification_preferences(user.email)
 
+        wechat_id = prefs.get("wechat_id") or prefs.get("wechat_openid")
         return NotificationPreferencesResponse(
             user_email=user.email,
             email_alerts=prefs.get("email_alerts", True),
@@ -54,7 +55,8 @@ async def get_notification_preferences(
             wechat_alerts=prefs.get("wechat_alerts", False),
             weekly_digest=prefs.get("weekly_digest", True),
             telegram_chat_id=prefs.get("telegram_chat_id"),
-            wechat_openid=prefs.get("wechat_openid"),
+            wechat_id=wechat_id,
+            wechat_openid=wechat_id,  # For backward compatibility
             notification_email=prefs.get("notification_email") or user.email
         )
     except Exception as e:
@@ -86,6 +88,11 @@ async def update_notification_preferences(
         existing = manager.get_notification_preferences(user.email)
 
         # Build update dict with only provided fields
+        # Support both wechat_id and wechat_openid for backward compatibility
+        new_wechat_id = preferences.wechat_id or preferences.wechat_openid
+        existing_wechat_id = existing.get("wechat_id") or existing.get("wechat_openid")
+        wechat_id = new_wechat_id if new_wechat_id is not None else existing_wechat_id
+
         update_data = {
             "user_email": user.email,
             "email_alerts": preferences.email_alerts if preferences.email_alerts is not None else existing.get("email_alerts", True),
@@ -93,7 +100,7 @@ async def update_notification_preferences(
             "wechat_alerts": preferences.wechat_alerts if preferences.wechat_alerts is not None else existing.get("wechat_alerts", False),
             "weekly_digest": preferences.weekly_digest if preferences.weekly_digest is not None else existing.get("weekly_digest", True),
             "telegram_chat_id": preferences.telegram_chat_id if preferences.telegram_chat_id is not None else existing.get("telegram_chat_id"),
-            "wechat_openid": preferences.wechat_openid if preferences.wechat_openid is not None else existing.get("wechat_openid"),
+            "wechat_id": wechat_id,
             "notification_email": preferences.notification_email if preferences.notification_email is not None else existing.get("notification_email", user.email)
         }
 
@@ -113,7 +120,9 @@ async def update_notification_preferences(
                 detail="Failed to save notification preferences"
             )
 
-        return NotificationPreferencesResponse(**update_data)
+        # Add wechat_openid for backward compatibility
+        response_data = {**update_data, "wechat_openid": update_data.get("wechat_id")}
+        return NotificationPreferencesResponse(**response_data)
 
     except HTTPException:
         raise
@@ -177,10 +186,17 @@ async def test_notification(
         )
 
     elif request.channel == "wechat":
-        wechat_openid = prefs.get("wechat_openid")
+        wechat_id = prefs.get("wechat_id") or prefs.get("wechat_openid")
+        if not wechat_id:
+            return TestNotificationResponse(
+                success=False,
+                channel="wechat",
+                message="WeChat ID not configured. Please set your WeChat ID first."
+            )
+
         success = send_wechat_message(
             message=f"**WinningCV Test Notification**\n\n{test_message}\n\nIf you received this message, your WeChat alerts are working!",
-            wechat_openid=wechat_openid
+            wechat_id=wechat_id
         )
         return TestNotificationResponse(
             success=success,

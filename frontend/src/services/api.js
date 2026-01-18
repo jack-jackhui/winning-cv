@@ -445,7 +445,7 @@ export const profileService = {
         wechat_alerts: preferences.wechatAlerts,
         weekly_digest: preferences.weeklyDigest,
         telegram_chat_id: preferences.telegramChatId,
-        wechat_openid: preferences.wechatOpenId,
+        wechat_id: preferences.wechatId,
         notification_email: preferences.notificationEmail,
       }),
     })

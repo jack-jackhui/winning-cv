@@ -51,6 +51,7 @@ class Config:
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
     WECHAT_API_KEY = os.getenv("WECHAT_API_KEY")
     WECHAT_BOT_URL = os.getenv("WECHAT_BOT_URL")
+    WECHAT_API_URL = os.getenv("WECHAT_API_URL")  # Direct WeChat API endpoint (e.g., https://wechat.jackhui.com.au)
     EMAIL_USER = os.getenv("EMAIL_USER")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     SMTP_SERVER = os.getenv("SMTP_SERVER")

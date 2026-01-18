@@ -293,13 +293,16 @@ class AirtableManager:
             )
             if records:
                 fields = records[0]['fields']
+                # Support both wechat_id and wechat_openid (wechat_id takes precedence)
+                wechat_id = fields.get("wechat_id") or fields.get("wechat_openid")
                 return {
                     "email_alerts": fields.get("email_alerts", True),
                     "telegram_alerts": fields.get("telegram_alerts", False),
                     "wechat_alerts": fields.get("wechat_alerts", False),
                     "weekly_digest": fields.get("weekly_digest", True),
                     "telegram_chat_id": fields.get("telegram_chat_id"),
-                    "wechat_openid": fields.get("wechat_openid"),
+                    "wechat_id": wechat_id,
+                    "wechat_openid": wechat_id,  # For backward compatibility
                     "notification_email": fields.get("notification_email"),
                 }
             return {}
@@ -321,13 +324,15 @@ class AirtableManager:
             )
 
             # Build notification preference fields
+            # Support both wechat_id and wechat_openid (wechat_id takes precedence)
+            wechat_id = prefs_data.get("wechat_id") or prefs_data.get("wechat_openid") or ""
             notification_fields = {
                 "email_alerts": prefs_data.get("email_alerts", True),
                 "telegram_alerts": prefs_data.get("telegram_alerts", False),
                 "wechat_alerts": prefs_data.get("wechat_alerts", False),
                 "weekly_digest": prefs_data.get("weekly_digest", True),
                 "telegram_chat_id": prefs_data.get("telegram_chat_id") or "",
-                "wechat_openid": prefs_data.get("wechat_openid") or "",
+                "wechat_id": wechat_id,
                 "notification_email": prefs_data.get("notification_email") or "",
             }
 
@@ -351,19 +356,23 @@ class AirtableManager:
             # Get all user configs with any notification enabled
             formula = "OR({email_alerts}, {telegram_alerts}, {wechat_alerts})"
             records = self.user_config_table.all(formula=formula)
-            return [
-                {
-                    "user_email": rec['fields'].get("user_email"),
-                    "email_alerts": rec['fields'].get("email_alerts", True),
-                    "telegram_alerts": rec['fields'].get("telegram_alerts", False),
-                    "wechat_alerts": rec['fields'].get("wechat_alerts", False),
-                    "weekly_digest": rec['fields'].get("weekly_digest", True),
-                    "telegram_chat_id": rec['fields'].get("telegram_chat_id"),
-                    "wechat_openid": rec['fields'].get("wechat_openid"),
-                    "notification_email": rec['fields'].get("notification_email"),
-                }
-                for rec in records if rec['fields'].get("user_email")
-            ]
+            users = []
+            for rec in records:
+                if rec['fields'].get("user_email"):
+                    fields = rec['fields']
+                    wechat_id = fields.get("wechat_id") or fields.get("wechat_openid")
+                    users.append({
+                        "user_email": fields.get("user_email"),
+                        "email_alerts": fields.get("email_alerts", True),
+                        "telegram_alerts": fields.get("telegram_alerts", False),
+                        "wechat_alerts": fields.get("wechat_alerts", False),
+                        "weekly_digest": fields.get("weekly_digest", True),
+                        "telegram_chat_id": fields.get("telegram_chat_id"),
+                        "wechat_id": wechat_id,
+                        "wechat_openid": wechat_id,  # For backward compatibility
+                        "notification_email": fields.get("notification_email"),
+                    })
+            return users
         except Exception as e:
             self.logger.error(f"Failed to get users with notifications: {str(e)}")
             return []

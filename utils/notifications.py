@@ -26,7 +26,7 @@ class UserNotificationPrefs:
         wechat_alerts: bool = False,
         weekly_digest: bool = True,
         telegram_chat_id: Optional[str] = None,
-        wechat_openid: Optional[str] = None,
+        wechat_id: Optional[str] = None,
         notification_email: Optional[str] = None
     ):
         self.user_email = user_email
@@ -35,7 +35,7 @@ class UserNotificationPrefs:
         self.wechat_alerts = wechat_alerts
         self.weekly_digest = weekly_digest
         self.telegram_chat_id = telegram_chat_id
-        self.wechat_openid = wechat_openid
+        self.wechat_id = wechat_id  # WeChat ID (wxid) for direct messaging
         self.notification_email = notification_email or user_email
 
     def to_dict(self) -> dict:
@@ -46,7 +46,7 @@ class UserNotificationPrefs:
             "wechat_alerts": self.wechat_alerts,
             "weekly_digest": self.weekly_digest,
             "telegram_chat_id": self.telegram_chat_id,
-            "wechat_openid": self.wechat_openid,
+            "wechat_id": self.wechat_id,
             "notification_email": self.notification_email,
         }
 
@@ -59,7 +59,7 @@ class UserNotificationPrefs:
             wechat_alerts=data.get("wechat_alerts", False),
             weekly_digest=data.get("weekly_digest", True),
             telegram_chat_id=data.get("telegram_chat_id"),
-            wechat_openid=data.get("wechat_openid"),
+            wechat_id=data.get("wechat_id") or data.get("wechat_openid"),  # Support both old and new field names
             notification_email=data.get("notification_email"),
         )
 
@@ -122,26 +122,81 @@ def send_email_notification(subject: str, body: str, to_email: Optional[str] = N
         return False
 
 
-def send_wechat_message(message: str, wechat_openid: Optional[str] = None) -> bool:
+def send_wechat_message(message: str, wechat_id: Optional[str] = None) -> bool:
     """
-    Send a message via WeChat Work (企业微信) webhook or WeCom API.
+    Send a message via WeChat using direct API or webhook.
 
-    Supports two modes:
-    1. Webhook mode: Uses WECHAT_BOT_URL for group bot notifications
-    2. OpenID mode: Direct user notification (requires additional API setup)
+    Supports three modes:
+    1. Direct API mode: Uses WECHAT_API_URL for direct user messaging (requires wechat_id)
+    2. Group mode: Uses WECHAT_API_URL with group_name for group notifications
+    3. Webhook mode: Uses WECHAT_BOT_URL for WeChat Work webhook (legacy)
 
     Args:
         message: The message to send
-        wechat_openid: Optional user's WeChat OpenID for direct messaging
+        wechat_id: User's WeChat ID (wxid) for direct messaging, or group name for group messaging
 
     Returns:
         True if sent successfully, False otherwise
     """
-    WECHAT_BOT_URL = Config.WECHAT_BOT_URL
+    WECHAT_API_URL = Config.WECHAT_API_URL
     WECHAT_API_KEY = Config.WECHAT_API_KEY
+    WECHAT_BOT_URL = Config.WECHAT_BOT_URL
 
-    # Mode 1: Webhook bot (group notifications)
-    if WECHAT_BOT_URL:
+    # Mode 1: Direct API (preferred) - for direct user messaging
+    if WECHAT_API_URL and WECHAT_API_KEY and wechat_id:
+        try:
+            # Determine if wechat_id is a user wxid or group name
+            # wxid format typically starts with "wxid_" for users or ends with "@chatroom" for groups
+            is_user_wxid = wechat_id.startswith("wxid_") or (not wechat_id.endswith("@chatroom") and "_" in wechat_id)
+
+            if is_user_wxid:
+                # Direct user message
+                endpoint = f"{WECHAT_API_URL.rstrip('/')}/send_direct_message"
+                payload = {
+                    "receiver_wxid": wechat_id,
+                    "message": message,
+                    "message_type": "TEXT"
+                }
+            else:
+                # Group message (treat wechat_id as group name)
+                endpoint = f"{WECHAT_API_URL.rstrip('/')}/send_message"
+                payload = {
+                    "group_name": wechat_id,
+                    "message": message,
+                    "message_type": "TEXT"
+                }
+
+            headers = {
+                "Authorization": f"Bearer {WECHAT_API_KEY}",
+                "Content-Type": "application/json"
+            }
+
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get("status") == "success":
+                    logger.info(f"WeChat message sent successfully via API to {wechat_id}")
+                    return True
+                else:
+                    logger.warning(f"WeChat API error: {result.get('error', 'Unknown error')}")
+                    return False
+            elif resp.status_code == 401:
+                logger.warning("WeChat API authentication failed - check WECHAT_API_KEY")
+                return False
+            else:
+                logger.warning(f"WeChat API HTTP error: {resp.status_code} - {resp.text}")
+                return False
+
+        except requests.exceptions.Timeout:
+            logger.error("WeChat API request timed out")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to send WeChat message via API: {str(e)}")
+            return False
+
+    # Mode 2: Webhook bot (legacy - WeChat Work)
+    elif WECHAT_BOT_URL:
         try:
             # WeChat Work webhook format
             payload = {
@@ -169,20 +224,8 @@ def send_wechat_message(message: str, wechat_openid: Optional[str] = None) -> bo
             logger.error(f"Failed to send WeChat webhook message: {str(e)}")
             return False
 
-    # Mode 2: Direct user notification via WeCom API (if openid provided)
-    elif wechat_openid and WECHAT_API_KEY:
-        try:
-            # This would require WeCom Corp API integration
-            # For now, log that direct messaging is not fully implemented
-            logger.warning("WeChat direct messaging requires WeCom Corp API setup")
-            return False
-
-        except Exception as e:
-            logger.error(f"Failed to send WeChat direct message: {str(e)}")
-            return False
-
     else:
-        logger.warning("WeChat not configured: Missing WECHAT_BOT_URL or WECHAT_API_KEY")
+        logger.warning("WeChat not configured: Missing WECHAT_API_URL/WECHAT_API_KEY or WECHAT_BOT_URL")
         return False
 
 
@@ -377,7 +420,7 @@ def notify_user(
             f"{jobs_markdown}\n\n"
             f"[View all matches]({airtable_link})"
         )
-        results["wechat"] = send_wechat_message(message, user_prefs.wechat_openid)
+        results["wechat"] = send_wechat_message(message, user_prefs.wechat_id)
 
     logger.info(f"Notification results for {user_prefs.user_email}: {results}")
     return results
@@ -438,7 +481,7 @@ def notify_all_users(
             wechat_alerts=user_data.get("wechat_alerts", False),
             weekly_digest=user_data.get("weekly_digest", True),
             telegram_chat_id=user_data.get("telegram_chat_id"),
-            wechat_openid=user_data.get("wechat_openid"),
+            wechat_id=user_data.get("wechat_id") or user_data.get("wechat_openid"),
             notification_email=user_data.get("notification_email")
         )
 
@@ -504,7 +547,7 @@ def notify_specific_user(
         wechat_alerts=prefs_data.get("wechat_alerts", False),
         weekly_digest=prefs_data.get("weekly_digest", True),
         telegram_chat_id=prefs_data.get("telegram_chat_id"),
-        wechat_openid=prefs_data.get("wechat_openid"),
+        wechat_id=prefs_data.get("wechat_id") or prefs_data.get("wechat_openid"),
         notification_email=prefs_data.get("notification_email")
     )
 

@@ -12,7 +12,7 @@ class NotificationPreferences(BaseModel):
     wechat_alerts: bool = False
     weekly_digest: bool = True
     telegram_chat_id: Optional[str] = None
-    wechat_openid: Optional[str] = None
+    wechat_id: Optional[str] = None  # WeChat ID (wxid) for direct messaging
     notification_email: Optional[str] = None
 
 
@@ -23,7 +23,8 @@ class NotificationPreferencesUpdate(BaseModel):
     wechat_alerts: Optional[bool] = None
     weekly_digest: Optional[bool] = None
     telegram_chat_id: Optional[str] = None
-    wechat_openid: Optional[str] = None
+    wechat_id: Optional[str] = None  # WeChat ID (wxid) for direct messaging
+    wechat_openid: Optional[str] = None  # Deprecated, use wechat_id
     notification_email: Optional[str] = None
 
 
@@ -35,7 +36,8 @@ class NotificationPreferencesResponse(BaseModel):
     wechat_alerts: bool
     weekly_digest: bool
     telegram_chat_id: Optional[str] = None
-    wechat_openid: Optional[str] = None
+    wechat_id: Optional[str] = None  # WeChat ID (wxid) for direct messaging
+    wechat_openid: Optional[str] = None  # Deprecated, kept for backward compatibility
     notification_email: Optional[str] = None
 
 
