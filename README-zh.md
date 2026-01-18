@@ -1,8 +1,8 @@
 <div align="center">
-<h1 align="center">Winning CV - AI智能简历优化与职位匹配系统</h1>
+<h1 align="center">Winning CV - 职位匹配与简历定制平台</h1>
 
 <p align="center">
-  <strong>告别千篇一律的简历，让AI为每个机会量身定制完美简历</strong>
+  <strong>告别千篇一律的简历，让系统为每个机会量身定制完美简历</strong>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 **立即在线使用：** [https://winning-cv.jackhui.com.au](https://winning-cv.jackhui.com.au)
 
 - **零配置** — 登录即可使用
-- **永久免费** （合理使用限制）
+- **免费使用** （合理使用限制）
 - **全功能开放** — 网页端支持所有功能
 
 > **建议：** 先体验在线版本，了解完整功能后再考虑本地部署！
@@ -38,7 +38,7 @@
 
 ## 什么是 Winning CV？
 
-Winning CV 是一款开源AI求职助手，彻底改变传统的求职方式。无需手动为每个职位修改简历，智能系统自动完成：
+Winning CV 是一款开源应用，彻底改变传统的求职方式。无需手动为每个职位修改简历，智能系统自动完成：
 
 1. **全平台扫描** — LinkedIn、Seek、Indeed、Glassdoor、Google Jobs
 2. **智能分析** — 基于NLP语义分析，将职位要求与您的简历对比
@@ -50,61 +50,25 @@ Winning CV 是一款开源AI求职助手，彻底改变传统的求职方式。�
 
 ---
 
-## 最新功能
-
-### 全新React仪表盘 & REST API
-基于React、Vite和Tailwind CSS打造的全新前端体验，配合强大的FastAPI后端：
-
-- **交互式仪表盘** — 实时统计：匹配总数、已生成简历数、平均匹配分数
-- **简历版本库** — 集中管理、标签分类、搜索所有定制简历
-- **效果分析** — 追踪各版本简历的回复率表现
-- **职位浏览器** — 筛选、排序、一键下载匹配职位的定制简历
-
-### 简历版本管理系统
-再也不会丢失任何定制简历：
-
-- **版本控制** — 每份生成的简历自动版本化存储
-- **MinIO对象存储** — 企业级S3兼容存储，安全预签名URL
-- **智能分类** — 自动识别职位类型（后端、前端、数据等）
-- **自定义标签** — 按您的方式组织简历
-- **分支编辑** — 基于成功简历创建新版本
-- **使用追踪** — 查看每份简历的投递记录
-- **回复分析** — 追踪面试邀约，计算各版本回复率
-
-### 增强版职位抓取
-更精准的职位数据提取：
-
-- **公司与地点提取** — 更丰富的职位信息，提升匹配质量
-- **智能去重** — 跨平台自动去重
-- **直接搜索** — 网页端无需粘贴URL，直接输入关键词搜索
-
-### 多服务Docker架构
-生产级部署方案：
-
-- **Streamlit管理界面** (端口13000) — 完整的职位搜索和简历管理
-- **FastAPI后端** (端口8000) — REST API，支持Swagger文档 `/api/docs`
-- **MinIO存储** (端口9000/9001) — 安全对象存储，含Web控制台
-- **CLI批处理** — 支持自动化批量处理
-
----
-
 ## 核心功能
 
 ### 智能职位聚合
 - 实时爬取LinkedIn、Seek、Indeed、Glassdoor、Google Jobs
 - 支持地区、关键词等高级筛选
 - 自动去重与优先级排序
+- LinkedIn Cookie健康监控，确保爬取稳定性
 
 ### 简历智能匹配
 - 基于spaCy NLP的职位描述与简历语义分析
 - 0-10分匹配评分系统
-- 技能差距分析（即将推出）
+- 简历-职位匹配度分析（CV-JD Fit Analysis）
+- 技能差距识别与建议
 
 ### 自动化简历生成
-- 基于Azure AI (DeepSeek R1) 的上下文感知定制
+- 基于Azure AI的上下文感知定制
 - 职位关键词自动优化
 - 格式完美保留（PDF/DOCX）
-- AI智能提炼工作亮点
+- 智能提炼工作亮点
 
 ### 简历版本库
 - 每份简历自动版本化存储
@@ -112,18 +76,39 @@ Winning CV 是一款开源AI求职助手，彻底改变传统的求职方式。�
 - 自动分类与自定义标签
 - 支持分支、归档、恢复、删除
 - 使用量与回复率追踪分析
+- 搜索前可从版本库选择简历
 
 ### 多渠道即时提醒
-- 邮件、Telegram、微信通知
-- 高匹配职位即时推送
-- 通知包含完整职位信息
+- **邮件** — 基于SMTP，支持自定义模板
+- **Telegram** — 通过Bot即时推送，配置Chat ID即可
+- **微信** — 通过自定义微信API直接发送消息
+- 支持从个人设置发送测试通知
+- 每条通知包含完整职位信息
 
-### 现代技术栈
-- **前端：** React 18 + Vite + Tailwind CSS
-- **后端：** FastAPI 异步框架
-- **管理界面：** Streamlit + Google/Microsoft OAuth
-- **存储：** MinIO (S3兼容) + Airtable
-- **AI：** Azure AI，本地Ollama支持（即将推出）
+### 现代化仪表盘
+- **交互式统计** — 匹配总数、已生成简历数、平均分数
+- **职位浏览器** — 筛选、排序、浏览匹配职位
+- **简历分析** — 追踪各版本简历的回复率
+- **效果指标** — 监控求职效率
+
+### 认证与安全
+- 微软OAuth集成
+- 基于Token的API认证
+- 安全会话管理
+- 用户级通知偏好设置
+
+---
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 前端 | React 18, Vite, Tailwind CSS, HeroUI |
+| 后端 | FastAPI, Python 3.10+ |
+| 管理界面 | Streamlit + OAuth |
+| 存储 | MinIO (S3兼容), Airtable |
+| NLP | spaCy + en-core-web-sm |
+| 容器化 | Docker, Docker Compose |
 
 ---
 
@@ -149,7 +134,7 @@ docker compose up -d
 ```
 
 **访问地址：**
-- **Streamlit管理界面：** http://localhost:13000
+- **React前端：** http://localhost:13000
 - **FastAPI后端：** http://localhost:8000
 - **API文档：** http://localhost:8000/api/docs
 - **MinIO控制台：** http://localhost:9001
@@ -205,9 +190,9 @@ python main.py --user-email your@email.com
 
 ### 网页端操作
 
-1. **登录** — 使用Google或Microsoft账号
-2. **配置搜索** — 输入职位关键词、地区等（无需粘贴URL）
-3. **上传基础简历** — 您的主简历，用于AI分析
+1. **登录** — 使用微软OAuth
+2. **配置搜索** — 输入职位关键词、地区等
+3. **选择简历** — 从版本库选择或上传新简历
 4. **运行搜索** — 系统自动抓取职位并实时评分
 5. **查看匹配** — 浏览带匹配分数的职位列表
 6. **下载简历** — 获取为每个职位优化的定制简历
@@ -230,7 +215,7 @@ python main.py --user-email your@email.com
 
 ## 配置说明
 
-所有配置通过 `.env` 文件管理，复制 `.env.example` 并配置：
+所有配置通过 `.env` 文件管理，复制 `env.example` 并配置：
 
 <details>
 <summary><strong>点击展开完整配置参考</strong></summary>
@@ -244,6 +229,7 @@ AIRTABLE_PAT=your-personal-access-token
 AIRTABLE_BASE_ID=your-base-id
 AIRTABLE_TABLE_ID=main-jobs-table-id
 AIRTABLE_TABLE_ID_HISTORY=history-table-id
+AIRTABLE_TABLE_ID_USER_CONFIGS=user-configs-table-id
 AIRTABLE_TABLE_ID_CV_VERSIONS=cv-versions-table-id
 
 # === MinIO (简历文件存储) ===
@@ -262,15 +248,24 @@ AZURE_AI_API_KEY=your-api-key
 AZURE_DEPLOYMENT=deployment-name
 
 # === 通知设置 ===
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+# 邮件
 EMAIL_USER=your@email.com
 EMAIL_PASSWORD=your-password
 SMTP_SERVER=smtp.server.com
+DEFAULT_FROM_EMAIL=noreply@example.com
+DEFAULT_TO_EMAIL=your@email.com
+
+# Telegram
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+
+# 微信 (直接API)
+WECHAT_API_URL=https://your-wechat-api.com
+WECHAT_API_KEY=your-api-key
 
 # === 搜索参数 ===
 LOCATION=Melbourne,VIC
-COUNTRY=australia
+COUNTRY=Australia
 HOURS_OLD=168          # 最近7天的职位
 RESULTS_WANTED=10      # 每个平台的职位数
 JOB_MATCH_THRESHOLD=7  # 最低匹配分数 (0-10)
@@ -309,8 +304,9 @@ client_secret = "your-microsoft-secret"
 winning-cv/
 ├── frontend/              # React + Vite + Tailwind 仪表盘
 │   └── src/
-│       ├── pages/         # Dashboard, CVLibrary, Analytics 等页面
+│       ├── pages/         # Dashboard, CVLibrary, Analytics, Profile 等
 │       ├── components/    # 可复用UI组件
+│       ├── context/       # 认证上下文
 │       └── services/      # API客户端
 ├── api/                   # FastAPI REST 后端
 │   ├── routes/            # auth, cv, cv_versions, jobs, profile
@@ -318,8 +314,11 @@ winning-cv/
 │   └── schemas/           # Pydantic 模型
 ├── job_processing/        # 核心匹配引擎
 ├── job_sources/           # 平台爬虫 (LinkedIn, Seek 等)
+│   └── linkedin_cookie_health.py  # Cookie监控
 ├── data_store/            # Airtable + 简历版本管理
+├── cv/                    # 简历解析与生成
 ├── utils/                 # MinIO存储, 通知, 日志
+├── scheduler/             # APScheduler后台任务
 ├── webui_new.py           # Streamlit 管理应用
 ├── main.py                # CLI 接口
 └── run_api.py             # FastAPI 服务入口
@@ -329,10 +328,55 @@ winning-cv/
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| `winning-cv` | 13000 | Streamlit管理界面 |
+| `frontend` | 13000 | React SPA (Nginx) |
 | `api` | 8000 | FastAPI REST后端 |
 | `job-runner` | - | CLI批处理器 |
 | `minio` | 9000/9001 | S3兼容对象存储 |
+
+---
+
+## API参考
+
+FastAPI后端提供完整的REST API：
+
+### 认证
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/auth/me` | GET | 获取认证状态 |
+| `/api/v1/auth/user` | GET | 获取用户信息 |
+| `/api/v1/auth/login-url` | GET | 获取OAuth登录URL |
+| `/api/v1/auth/logout` | POST | 登出 |
+
+### 职位
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/jobs/config` | GET | 获取搜索配置 |
+| `/api/v1/jobs/config` | POST | 保存搜索配置 |
+| `/api/v1/jobs/search` | POST | 开始搜索 |
+| `/api/v1/jobs/search/{task_id}/status` | GET | 获取搜索状态 |
+| `/api/v1/jobs/results` | GET | 获取匹配职位列表 |
+| `/api/v1/jobs/linkedin/health` | GET | LinkedIn Cookie健康状态 |
+
+### 简历版本
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/cv/versions` | GET | 获取版本列表 |
+| `/api/v1/cv/versions` | POST | 创建版本 |
+| `/api/v1/cv/versions/{id}` | GET | 获取版本详情 |
+| `/api/v1/cv/versions/{id}` | PATCH | 更新版本 |
+| `/api/v1/cv/versions/{id}` | DELETE | 删除版本 |
+| `/api/v1/cv/versions/{id}/download` | GET | 获取下载链接 |
+| `/api/v1/cv/versions/{id}/fork` | POST | 分支版本 |
+| `/api/v1/cv/versions/analytics/summary` | GET | 获取分析数据 |
+
+### 个人资料与通知
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/profile/notifications` | GET | 获取通知偏好 |
+| `/api/v1/profile/notifications` | PUT | 更新偏好 |
+| `/api/v1/profile/notifications/test` | POST | 发送测试通知 |
+
+完整交互文档：`http://localhost:8000/api/docs`
 
 ---
 
@@ -351,25 +395,6 @@ chmod 600 .env .streamlit/secrets.toml
 - CI/CD中使用环境变量
 - 妥善保管API密钥和令牌
 - 参阅 [Streamlit安全建议](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
-
----
-
-## API参考
-
-FastAPI后端提供完整的REST API：
-
-| 端点 | 说明 |
-|------|------|
-| `GET /api/health` | 健康检查 |
-| `POST /api/v1/auth/login` | 用户认证 |
-| `GET /api/v1/jobs/results` | 获取匹配职位列表 |
-| `GET /api/v1/cv/versions` | 获取简历版本列表 |
-| `POST /api/v1/cv/versions` | 创建简历版本 |
-| `GET /api/v1/cv/versions/{id}/download` | 获取下载链接 |
-| `GET /api/v1/cv/analytics` | 简历效果分析 |
-| `GET /api/v1/profile` | 用户资料 |
-
-完整交互文档：`http://localhost:8000/api/docs`
 
 ---
 
@@ -433,10 +458,10 @@ FastAPI后端提供完整的REST API：
 - **[JobSpy](https://github.com/speedyapply/JobSpy)** — 多平台职位爬取
 - **[FastAPI](https://fastapi.tiangolo.com)** — 现代Python Web框架
 - **[React](https://react.dev)** — UI组件库
+- **[HeroUI](https://heroui.com)** — React组件库
 - **[Streamlit](https://streamlit.io)** — 快速仪表盘开发
 - **[MinIO](https://min.io)** — S3兼容对象存储
 - **[spaCy](https://spacy.io)** — 工业级NLP
-- **[Azure AI](https://azure.microsoft.com/zh-cn/products/ai-services)** — 大语言模型能力
 - **[Docker](https://docker.com)** — 容器化技术
 
 *特别感谢所有开源维护者和贡献者，正是你们让此类项目成为可能。*

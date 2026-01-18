@@ -1,8 +1,8 @@
 <div align="center">
-<h1 align="center">Winning CV - AI-Powered Job Matching & CV Tailoring</h1>
+<h1 align="center">Winning CV - Job Matching & CV Tailoring Platform</h1>
 
 <p align="center">
-  <strong>Stop sending generic resumes. Let AI create the perfect CV for every opportunity.</strong>
+  <strong>Stop sending generic resumes. Get tailored CVs for every opportunity.</strong>
 </p>
 
 <p align="center">
@@ -38,7 +38,7 @@
 
 ## What is Winning CV?
 
-Winning CV is an open-source AI application that transforms how you apply for jobs. Instead of manually tailoring resumes for each position, our intelligent system:
+Winning CV is an open-source application that transforms how you apply for jobs. Instead of manually tailoring resumes for each position, our intelligent system:
 
 1. **Scans job platforms** — LinkedIn, Seek, Indeed, Glassdoor, and Google Jobs
 2. **Analyzes every listing** against your base CV using semantic NLP
@@ -50,61 +50,25 @@ Winning CV is an open-source AI application that transforms how you apply for jo
 
 ---
 
-## What's New
-
-### Modern React Dashboard & REST API
-A completely redesigned frontend experience built with React, Vite, and Tailwind CSS, backed by a robust FastAPI backend:
-
-- **Interactive Dashboard** — Real-time stats: total matches, CVs generated, average match scores
-- **CV Version Library** — Organize, tag, search, and manage all your tailored CVs in one place
-- **Performance Analytics** — Track which CV versions get the best response rates
-- **Job Match Browser** — Filter, sort, and explore matched jobs with one-click CV downloads
-
-### CV Version Management System
-Never lose track of your tailored resumes again:
-
-- **Version Control** — Every generated CV is automatically versioned and stored
-- **MinIO Object Storage** — Enterprise-grade S3-compatible storage with secure presigned URLs
-- **Smart Categorization** — Auto-detect role types (Backend, Frontend, Data, etc.)
-- **Custom Tags** — Organize CVs your way with user-defined tags
-- **Fork & Edit** — Create new versions from existing successful CVs
-- **Usage Tracking** — See which CVs you've used and where
-- **Response Analytics** — Track callbacks and calculate response rates per CV version
-
-### Enhanced Job Scraping
-Improved job discovery with better data extraction:
-
-- **Company & Location Extraction** — Richer job data for better matching
-- **Duplicate Detection** — Smart deduplication across platforms
-- **Direct Search** — No need to paste URLs in the web UI — just enter keywords
-
-### Multi-Service Docker Stack
-Production-ready deployment with:
-
-- **Streamlit Admin UI** (port 13000) — Full-featured job search and CV management
-- **FastAPI Backend** (port 8000) — REST API with Swagger docs at `/api/docs`
-- **MinIO Storage** (ports 9000/9001) — Secure object storage with web console
-- **CLI Job Runner** — Automated batch processing for power users
-
----
-
 ## Features
 
 ### Smart Job Aggregation
 - Real-time crawling of LinkedIn, Seek, Indeed, Glassdoor, Google Jobs
 - Advanced filtering by location, keywords, and job parameters
 - Automatic duplicate detection and priority sorting
+- LinkedIn cookie health monitoring for reliable scraping
 
 ### CV-to-Job Matching Engine
 - Semantic analysis of job descriptions vs. your base CV using spaCy NLP
 - Compatibility scoring system (0-10 scale)
-- Skills gap identification (coming soon)
+- CV-JD fit analysis with detailed breakdown
+- Skills gap identification and recommendations
 
-### Auto-CV Generation
-- Context-aware resume customization via Azure AI (DeepSeek R1)
+### Automated CV Generation
+- Context-aware resume customization via Azure AI
 - Position-specific keyword optimization
 - Format preservation (PDF/DOCX)
-- LLM-powered achievement highlighting
+- Achievement highlighting based on job requirements
 
 ### CV Version Library
 - Automatic versioning for every generated CV
@@ -112,18 +76,39 @@ Production-ready deployment with:
 - Category detection and custom tagging
 - Fork, archive, restore, and delete versions
 - Usage and response tracking with analytics
+- Select from library before job search
 
-### Multi-Channel Alerts
-- Email, Telegram, and WeChat notifications
-- Instant alerts for high-match opportunities
+### Multi-Channel Notifications
+- **Email** — SMTP-based notifications with customizable templates
+- **Telegram** — Instant alerts via bot with your Chat ID
+- **WeChat** — Direct messaging via custom WeChat API integration
+- Test notifications from profile settings
 - Detailed job information in every notification
 
-### Modern Tech Stack
-- **Frontend:** React 18 + Vite + Tailwind CSS
-- **Backend:** FastAPI with async support
-- **Admin UI:** Streamlit with Google/Microsoft OAuth
-- **Storage:** MinIO (S3-compatible) + Airtable
-- **AI:** Azure AI with local Ollama support (coming soon)
+### Modern Dashboard
+- **Interactive Stats** — Total matches, CVs generated, average scores
+- **Job Match Browser** — Filter, sort, and explore matched jobs
+- **CV Analytics** — Track which CV versions get the best response rates
+- **Performance Metrics** — Monitor your job search effectiveness
+
+### Authentication & Security
+- Microsoft OAuth integration
+- Token-based API authentication
+- Secure session management
+- Per-user notification preferences
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, Vite, Tailwind CSS, HeroUI |
+| Backend | FastAPI, Python 3.10+ |
+| Admin UI | Streamlit with OAuth |
+| Storage | MinIO (S3-compatible), Airtable |
+| NLP | spaCy with en-core-web-sm |
+| Containerization | Docker, Docker Compose |
 
 ---
 
@@ -149,7 +134,7 @@ docker compose up -d
 ```
 
 **Access points:**
-- **Streamlit Admin UI:** http://localhost:13000
+- **React Frontend:** http://localhost:13000
 - **FastAPI Backend:** http://localhost:8000
 - **API Documentation:** http://localhost:8000/api/docs
 - **MinIO Console:** http://localhost:9001
@@ -205,12 +190,12 @@ python main.py --user-email your@email.com
 
 ### Web UI Workflow
 
-1. **Sign In** — Use Google or Microsoft OAuth
-2. **Configure Search** — Enter job keywords, location, and preferences (no URLs needed!)
-3. **Upload Base CV** — Your master resume for AI analysis
+1. **Sign In** — Use Microsoft OAuth
+2. **Configure Search** — Enter job keywords, location, and preferences
+3. **Select CV** — Choose from your CV library or upload a new one
 4. **Run Search** — System scrapes jobs and scores matches in real-time
 5. **Review Matches** — Browse jobs with compatibility scores
-6. **Download CVs** — Get AI-tailored resumes optimized for each role
+6. **Download CVs** — Get tailored resumes optimized for each role
 7. **Manage Library** — Track all versions, see analytics, and optimize your approach
 
 ### CLI Workflow
@@ -230,7 +215,7 @@ Jobs are analyzed, CVs generated, and notifications sent automatically.
 
 ## Configuration
 
-All settings are managed via `.env` file. Copy `.env.example` and configure:
+All settings are managed via `.env` file. Copy `env.example` and configure:
 
 <details>
 <summary><strong>Click to expand full configuration reference</strong></summary>
@@ -244,6 +229,7 @@ AIRTABLE_PAT=your-personal-access-token
 AIRTABLE_BASE_ID=your-base-id
 AIRTABLE_TABLE_ID=main-jobs-table-id
 AIRTABLE_TABLE_ID_HISTORY=history-table-id
+AIRTABLE_TABLE_ID_USER_CONFIGS=user-configs-table-id
 AIRTABLE_TABLE_ID_CV_VERSIONS=cv-versions-table-id
 
 # === MinIO (CV File Storage) ===
@@ -262,15 +248,24 @@ AZURE_AI_API_KEY=your-api-key
 AZURE_DEPLOYMENT=deployment-name
 
 # === Notifications ===
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+# Email
 EMAIL_USER=your@email.com
 EMAIL_PASSWORD=your-password
 SMTP_SERVER=smtp.server.com
+DEFAULT_FROM_EMAIL=noreply@example.com
+DEFAULT_TO_EMAIL=your@email.com
+
+# Telegram
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+
+# WeChat (Direct API)
+WECHAT_API_URL=https://your-wechat-api.com
+WECHAT_API_KEY=your-api-key
 
 # === Search Parameters ===
 LOCATION=Melbourne,VIC
-COUNTRY=australia
+COUNTRY=Australia
 HOURS_OLD=168          # Jobs from last 7 days
 RESULTS_WANTED=10      # Jobs per platform
 JOB_MATCH_THRESHOLD=7  # Minimum match score (0-10)
@@ -309,8 +304,9 @@ See [Streamlit Authentication Docs](https://docs.streamlit.io/develop/concepts/c
 winning-cv/
 ├── frontend/              # React + Vite + Tailwind dashboard
 │   └── src/
-│       ├── pages/         # Dashboard, CVLibrary, Analytics, etc.
+│       ├── pages/         # Dashboard, CVLibrary, Analytics, Profile, etc.
 │       ├── components/    # Reusable UI components
+│       ├── context/       # Auth context
 │       └── services/      # API client
 ├── api/                   # FastAPI REST backend
 │   ├── routes/            # auth, cv, cv_versions, jobs, profile
@@ -318,8 +314,11 @@ winning-cv/
 │   └── schemas/           # Pydantic models
 ├── job_processing/        # Core matching engine
 ├── job_sources/           # Platform scrapers (LinkedIn, Seek, etc.)
+│   └── linkedin_cookie_health.py  # Cookie monitoring
 ├── data_store/            # Airtable + CV version manager
+├── cv/                    # CV parsing & generation
 ├── utils/                 # MinIO storage, notifications, logging
+├── scheduler/             # APScheduler background jobs
 ├── webui_new.py           # Streamlit admin application
 ├── main.py                # CLI interface
 └── run_api.py             # FastAPI server entry point
@@ -329,10 +328,55 @@ winning-cv/
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `winning-cv` | 13000 | Streamlit admin UI |
+| `frontend` | 13000 | React SPA via Nginx |
 | `api` | 8000 | FastAPI REST backend |
 | `job-runner` | - | CLI batch processor |
 | `minio` | 9000/9001 | S3-compatible storage |
+
+---
+
+## API Reference
+
+The FastAPI backend provides a complete REST API:
+
+### Authentication
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/auth/me` | GET | Get auth status |
+| `/api/v1/auth/user` | GET | Get user info |
+| `/api/v1/auth/login-url` | GET | Get OAuth login URL |
+| `/api/v1/auth/logout` | POST | Logout |
+
+### Jobs
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/jobs/config` | GET | Get job search config |
+| `/api/v1/jobs/config` | POST | Save job search config |
+| `/api/v1/jobs/search` | POST | Start job search |
+| `/api/v1/jobs/search/{task_id}/status` | GET | Get search status |
+| `/api/v1/jobs/results` | GET | List matched jobs |
+| `/api/v1/jobs/linkedin/health` | GET | LinkedIn cookie health |
+
+### CV Versions
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/cv/versions` | GET | List CV versions |
+| `/api/v1/cv/versions` | POST | Create CV version |
+| `/api/v1/cv/versions/{id}` | GET | Get version details |
+| `/api/v1/cv/versions/{id}` | PATCH | Update version |
+| `/api/v1/cv/versions/{id}` | DELETE | Delete version |
+| `/api/v1/cv/versions/{id}/download` | GET | Get download URL |
+| `/api/v1/cv/versions/{id}/fork` | POST | Fork version |
+| `/api/v1/cv/versions/analytics/summary` | GET | Get analytics |
+
+### Profile & Notifications
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/profile/notifications` | GET | Get notification preferences |
+| `/api/v1/profile/notifications` | PUT | Update preferences |
+| `/api/v1/profile/notifications/test` | POST | Send test notification |
+
+Full interactive docs at: `http://localhost:8000/api/docs`
 
 ---
 
@@ -351,25 +395,6 @@ chmod 600 .env .streamlit/secrets.toml
 - Use environment variables in CI/CD
 - Keep API keys and tokens secure
 - Review [Streamlit security recommendations](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
-
----
-
-## API Reference
-
-The FastAPI backend provides a complete REST API:
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/health` | Health check |
-| `POST /api/v1/auth/login` | User authentication |
-| `GET /api/v1/jobs/results` | List matched jobs |
-| `GET /api/v1/cv/versions` | List CV versions |
-| `POST /api/v1/cv/versions` | Create CV version |
-| `GET /api/v1/cv/versions/{id}/download` | Get download URL |
-| `GET /api/v1/cv/analytics` | CV performance analytics |
-| `GET /api/v1/profile` | User profile |
-
-Full interactive docs at: `http://localhost:8000/api/docs`
 
 ---
 
@@ -433,10 +458,10 @@ Built with these amazing open-source technologies:
 - **[JobSpy](https://github.com/speedyapply/JobSpy)** — Multi-platform job scraping
 - **[FastAPI](https://fastapi.tiangolo.com)** — Modern Python web framework
 - **[React](https://react.dev)** — UI component library
+- **[HeroUI](https://heroui.com)** — React component library
 - **[Streamlit](https://streamlit.io)** — Rapid dashboard development
 - **[MinIO](https://min.io)** — S3-compatible object storage
 - **[spaCy](https://spacy.io)** — Industrial NLP
-- **[Azure AI](https://azure.microsoft.com/products/ai-services)** — LLM capabilities
 - **[Docker](https://docker.com)** — Containerization
 
 *Special thanks to all open-source maintainers and contributors who make projects like this possible.*
