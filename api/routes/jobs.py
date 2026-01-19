@@ -531,8 +531,22 @@ async def get_job_results(
                 suggestions=suggestions
             ))
 
-        # Sort by score descending
-        items.sort(key=lambda x: x.score, reverse=True)
+        # Sort by posted_date descending (most recent first), then by score
+        def sort_key(item):
+            # Parse date, default to epoch for missing dates
+            date_val = datetime.min
+            if item.posted_date:
+                try:
+                    date_val = datetime.fromisoformat(item.posted_date.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    try:
+                        # Try parsing common date formats
+                        date_val = datetime.strptime(item.posted_date, "%Y-%m-%d")
+                    except (ValueError, AttributeError):
+                        pass
+            return (date_val, item.score)
+
+        items.sort(key=sort_key, reverse=True)
 
         return JobResultsResponse(
             items=items,
