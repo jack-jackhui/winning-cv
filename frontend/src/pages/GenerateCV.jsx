@@ -14,6 +14,9 @@ import {
   Plus,
   ChevronDown,
   BarChart3,
+  Save,
+  Edit3,
+  Library,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
@@ -51,6 +54,13 @@ export default function GenerateCV() {
   const [analysis, setAnalysis] = useState(null)
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
   const analysisPollingRef = useRef(null)
+
+  // Auto-save to library state
+  const [savedToLibrary, setSavedToLibrary] = useState(null) // { version_id, version_name } or null
+  const [savingToLibrary, setSavingToLibrary] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+  const [editingName, setEditingName] = useState(false)
+  const [customVersionName, setCustomVersionName] = useState('')
 
   // Close download menu when clicking outside
   useEffect(() => {
@@ -112,6 +122,62 @@ export default function GenerateCV() {
       }
     }).catch(() => {})
   }, [])
+
+  // Auto-save generated CV to library
+  const saveToLibrary = useCallback(async (historyId, jobTitle, customName = null) => {
+    if (!historyId || savingToLibrary) return
+
+    setSavingToLibrary(true)
+    setSaveError(null)
+
+    try {
+      const versionName = customName || `${jobTitle} (${new Date().toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })})`
+      const savedVersion = await cvVersionsService.createFromHistory(historyId, {
+        versionName,
+        autoCategory: 'Generated',
+        userTags: ['generated', 'auto-saved'],
+      })
+
+      setSavedToLibrary({
+        version_id: savedVersion.version_id,
+        version_name: savedVersion.version_name,
+      })
+      setCustomVersionName(savedVersion.version_name)
+    } catch (err) {
+      console.error('Failed to save to library:', err)
+      setSaveError(err.message || 'Failed to save to library')
+    } finally {
+      setSavingToLibrary(false)
+    }
+  }, [savingToLibrary])
+
+  // Update version name in library
+  const updateVersionName = async () => {
+    if (!savedToLibrary || !customVersionName.trim()) return
+
+    try {
+      await cvVersionsService.updateVersion(savedToLibrary.version_id, {
+        versionName: customVersionName.trim(),
+      })
+      setSavedToLibrary(prev => ({ ...prev, version_name: customVersionName.trim() }))
+      setEditingName(false)
+    } catch (err) {
+      console.error('Failed to update version name:', err)
+    }
+  }
+
+  // Remove from library (delete the auto-saved version)
+  const removeFromLibrary = async () => {
+    if (!savedToLibrary) return
+
+    try {
+      await cvVersionsService.deleteVersion(savedToLibrary.version_id)
+      setSavedToLibrary(null)
+      setCustomVersionName('')
+    } catch (err) {
+      console.error('Failed to remove from library:', err)
+    }
+  }
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -228,6 +294,9 @@ export default function GenerateCV() {
       // Start polling for analysis if history_id is available
       if (response.history_id) {
         startAnalysisPolling(response.history_id)
+
+        // Auto-save to library
+        saveToLibrary(response.history_id, response.job_title)
       }
     } catch (err) {
       setError(err.message || 'Failed to generate CV. Please try again.')
@@ -272,6 +341,12 @@ export default function GenerateCV() {
     setError(null)
     setAnalysisStatus('idle')
     setAnalysis(null)
+    // Reset library save state
+    setSavedToLibrary(null)
+    setSavingToLibrary(false)
+    setSaveError(null)
+    setEditingName(false)
+    setCustomVersionName('')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -302,6 +377,94 @@ export default function GenerateCV() {
             <button onClick={handleReset} className="btn-secondary text-sm">
               Generate Another
             </button>
+          </div>
+
+          {/* Library Save Status */}
+          <div className="p-4 rounded-xl bg-surface-elevated border border-border">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent-500/10 flex items-center justify-center">
+                <Library className="w-5 h-5 text-accent-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {savingToLibrary ? (
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving to My CVs...</span>
+                  </div>
+                ) : savedToLibrary ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-text-muted">Saved to My CVs as:</p>
+                    {editingName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={customVersionName}
+                          onChange={(e) => setCustomVersionName(e.target.value)}
+                          className="input py-1 px-2 text-sm flex-1"
+                          onKeyDown={(e) => e.key === 'Enter' && updateVersionName()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={updateVersionName}
+                          className="btn-icon text-emerald-400 hover:bg-emerald-500/10"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingName(false)
+                            setCustomVersionName(savedToLibrary.version_name)
+                          }}
+                          className="btn-icon text-text-muted hover:text-text-primary"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-text-primary truncate">
+                          {savedToLibrary.version_name}
+                        </p>
+                        <button
+                          onClick={() => setEditingName(true)}
+                          className="btn-icon text-text-muted hover:text-accent-400"
+                          title="Edit name"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : saveError ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-red-400">{saveError}</p>
+                    <button
+                      onClick={() => saveToLibrary(result.history_id, result.job_title)}
+                      className="text-sm text-accent-400 hover:underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => saveToLibrary(result.history_id, result.job_title)}
+                    className="text-sm text-accent-400 hover:underline flex items-center gap-1"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save to My CVs
+                  </button>
+                )}
+              </div>
+              {savedToLibrary && !editingName && (
+                <button
+                  onClick={removeFromLibrary}
+                  className="text-sm text-text-muted hover:text-red-400"
+                  title="Remove from library"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Actions */}

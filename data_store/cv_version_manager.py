@@ -569,6 +569,75 @@ class CVVersionManager:
             logger.error(f"Failed to get analytics for {user_email}: {e}")
             return {}
 
+    def create_version_from_history(
+        self,
+        user_email: str,
+        history_record: Dict[str, Any],
+        version_name: Optional[str] = None,
+        auto_category: Optional[str] = None,
+        user_tags: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a CV version from a history record (generated CV).
+
+        Downloads the PDF from history and creates a new version in the library.
+
+        Args:
+            user_email: User's email
+            history_record: The history record from Airtable
+            version_name: Optional custom name (auto-generated if not provided)
+            auto_category: Optional category
+            user_tags: Optional tags
+
+        Returns:
+            Created version record
+        """
+        import tempfile
+        import requests
+        import os
+        from datetime import datetime
+
+        fields = history_record.get('fields', {})
+        job_title = fields.get('job_title', 'Generated CV')
+        cv_pdf_url = fields.get('cv_pdf_url', '')
+        history_id = history_record.get('id', '')
+
+        if not cv_pdf_url:
+            raise ValueError("History record has no PDF URL")
+
+        # Auto-generate version name if not provided
+        if not version_name:
+            today = datetime.now().strftime("%b %Y")
+            version_name = f"{job_title} ({today})"
+
+        # Download the PDF to a temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            resp = requests.get(cv_pdf_url, timeout=60)
+            resp.raise_for_status()
+            tmp.write(resp.content)
+            tmp_path = tmp.name
+
+        try:
+            # Create the version
+            new_version = self.create_version(
+                user_email=user_email,
+                file_path=tmp_path,
+                version_name=version_name,
+                auto_category=auto_category or "Generated",
+                user_tags=user_tags or ["generated", "auto-saved"],
+                source_job_title=job_title,
+            )
+
+            logger.info(f"Created CV version from history {history_id}: {new_version.get('version_id')}")
+            return new_version
+
+        finally:
+            # Cleanup temp file
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
     def _record_to_dict(self, record: Dict) -> Dict[str, Any]:
         """Convert Airtable record to clean dictionary."""
         fields = record.get('fields', {})

@@ -155,6 +155,14 @@ class CVVersionBulkActionResponse(BaseModel):
     failed_ids: List[str] = []
 
 
+class CVVersionFromHistoryRequest(BaseModel):
+    """Request to create a CV version from a history record (generated CV)"""
+    history_id: str = Field(..., description="Airtable record ID of the history entry")
+    version_name: Optional[str] = Field(None, max_length=100, description="Custom name (auto-generated if not provided)")
+    auto_category: Optional[str] = Field(None, max_length=50, description="Category for the CV")
+    user_tags: Optional[List[str]] = Field(default_factory=list, description="User-defined tags")
+
+
 # ──────────────────────────────────────────────────────────
 # CV-JD FIT ANALYSIS SCHEMAS
 # ──────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ from api.schemas.cv import (
     CVVersionAnalyticsResponse,
     CVVersionBulkActionRequest,
     CVVersionBulkActionResponse,
+    CVVersionFromHistoryRequest,
 )
 from api.middleware.auth_middleware import get_current_user
 from data_store.cv_version_manager import get_cv_version_manager, CVVersionManager
@@ -505,6 +506,68 @@ async def get_analytics(
         categories=analytics.get('categories', []),
         tags=analytics.get('tags', [])
     )
+
+
+@router.post("/from-history", response_model=CVVersionResponse)
+async def create_from_history(
+    request: CVVersionFromHistoryRequest,
+    user: UserInfo = Depends(get_current_user)
+) -> CVVersionResponse:
+    """
+    Create a CV version from a history record (previously generated CV).
+
+    This allows users to save a generated CV to their library for reuse.
+    The PDF is downloaded from the history record and stored as a new version.
+    """
+    from data_store.airtable_manager import AirtableManager
+    from config.settings import Config
+
+    try:
+        # Get the history record
+        cfg = Config()
+        history_at = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+
+        history_record = history_at.get_history_record(request.history_id)
+
+        if not history_record:
+            raise HTTPException(status_code=404, detail="History record not found")
+
+        # Verify ownership
+        fields = history_record.get("fields", {})
+        if fields.get("user_email") != user.email:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Check if PDF URL exists
+        if not fields.get("cv_pdf_url"):
+            raise HTTPException(
+                status_code=400,
+                detail="History record has no downloadable CV"
+            )
+
+        # Create the version
+        manager = get_cv_version_manager()
+        version = manager.create_version_from_history(
+            user_email=user.email,
+            history_record=history_record,
+            version_name=request.version_name,
+            auto_category=request.auto_category,
+            user_tags=request.user_tags,
+        )
+
+        return _version_to_response(version)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create version from history: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create CV version from history: {str(e)}"
+        )
 
 
 @router.post("/bulk", response_model=CVVersionBulkActionResponse)

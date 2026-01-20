@@ -426,6 +426,19 @@ export const cvVersionsService = {
       }),
     })
   },
+
+  // Create a CV version from a history record (save generated CV to library)
+  async createFromHistory(historyId, { versionName = null, autoCategory = null, userTags = [] } = {}) {
+    return fetchAPI('/api/v1/cv/versions/from-history', {
+      method: 'POST',
+      body: JSON.stringify({
+        history_id: historyId,
+        version_name: versionName,
+        auto_category: autoCategory,
+        user_tags: userTags,
+      }),
+    })
+  },
 }
 
 // Profile Service - handles user profile and notification preferences

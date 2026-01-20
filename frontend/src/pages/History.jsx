@@ -9,14 +9,20 @@ import {
   Loader2,
   ExternalLink,
   Eye,
+  Library,
+  CheckCircle2,
+  X,
 } from 'lucide-react'
-import { historyService } from '../services/api'
+import { historyService, cvVersionsService } from '../services/api'
 
 export default function History() {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  // Track which items are being saved to library
+  const [savingItems, setSavingItems] = useState({}) // { id: 'saving' | 'saved' | 'error' }
+  const [savedVersions, setSavedVersions] = useState({}) // { id: version_name }
 
   useEffect(() => {
     loadHistory()
@@ -41,6 +47,27 @@ export default function History() {
       await historyService.downloadCV(item.cv_pdf_url, item.job_title)
     } catch (err) {
       console.error('Failed to download:', err)
+    }
+  }
+
+  const handleSaveToLibrary = async (item) => {
+    if (savingItems[item.id]) return
+
+    setSavingItems(prev => ({ ...prev, [item.id]: 'saving' }))
+
+    try {
+      const versionName = `${item.job_title} (${formatDate(item.created_at)})`
+      const savedVersion = await cvVersionsService.createFromHistory(item.id, {
+        versionName,
+        autoCategory: 'Generated',
+        userTags: ['generated', 'from-history'],
+      })
+
+      setSavingItems(prev => ({ ...prev, [item.id]: 'saved' }))
+      setSavedVersions(prev => ({ ...prev, [item.id]: savedVersion.version_name }))
+    } catch (err) {
+      console.error('Failed to save to library:', err)
+      setSavingItems(prev => ({ ...prev, [item.id]: 'error' }))
     }
   }
 
@@ -146,6 +173,35 @@ export default function History() {
                 <div className="flex items-center gap-2">
                   {item.cv_pdf_url && (
                     <>
+                      {/* Save to Library Button */}
+                      {savingItems[item.id] === 'saved' ? (
+                        <span className="flex items-center gap-1 text-xs text-emerald-400 px-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Saved
+                        </span>
+                      ) : savingItems[item.id] === 'saving' ? (
+                        <span className="flex items-center gap-1 text-xs text-text-muted px-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </span>
+                      ) : savingItems[item.id] === 'error' ? (
+                        <button
+                          onClick={() => handleSaveToLibrary(item)}
+                          className="btn-icon text-red-400 hover:text-red-300"
+                          aria-label="Retry save to library"
+                          title="Failed - click to retry"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSaveToLibrary(item)}
+                          className="btn-icon text-text-muted hover:text-accent-400"
+                          aria-label="Save to My CVs"
+                          title="Save to My CVs"
+                        >
+                          <Library className="w-5 h-5" />
+                        </button>
+                      )}
                       <a
                         href={item.cv_pdf_url}
                         target="_blank"

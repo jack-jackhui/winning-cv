@@ -24,6 +24,7 @@ import {
   Upload,
   Send,
   MessageCircle,
+  Sparkles,
 } from 'lucide-react'
 import { cvVersionsService } from '../services/api'
 
@@ -86,6 +87,9 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
     : 0
 
   const tags = version.user_tags || []
+  const isGenerated = version.auto_category === 'Generated' ||
+    (Array.isArray(tags) && tags.some(t => t === 'generated' || t === 'auto-saved')) ||
+    (typeof tags === 'string' && (tags.includes('generated') || tags.includes('auto-saved')))
 
   if (viewMode === 'list') {
     return (
@@ -97,16 +101,27 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-text-primary truncate">{version.version_name}</h3>
+            {isGenerated && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                <Sparkles className="w-3 h-3" />
+                Generated
+              </span>
+            )}
             {version.is_archived && (
               <span className="badge-secondary text-xs">Archived</span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
-            {version.auto_category && (
+            {version.auto_category && version.auto_category !== 'Generated' && (
               <span className="text-accent-400">{version.auto_category}</span>
             )}
             <span>{formatDate(version.created_at)}</span>
             <span>{formatFileSize(version.file_size)}</span>
+            {version.source_job_title && (
+              <span className="text-text-muted truncate max-w-[200px]" title={version.source_job_title}>
+                For: {version.source_job_title}
+              </span>
+            )}
           </div>
         </div>
 
@@ -259,10 +274,23 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
         </div>
       </div>
 
-      <h3 className="font-medium text-text-primary mb-1 line-clamp-2">{version.version_name}</h3>
+      <div className="flex items-start gap-2 mb-1">
+        <h3 className="font-medium text-text-primary line-clamp-2 flex-1">{version.version_name}</h3>
+        {isGenerated && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">
+            <Sparkles className="w-3 h-3" />
+          </span>
+        )}
+      </div>
 
-      {version.auto_category && (
+      {version.auto_category && version.auto_category !== 'Generated' && (
         <p className="text-sm text-accent-400 mb-2">{version.auto_category}</p>
+      )}
+
+      {version.source_job_title && (
+        <p className="text-xs text-text-muted mb-2 truncate" title={version.source_job_title}>
+          For: {version.source_job_title}
+        </p>
       )}
 
       {tags.length > 0 && (
@@ -652,6 +680,7 @@ export default function CVLibrary() {
   const [viewMode, setViewMode] = useState('grid')
   const [showArchived, setShowArchived] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all') // all | base | generated
   const [categories, setCategories] = useState([])
   const [allTags, setAllTags] = useState([])
   const [analytics, setAnalytics] = useState(null)
@@ -776,11 +805,31 @@ export default function CVLibrary() {
     }
   }
 
-  const filteredVersions = versions.filter((v) =>
-    v.version_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    v.auto_category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    v.user_tags?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Helper to check if a version is generated
+  const isVersionGenerated = (v) => {
+    const tags = v.user_tags || []
+    return v.auto_category === 'Generated' ||
+      (Array.isArray(tags) && tags.some(t => t === 'generated' || t === 'auto-saved')) ||
+      (typeof tags === 'string' && (tags.includes('generated') || tags.includes('auto-saved')))
+  }
+
+  const filteredVersions = versions.filter((v) => {
+    // Search filter
+    const matchesSearch = v.version_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.auto_category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.user_tags?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.source_job_title?.toLowerCase().includes(searchQuery.toLowerCase())
+
+    // Type filter
+    let matchesType = true
+    if (typeFilter === 'generated') {
+      matchesType = isVersionGenerated(v)
+    } else if (typeFilter === 'base') {
+      matchesType = !isVersionGenerated(v)
+    }
+
+    return matchesSearch && matchesType
+  })
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -862,6 +911,17 @@ export default function CVLibrary() {
         </div>
 
         <div className="flex gap-2">
+          {/* Type Filter */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="input w-auto"
+          >
+            <option value="all">All CVs</option>
+            <option value="base">Base CVs Only</option>
+            <option value="generated">Generated Only</option>
+          </select>
+
           {/* Category Filter */}
           <select
             value={selectedCategory}
@@ -869,7 +929,7 @@ export default function CVLibrary() {
             className="input w-auto"
           >
             <option value="">All Categories</option>
-            {categories.map((cat) => (
+            {categories.filter(cat => cat !== 'Generated').map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
