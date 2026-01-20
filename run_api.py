@@ -19,13 +19,25 @@ if __name__ == "__main__":
     host = os.getenv("API_HOST", "0.0.0.0")
     reload = os.getenv("API_RELOAD", "true").lower() == "true"
 
+    # Production: disable reload and use multiple workers
+    # Development: enable reload (which disables workers)
+    is_production = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
+    workers = int(os.getenv("API_WORKERS", "4" if is_production else "1"))
+
+    # Reload mode is incompatible with multiple workers
+    if reload and workers > 1:
+        reload = False
+
     print(f"Starting WinningCV API on {host}:{port}")
     print(f"API docs: http://{host}:{port}/api/docs")
+    print(f"Mode: {'Production' if is_production else 'Development'} (workers={workers}, reload={reload})")
 
     uvicorn.run(
         "api.main:app",
         host=host,
         port=port,
         reload=reload,
-        log_level="info"
+        workers=workers if not reload else 1,
+        log_level="info",
+        timeout_keep_alive=30,
     )
