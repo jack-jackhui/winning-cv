@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   FileText,
   Download,
@@ -23,6 +24,7 @@ import CVSelector from '../components/cv/CVSelector'
 import AnalysisModal from '../components/cv/AnalysisModal'
 
 export default function GenerateCV() {
+  const location = useLocation()
   // CV source state: 'library' | 'upload'
   const [cvSource, setCvSource] = useState('library')
 
@@ -61,6 +63,25 @@ export default function GenerateCV() {
   const [saveError, setSaveError] = useState(null)
   const [editingName, setEditingName] = useState(false)
   const [customVersionName, setCustomVersionName] = useState('')
+
+  // Pre-fill form when navigating from Job Matches page
+  useEffect(() => {
+    if (location.state) {
+      const { jobTitle, jobDescription, jobLink } = location.state
+      if (jobDescription) {
+        // Build job description with title and link if available
+        let prefillText = ''
+        if (jobTitle) {
+          prefillText += `Job Title: ${jobTitle}\n\n`
+        }
+        if (jobLink) {
+          prefillText += `Job Link: ${jobLink}\n\n`
+        }
+        prefillText += jobDescription
+        setJobDescription(prefillText)
+      }
+    }
+  }, [location.state])
 
   // Close download menu when clicking outside
   useEffect(() => {

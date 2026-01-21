@@ -151,14 +151,14 @@ export const jobService = {
     })
   },
 
-  // Get job results
-  async getResults(limit = 100) {
-    return fetchAPI(`/api/v1/jobs/results?limit=${limit}`)
+  // Get job results with optional sorting
+  async getResults(limit = 100, sortBy = 'date') {
+    return fetchAPI(`/api/v1/jobs/results?limit=${limit}&sort_by=${sortBy}`)
   },
 
   // Get matched jobs (alias for results)
-  async getMatchedJobs() {
-    const response = await this.getResults()
+  async getMatchedJobs(sortBy = 'date') {
+    const response = await this.getResults(100, sortBy)
     return response.items || []
   },
 

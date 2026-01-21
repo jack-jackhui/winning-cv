@@ -247,11 +247,11 @@ export default function Dashboard() {
           to="/history"
           className="card hover:border-accent-500/50 transition-colors group"
         >
-          <Clock className="w-8 h-8 text-accent-400 mb-3" />
+          <Briefcase className="w-8 h-8 text-accent-400 mb-3" />
           <h3 className="font-medium text-text-primary group-hover:text-accent-400 transition-colors">
-            CV History
+            Job Matches
           </h3>
-          <p className="text-sm text-text-muted mt-1">View previously generated CVs</p>
+          <p className="text-sm text-text-muted mt-1">View all matched jobs and generate CVs</p>
         </Link>
       </div>
     </div>

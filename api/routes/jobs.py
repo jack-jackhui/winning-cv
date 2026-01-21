@@ -531,17 +531,19 @@ async def get_search_status(
 @router.get("/results", response_model=JobResultsResponse)
 async def get_job_results(
     user: UserInfo = Depends(get_current_user),
-    limit: int = 100
+    limit: int = 100,
+    sort_by: str = "date"  # "date" or "score"
 ) -> JobResultsResponse:
     """
-    Get the user's job search results.
+    Get the user's job search results with CV generation status.
 
     Args:
         user: Authenticated user
         limit: Maximum number of results
+        sort_by: Sort order - "date" (default, most recent first) or "score" (highest first)
 
     Returns:
-        List of job results
+        List of job results with CV generation status
     """
     try:
         cfg = Config()
@@ -550,6 +552,23 @@ async def get_job_results(
             cfg.AIRTABLE_BASE_ID,
             cfg.AIRTABLE_TABLE_ID
         )
+
+        # Also get CV history to map cv_link -> cv_generated_at
+        history_manager = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+        history_records = history_manager.get_history_by_user(user.email)
+
+        # Build a map of cv_pdf_url -> created_at
+        cv_dates = {}
+        for hr in history_records:
+            hf = hr.get("fields", {})
+            cv_url = hf.get("cv_pdf_url", "")
+            created_at = hf.get("created_at")
+            if cv_url and created_at:
+                cv_dates[cv_url] = created_at
 
         records = joblist_manager.get_records_by_filter(f"{{User Email}} = '{user.email}'")
 
@@ -564,13 +583,22 @@ async def get_job_results(
             reasons = reasons_raw.split("\n") if reasons_raw else None
             suggestions = suggestions_raw.split("\n") if suggestions_raw else None
 
+            cv_link = fields.get("CV Link") or None
+            cv_generated_at = None
+            if cv_link and cv_link in cv_dates:
+                try:
+                    cv_generated_at = datetime.fromisoformat(cv_dates[cv_link].replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass
+
             items.append(JobResult(
                 id=rec.get("id", ""),
                 job_title=fields.get("Job Title", "Untitled"),
                 company=fields.get("Company", "Unknown"),
                 location=fields.get("Location"),
                 score=float(fields.get("Matching Score", 0)),
-                cv_link=fields.get("CV Link") or None,
+                cv_link=cv_link,
+                cv_generated_at=cv_generated_at,
                 job_link=fields.get("Job Link", ""),
                 posted_date=fields.get("Job Date"),
                 description=fields.get("Job Description"),
@@ -578,22 +606,25 @@ async def get_job_results(
                 suggestions=suggestions
             ))
 
-        # Sort by posted_date descending (most recent first), then by score
-        def sort_key(item):
-            # Parse date, default to epoch for missing dates
-            date_val = datetime.min
-            if item.posted_date:
+        # Sort based on user preference
+        def parse_date(date_str):
+            """Parse date string to datetime"""
+            if not date_str:
+                return datetime.min
+            try:
+                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
                 try:
-                    date_val = datetime.fromisoformat(item.posted_date.replace('Z', '+00:00'))
+                    return datetime.strptime(date_str, "%Y-%m-%d")
                 except (ValueError, AttributeError):
-                    try:
-                        # Try parsing common date formats
-                        date_val = datetime.strptime(item.posted_date, "%Y-%m-%d")
-                    except (ValueError, AttributeError):
-                        pass
-            return (date_val, item.score)
+                    return datetime.min
 
-        items.sort(key=sort_key, reverse=True)
+        if sort_by == "score":
+            # Sort by score descending, then by date
+            items.sort(key=lambda x: (x.score, parse_date(x.posted_date)), reverse=True)
+        else:
+            # Default: sort by date descending, then by score
+            items.sort(key=lambda x: (parse_date(x.posted_date), x.score), reverse=True)
 
         return JobResultsResponse(
             items=items,

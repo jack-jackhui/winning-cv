@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Search,
   FileText,
-  History,
+  Briefcase,
   User,
   LogOut,
   ChevronLeft,
@@ -19,7 +19,7 @@ const navigation = [
   { name: 'CV Analytics', href: '/cv-analytics', icon: BarChart3 },
   { name: 'Generate CV', href: '/generate', icon: FileText },
   { name: 'Job Search', href: '/preferences', icon: Search },
-  { name: 'CV History', href: '/history', icon: History },
+  { name: 'Job Matches', href: '/history', icon: Briefcase },
   { name: 'Profile', href: '/profile', icon: User },
 ]
 

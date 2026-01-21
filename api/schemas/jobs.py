@@ -66,6 +66,7 @@ class JobResult(BaseModel):
     location: Optional[str] = None
     score: float = Field(ge=0, le=10)
     cv_link: Optional[str] = None
+    cv_generated_at: Optional[datetime] = None  # When the CV was generated
     job_link: str
     posted_date: Optional[str] = None
     description: Optional[str] = None
