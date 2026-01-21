@@ -2,13 +2,14 @@
 Job Search routes for WinningCV API.
 Handles job search configuration, execution, and results.
 """
+import json
 import os
 import uuid
 import logging
 import math
 import asyncio
+import fcntl
 from datetime import datetime
-from multiprocessing import Manager
 from pathlib import Path
 from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
@@ -42,25 +43,58 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Job Search"])
 
-# Shared task storage using multiprocessing Manager
-# This allows task state to be shared across Uvicorn workers
-_manager = Manager()
-_search_tasks = _manager.dict()
+# File-based task storage for cross-process sharing
+# Works reliably across Uvicorn workers unlike in-memory dicts
+_TASKS_FILE = Path("/tmp/winningcv_search_tasks.json")
 
 # Thread pool for background tasks
 _executor = ThreadPoolExecutor(max_workers=3)
 
 
+def _read_tasks() -> Dict[str, dict]:
+    """Read tasks from shared file with locking."""
+    if not _TASKS_FILE.exists():
+        return {}
+    try:
+        with open(_TASKS_FILE, 'r') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock for reading
+            try:
+                return json.load(f)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def _write_tasks(tasks: Dict[str, dict]):
+    """Write tasks to shared file with locking."""
+    with open(_TASKS_FILE, 'w') as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock for writing
+        try:
+            json.dump(tasks, f)
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+def _get_task(task_id: str) -> Optional[dict]:
+    """Get a single task by ID."""
+    tasks = _read_tasks()
+    return tasks.get(task_id)
+
+
+def _set_task(task_id: str, task_data: dict):
+    """Set/create a task."""
+    tasks = _read_tasks()
+    tasks[task_id] = task_data
+    _write_tasks(tasks)
+
+
 def _update_task(task_id: str, **updates):
-    """
-    Update task state in the shared Manager dict.
-    Manager.dict() doesn't support nested assignment, so we need to
-    get the dict, update it, and reassign.
-    """
-    if task_id in _search_tasks:
-        task = dict(_search_tasks[task_id])  # Copy to regular dict
-        task.update(updates)
-        _search_tasks[task_id] = task  # Reassign to trigger sync
+    """Update specific fields of a task."""
+    tasks = _read_tasks()
+    if task_id in tasks:
+        tasks[task_id].update(updates)
+        _write_tasks(tasks)
 
 # LinkedIn GeoID mapping
 LINKEDIN_GEOID_MAP = {
@@ -434,15 +468,15 @@ async def start_job_search(
                 detail="No job search configuration found. Please configure search settings first."
             )
 
-        # Create task
+        # Create task using file-based storage for cross-worker sharing
         task_id = str(uuid.uuid4())
-        _search_tasks[task_id] = {
+        _set_task(task_id, {
             "status": SearchStatus.PENDING,
             "progress": 0,
             "message": "Task created",
             "results_count": None,
             "created_at": datetime.now().isoformat()
-        }
+        })
 
         # Run in background thread (job processing uses blocking I/O)
         _executor.submit(_run_job_search, task_id, user.email, user_config)
@@ -478,13 +512,12 @@ async def get_search_status(
     Returns:
         Current status of the search task
     """
-    if task_id not in _search_tasks:
+    task = _get_task(task_id)
+    if not task:
         raise HTTPException(
             status_code=404,
             detail="Task not found"
         )
-
-    task = _search_tasks[task_id]
 
     return SearchStatusResponse(
         task_id=task_id,
