@@ -244,14 +244,23 @@ async def get_version(
 ) -> CVVersionResponse:
     """Get a specific CV version by ID."""
     manager = get_cv_version_manager()
-    version = manager.get_version(version_id, user.email)
+    # Wrapped with timeout to prevent Cloudflare 524 errors
+    version = await run_with_timeout(
+        manager.get_version,
+        version_id,
+        user.email
+    )
 
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
 
     # Get download URL if requested
     if include_url:
-        version['download_url'] = manager.get_download_url(version_id, user.email)
+        version['download_url'] = await run_with_timeout(
+            manager.get_download_url,
+            version_id,
+            user.email
+        )
 
     return _version_to_response(version, include_url=include_url)
 
@@ -353,7 +362,13 @@ async def get_download_url(
 ) -> dict:
     """Get a presigned download URL for a CV version."""
     manager = get_cv_version_manager()
-    url = manager.get_download_url(version_id, user.email, expires_hours)
+    # Wrapped with timeout to prevent Cloudflare 524 errors
+    url = await run_with_timeout(
+        manager.get_download_url,
+        version_id,
+        user.email,
+        expires_hours
+    )
 
     if not url:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -380,7 +395,12 @@ async def stream_cv_file(
     from utils.minio_storage import get_minio_storage
 
     manager = get_cv_version_manager()
-    version = manager.get_version(version_id, user.email)
+    # Wrapped with timeout to prevent Cloudflare 524 errors
+    version = await run_with_timeout(
+        manager.get_version,
+        version_id,
+        user.email
+    )
 
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -478,8 +498,13 @@ async def match_versions(
 
     manager = get_cv_version_manager()
 
-    # Get all active versions
-    versions = manager.list_versions(user.email, include_archived=False, limit=100)
+    # Get all active versions - wrapped with timeout to prevent Cloudflare 524 errors
+    versions = await run_with_timeout(
+        manager.list_versions,
+        user.email,
+        include_archived=False,
+        limit=100
+    )
 
     if not versions:
         return CVVersionMatchResponse(
@@ -497,10 +522,14 @@ async def match_versions(
         limit=request.limit
     )
 
-    # Add download URLs to top matches
+    # Add download URLs to top matches - wrapped with timeout
     suggestions = []
     for result in results['suggestions']:
-        url = manager.get_download_url(result['version_id'], user.email)
+        url = await run_with_timeout(
+            manager.get_download_url,
+            result['version_id'],
+            user.email
+        )
         suggestions.append(CVVersionMatchScore(
             version_id=result['version_id'],
             version_name=result['version_name'],
