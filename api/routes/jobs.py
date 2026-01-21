@@ -8,6 +8,7 @@ import logging
 import math
 import asyncio
 from datetime import datetime
+from multiprocessing import Manager
 from pathlib import Path
 from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
@@ -41,11 +42,25 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Job Search"])
 
-# In-memory task storage (in production, use Redis or similar)
-_search_tasks: Dict[str, dict] = {}
+# Shared task storage using multiprocessing Manager
+# This allows task state to be shared across Uvicorn workers
+_manager = Manager()
+_search_tasks = _manager.dict()
 
 # Thread pool for background tasks
 _executor = ThreadPoolExecutor(max_workers=3)
+
+
+def _update_task(task_id: str, **updates):
+    """
+    Update task state in the shared Manager dict.
+    Manager.dict() doesn't support nested assignment, so we need to
+    get the dict, update it, and reassign.
+    """
+    if task_id in _search_tasks:
+        task = dict(_search_tasks[task_id])  # Copy to regular dict
+        task.update(updates)
+        _search_tasks[task_id] = task  # Reassign to trigger sync
 
 # LinkedIn GeoID mapping
 LINKEDIN_GEOID_MAP = {
@@ -346,14 +361,11 @@ async def save_job_config(
 def _run_job_search(task_id: str, user_email: str, config_data: dict):
     """Background task to run job search"""
     try:
-        _search_tasks[task_id]["status"] = SearchStatus.RUNNING
-        _search_tasks[task_id]["progress"] = 10
-        _search_tasks[task_id]["message"] = "Initializing search..."
+        _update_task(task_id, status=SearchStatus.RUNNING, progress=10, message="Initializing search...")
 
         # Progress callback to update task status in real-time
         def update_progress(progress: int, message: str):
-            _search_tasks[task_id]["progress"] = progress
-            _search_tasks[task_id]["message"] = message
+            _update_task(task_id, progress=progress, message=message)
 
         # Merge with defaults
         defaults = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
@@ -379,15 +391,17 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
         # process_jobs() will now call update_progress internally
         results = processor.process_jobs()
 
-        _search_tasks[task_id]["progress"] = 100
-        _search_tasks[task_id]["status"] = SearchStatus.COMPLETED
-        _search_tasks[task_id]["message"] = f"Complete! Generated {len(results)} tailored CVs"
-        _search_tasks[task_id]["results_count"] = len(results)
+        _update_task(
+            task_id,
+            progress=100,
+            status=SearchStatus.COMPLETED,
+            message=f"Complete! Generated {len(results)} tailored CVs",
+            results_count=len(results)
+        )
 
     except Exception as e:
         logger.error(f"Job search failed: {e}")
-        _search_tasks[task_id]["status"] = SearchStatus.FAILED
-        _search_tasks[task_id]["message"] = str(e)
+        _update_task(task_id, status=SearchStatus.FAILED, message=str(e))
 
 
 @router.post("/search", response_model=SearchTaskResponse)
