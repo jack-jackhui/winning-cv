@@ -3,9 +3,12 @@ CV Version Management API Routes.
 
 Handles CRUD operations for CV versions, smart matching, and analytics.
 """
+import asyncio
 import logging
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, List
@@ -34,6 +37,33 @@ from data_store.cv_version_manager import get_cv_version_manager, CVVersionManag
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cv/versions", tags=["CV Versions"])
+
+# Thread pool for running sync Airtable calls without blocking the event loop
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="airtable_")
+
+# Timeout for Airtable operations (must be less than Cloudflare's 100s limit)
+AIRTABLE_TIMEOUT_SECONDS = 45
+
+
+async def run_with_timeout(func, *args, timeout: float = AIRTABLE_TIMEOUT_SECONDS, **kwargs):
+    """
+    Run a sync function in a thread pool with a timeout.
+
+    This prevents slow Airtable responses from blocking workers indefinitely
+    and causing Cloudflare 524 timeouts.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(_executor, partial(func, *args, **kwargs)),
+            timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Airtable operation timed out after {timeout}s: {func.__name__}")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Database operation timed out. Please try again."
+        )
 
 
 def _version_to_response(version: dict, include_url: bool = False) -> CVVersionResponse:
@@ -86,6 +116,7 @@ async def list_versions(
 
     Supports filtering by category and tags, with pagination.
     Optimized to minimize Airtable API calls.
+    Uses async timeout to prevent Cloudflare 524 errors.
     """
     manager = get_cv_version_manager()
 
@@ -95,7 +126,9 @@ async def list_versions(
 
     # Fetch all versions in a single query, then apply pagination in memory
     # This avoids making separate queries for count, categories, and tags
-    all_versions = manager.list_versions(
+    # Wrapped with timeout to prevent worker blocking on slow Airtable responses
+    all_versions = await run_with_timeout(
+        manager.list_versions,
         user_email=user.email,
         include_archived=include_archived,
         category=category,
@@ -493,7 +526,8 @@ async def get_analytics(
 ) -> CVVersionAnalyticsResponse:
     """Get analytics summary for user's CV versions."""
     manager = get_cv_version_manager()
-    analytics = manager.get_analytics(user.email)
+    # Wrapped with timeout to prevent worker blocking on slow Airtable responses
+    analytics = await run_with_timeout(manager.get_analytics, user.email)
 
     return CVVersionAnalyticsResponse(
         total_versions=analytics.get('total_versions', 0),
