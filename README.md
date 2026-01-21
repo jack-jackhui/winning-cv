@@ -85,9 +85,16 @@ Winning CV is an open-source application that transforms how you apply for jobs.
 - Test notifications from profile settings
 - Detailed job information in every notification
 
+### Unified Job Matches
+- **All Matches in One Place** — View every matched job with CV generation status
+- **Smart Sorting** — Sort by newest first or highest match score
+- **Quick Stats** — Total matches, CVs generated, pending CVs, average match score
+- **One-Click CV Generation** — Generate tailored CV directly from any job match
+- **CV Status Tracking** — See which jobs have CVs generated and when
+
 ### Modern Dashboard
 - **Interactive Stats** — Total matches, CVs generated, average scores
-- **Job Match Browser** — Filter, sort, and explore matched jobs
+- **Recent Matches Preview** — Quick view of latest job matches
 - **CV Analytics** — Track which CV versions get the best response rates
 - **Performance Metrics** — Monitor your job search effectiveness
 
@@ -194,9 +201,10 @@ python main.py --user-email your@email.com
 2. **Configure Search** — Enter job keywords, location, and preferences
 3. **Select CV** — Choose from your CV library or upload a new one
 4. **Run Search** — System scrapes jobs and scores matches in real-time
-5. **Review Matches** — Browse jobs with compatibility scores
-6. **Download CVs** — Get tailored resumes optimized for each role
-7. **Manage Library** — Track all versions, see analytics, and optimize your approach
+5. **Browse Job Matches** — View all matches sorted by date or score, see CV status for each
+6. **Generate Tailored CVs** — Click "Generate CV" on any job to create an optimized resume
+7. **Download & Apply** — View, download, or share your generated CVs
+8. **Track Performance** — Use analytics to see which CV versions get the best results
 
 ### CLI Workflow
 
@@ -354,7 +362,7 @@ The FastAPI backend provides a complete REST API:
 | `/api/v1/jobs/config` | POST | Save job search config |
 | `/api/v1/jobs/search` | POST | Start job search |
 | `/api/v1/jobs/search/{task_id}/status` | GET | Get search status |
-| `/api/v1/jobs/results` | GET | List matched jobs |
+| `/api/v1/jobs/results` | GET | List matched jobs (supports `sort_by=date\|score`) |
 | `/api/v1/jobs/linkedin/health` | GET | LinkedIn cookie health |
 
 ### CV Versions
