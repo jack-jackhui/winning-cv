@@ -29,28 +29,40 @@ scheduler = None
 
 
 def setup_cookie_health_monitoring():
-    """Set up LinkedIn cookie health monitoring with alerts."""
+    """
+    Set up LinkedIn cookie health monitoring with session-based detection.
+
+    Now uses actual session validation instead of age-based thresholds.
+    Runs daily since we test actual session validity, not arbitrary age.
+    """
     global scheduler
     try:
-        from job_sources.linkedin_cookie_health import run_cookie_health_check, get_check_interval_hours
+        from job_sources.linkedin_cookie_health import (
+            run_cookie_health_check,
+            check_cookie_health,
+            get_check_interval_hours
+        )
 
-        # Get initial check interval based on current cookie status
-        initial_interval_hours = get_check_interval_hours()
-        initial_interval_minutes = initial_interval_hours * 60
+        # Session-based detection uses fixed 24-hour interval
+        interval_hours = get_check_interval_hours()  # Returns 24
+        interval_minutes = interval_hours * 60
 
         scheduler = JobScheduler()
         scheduler.add_job(
-            lambda: run_cookie_health_check(send_alert=True, test_session=False),
-            interval_minutes=initial_interval_minutes,
+            # Force fresh test on scheduled runs
+            lambda: run_cookie_health_check(send_alert=True, force_test=True),
+            interval_minutes=interval_minutes,
             name="linkedin_cookie_health_check"
         )
         scheduler.start()
 
-        # Run an initial check on startup (without alerting - just log status)
+        # Run an initial check on startup (use cached if available, don't alert)
         logger.info("Running initial LinkedIn cookie health check...")
-        health_info = run_cookie_health_check(send_alert=False, test_session=False)
-        logger.info(f"Cookie status: {health_info['status'].value} - {health_info['message']}")
-        logger.info(f"Cookie health check scheduled every {initial_interval_hours} hours")
+        health_info = check_cookie_health(use_session_test=True, force_test=False)
+        logger.info(f"Cookie status: {health_info['status'].value}")
+        logger.info(f"Session valid: {health_info.get('session_valid', 'unknown')}")
+        logger.info(f"Message: {health_info['message']}")
+        logger.info(f"Cookie health check scheduled every {interval_hours} hours (session-based)")
 
     except Exception as e:
         logger.warning(f"Could not set up cookie health monitoring: {e}")
