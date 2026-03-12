@@ -3,7 +3,6 @@ CV Knowledge Base API Routes.
 
 Endpoints for indexing, searching, and generating CVs using the knowledge base.
 """
-import asyncio
 import logging
 from typing import Optional
 
@@ -120,9 +119,10 @@ async def index_cv_version(
 
     try:
         # Download and extract text from the CV
-        from utils.minio_storage import get_minio_storage
         import tempfile
         from pathlib import Path
+
+        from utils.minio_storage import get_minio_storage
 
         minio = get_minio_storage()
 
@@ -285,9 +285,10 @@ async def generate_smart_cv(
         storage_path = version.get('storage_path')
         if storage_path:
             try:
-                from utils.minio_storage import get_minio_storage
                 import tempfile
                 from pathlib import Path
+
+                from utils.minio_storage import get_minio_storage
 
                 minio = get_minio_storage()
 
@@ -363,9 +364,10 @@ async def index_all_versions(
                 continue
 
             # Download and extract text
-            from utils.minio_storage import get_minio_storage
             import tempfile
             from pathlib import Path
+
+            from utils.minio_storage import get_minio_storage
 
             minio = get_minio_storage()
 

@@ -1,5 +1,4 @@
 # cv/cv_generator.py
-import asyncio
 import logging
 import os
 import re
