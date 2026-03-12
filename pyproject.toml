@@ -1,0 +1,23 @@
+[project]
+name = "winning-cv"
+version = "1.0.0"
+description = "AI-powered CV tailoring and job matching"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+asyncio_mode = "auto"
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["api", "cv", "utils", "job_sources", "job_processing"]
+omit = ["tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
