@@ -109,3 +109,41 @@ jobs:
             curl -f http://localhost:13000/health || exit 1
             docker image prune -af --filter "until=168h"
             echo "Deployment successful at $(date)"
+
+  notify-success:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send Telegram notification (Success)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ✅ *WinningCV Deployment Successful*
+            
+            📦 *Commit:* `${{ github.sha }}`
+            📝 *Message:* ${{ github.event.head_commit.message }}
+            👤 *Author:* ${{ github.actor }}
+            🔗 [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+  notify-failure:
+    needs: [build-backend, build-frontend, deploy]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send Telegram notification (Failure)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ❌ *WinningCV Deployment Failed*
+            
+            📦 *Commit:* `${{ github.sha }}`
+            📝 *Message:* ${{ github.event.head_commit.message }}
+            👤 *Author:* ${{ github.actor }}
+            🔗 [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
