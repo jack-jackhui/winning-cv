@@ -1,12 +1,13 @@
 # utils/notifications.py
 
-import os
-import requests
 import logging
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, List, Dict, Any
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional
+
+import requests
+
 from config.settings import Config
 
 logger = logging.getLogger(__name__)
@@ -448,8 +449,8 @@ def notify_all_users(
     Returns:
         Dictionary mapping user emails to their notification results
     """
-    from data_store.airtable_manager import AirtableManager
     from config.settings import Config
+    from data_store.airtable_manager import AirtableManager
 
     # Create manager if not provided
     if airtable_manager is None:
@@ -516,8 +517,8 @@ def notify_specific_user(
     Returns:
         Dictionary with status of each notification channel
     """
-    from data_store.airtable_manager import AirtableManager
     from config.settings import Config
+    from data_store.airtable_manager import AirtableManager
 
     # Create manager if not provided
     if airtable_manager is None:

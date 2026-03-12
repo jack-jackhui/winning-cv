@@ -1,12 +1,15 @@
 # ui/generate_ui.py
-import streamlit as st
 import re
 from datetime import datetime
-from utils.utils import extract_text_from_file, create_pdf
+
+import streamlit as st
+
+from config.settings import Config
 from cv.cv_generator import CVGenerator
 from data_store.airtable_manager import AirtableManager
-from config.settings import Config
-from ui.helpers import upload_pdf_to_wordpress, extract_title_from_jd, extract_contact_info
+from ui.helpers import extract_title_from_jd, upload_pdf_to_wordpress
+from utils.utils import create_pdf, extract_text_from_file
+
 
 def show_generate_ui(user_email: str):
     st.title("🔍 Generate a Tailored CV")

@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def render_sidebar() -> str:
     """Draw the left sidebar. Returns (user_email, mode)."""
     # Main content first
@@ -58,7 +59,7 @@ def render_sidebar() -> str:
     </style>
     <div class="sidebar-footer" align="center">
         Powered by <strong>Winning CV AI</strong><br>
-        Built with 🗳️ by <a href="https://jackhui.com.au" target="_blank">@jackhui</a><br>        
+        Built with 🗳️ by <a href="https://jackhui.com.au" target="_blank">@jackhui</a><br>
     </div>
     """, unsafe_allow_html=True)
 

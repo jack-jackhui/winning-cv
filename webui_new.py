@@ -1,12 +1,15 @@
-import streamlit as st
-from ui.sidebar     import render_sidebar
-from ui.generate_ui import show_generate_ui
-from ui.history_ui  import show_history_ui
-from data_store.airtable_manager import AirtableManager
-from config.settings import Config
-from ui.job_search_ui import show_job_search_ui, display_search_results
-from utils.logger import setup_logger
 import logging
+
+import streamlit as st
+
+from config.settings import Config
+from data_store.airtable_manager import AirtableManager
+from ui.generate_ui import show_generate_ui
+from ui.history_ui import show_history_ui
+from ui.job_search_ui import display_search_results, show_job_search_ui
+from ui.sidebar import render_sidebar
+from utils.logger import setup_logger
+
 
 # Add login dialog decorator
 @st.dialog("Login Required", width="large")
@@ -90,7 +93,7 @@ def main():
 
     user_email = st.user.email if st.user.is_logged_in else None
     # never assume name exists
-    user_name = getattr(st.user, "name", None)
+    getattr(st.user, "name", None)
     if mode == "Generate New CV":
         show_generate_ui(user_email)
     elif mode == "Run Job Search":
@@ -104,7 +107,7 @@ def main():
     # Add footer content
     st.markdown("""
         <footer>
-            ⭐ Winning CV Powered by AI | 
+            ⭐ Winning CV Powered by AI |
             <a href="https://jackhui.com.au/" target="_blank">About</a> |
             <a href="https://jackhui.com.au/" target="_blank">Contact</a>
         </footer>

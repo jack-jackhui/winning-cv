@@ -8,12 +8,13 @@ Tests:
 4. Frontend component imports
 """
 
-import pytest
-import sys
-import os
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
 import json
+import os
+import sys
+from datetime import datetime
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -180,18 +181,18 @@ class TestAPISchemas:
     def test_import_schemas(self):
         """Test that all CV version schemas can be imported."""
         from api.schemas.cv import (
-            CVVersionBase,
-            CVVersionCreate,
-            CVVersionUpdate,
-            CVVersionResponse,
-            CVVersionListResponse,
-            CVVersionForkRequest,
-            CVVersionMatchRequest,
-            CVVersionMatchScore,
-            CVVersionMatchResponse,
             CVVersionAnalyticsResponse,
+            CVVersionBase,
             CVVersionBulkActionRequest,
-            CVVersionBulkActionResponse
+            CVVersionBulkActionResponse,
+            CVVersionCreate,
+            CVVersionForkRequest,
+            CVVersionListResponse,
+            CVVersionMatchRequest,
+            CVVersionMatchResponse,
+            CVVersionMatchScore,
+            CVVersionResponse,
+            CVVersionUpdate,
         )
 
         assert CVVersionBase is not None

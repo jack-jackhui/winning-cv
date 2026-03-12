@@ -12,17 +12,15 @@ This module provides:
 5. Integration with APScheduler for periodic checks
 """
 
-import logging
 import json
-import os
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
 from enum import Enum
 from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 from job_sources.linkedin_cookie_manager import get_cookie_manager
-from utils.notifications import send_telegram_message, send_email_notification
-from config.settings import Config
+from utils.notifications import send_email_notification, send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -253,11 +251,11 @@ def send_cookie_alert(health_info: Dict):
 
     # Only send alerts when session is actually invalid or missing
     if status == CookieStatus.HEALTHY:
-        logger.info(f"Cookie session is valid, no alert needed.")
+        logger.info("Cookie session is valid, no alert needed.")
         return
 
     if status == CookieStatus.UNTESTED:
-        logger.info(f"Cookie session untested, no alert sent.")
+        logger.info("Cookie session untested, no alert sent.")
         return
 
     # Build alert message

@@ -12,12 +12,12 @@ Analyzes a generated CV against a job description to provide:
 - Interview talking points
 """
 
-import os
 import json
 import logging
+import os
 import re
-from typing import Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential

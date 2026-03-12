@@ -1,8 +1,9 @@
 # job_sources/additional_job_search.py
+import logging
+from typing import Dict, List
+
 import pandas as pd
 from jobspy import scrape_jobs
-from typing import Optional, List, Dict
-import logging
 
 logger = logging.getLogger(__name__)
 

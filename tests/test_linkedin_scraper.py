@@ -1,7 +1,7 @@
+import logging
 import os
 import sys
 import time
-import logging
 
 # Make sure we can import from one directory up
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from config.settings import Config
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from utils.logger import setup_logger
+
 
 def test_real_linkedin_scraping():
     """Live test of LinkedIn scraping with real job URLs, respecting MAX_JOBS_TO_SCRAPE."""

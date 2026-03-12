@@ -3,8 +3,15 @@ target-version = "py312"
 
 [lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "E402",  # Module level import not at top (needed for some scripts)
+    "E722",  # Bare except (legacy code, fix gradually)
+    "E741",  # Ambiguous variable name
+    "F403",  # Star imports (used in __init__.py)
+]
 
 [lint.per-file-ignores]
 "tests/*" = ["F401", "F811"]
-"__init__.py" = ["F401"]
+"__init__.py" = ["F401", "F403"]
+"webui*.py" = ["E402"]  # Streamlit requires specific import order

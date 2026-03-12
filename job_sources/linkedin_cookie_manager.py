@@ -10,11 +10,10 @@ Pattern inspired by xiaohongshu-mcp for persistent session management.
 """
 
 import json
-import os
 import logging
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, List
+from pathlib import Path
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

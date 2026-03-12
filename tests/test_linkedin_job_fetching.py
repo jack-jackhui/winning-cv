@@ -1,12 +1,14 @@
 # tests/test_job_processing.py
-import pytest
+import logging
+import os
 from unittest import mock
+
+import pytest
+
 from config.settings import Config
 from data_store.airtable_manager import AirtableManager
 from feed.linkedin_feed import LinkedInFeedProcessor
 from utils.content_cleaner import ContentCleaner
-import logging
-import os
 
 # Configure tests logger
 logger = logging.getLogger(__name__)

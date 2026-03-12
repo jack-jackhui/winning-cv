@@ -1,14 +1,14 @@
 # job_sources/seek_job_scraper.py
-import time
-import random
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
-from DrissionPage import Chromium, ChromiumOptions
-from pygments.lexers import automation
-from urllib.parse import urljoin
-from config.settings import Config
 import logging
 import os
+import random
+import time
+from urllib.parse import urljoin, urlparse
+
+from bs4 import BeautifulSoup
+from DrissionPage import Chromium, ChromiumOptions
+
+from config.settings import Config
 
 logger = logging.getLogger(__name__)
 
@@ -153,19 +153,19 @@ class SeekJobScraper:
                 'work_type': self._safe_extract(card, '[data-automation="jobWorkType"]', 'text'),
                 'classification': self._safe_extract(card, '[data-automation="jobClassification"]', 'text')
             }
-            
+
             # Fetch full description and potentially better company name from detail page
             if len(jobs) < self.max_jobs_for_description:
                 full_desc, company_from_detail = self._get_full_description(job['job_url'])
                 job['full_description'] = full_desc
-                
+
                 # Use company from detail page if list page extraction failed
                 if company_from_detail and (not job['company'] or job['company'] == "Unknown Company"):
                     job['company'] = company_from_detail
                     logger.debug(f"Using company from Seek detail page: {company_from_detail}")
             else:
                 job['full_description'] = ""
-            
+
             jobs.append(job)
         return jobs
 
@@ -224,7 +224,7 @@ class SeekJobScraper:
             # Wait for page to fully load
             new_tab.wait.doc_loaded()
             self.random_delay(1.5, 2.5)  # Allow JS execution
-            
+
             # Get page HTML and parse with BeautifulSoup
             page_html = new_tab.html
             soup = BeautifulSoup(page_html, 'html.parser')
@@ -256,11 +256,11 @@ class SeekJobScraper:
 
                 desc = desc_container.get_text(separator='\n', strip=True)
             else:
-                logger.warning(f"Description container not found in HTML")
+                logger.warning("Description container not found in HTML")
                 desc = ""
 
             return desc, company
-            
+
         except Exception as e:
             logger.error(f"Detail page extraction failed: {str(e)}")
             return "", ""
@@ -278,7 +278,7 @@ class SeekJobScraper:
             if next_btn:
                 next_btn.click()
                 return True
-        except Exception as e:
+        except Exception:
             logger.debug("No next page button found")
         return False
 

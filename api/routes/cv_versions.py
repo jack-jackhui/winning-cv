@@ -9,30 +9,28 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import partial
-from io import BytesIO
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
+from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.cv import (
-    CVVersionCreate,
-    CVVersionUpdate,
-    CVVersionResponse,
-    CVVersionListResponse,
-    CVVersionForkRequest,
-    CVVersionMatchRequest,
-    CVVersionMatchResponse,
-    CVVersionMatchScore,
     CVVersionAnalyticsResponse,
     CVVersionBulkActionRequest,
     CVVersionBulkActionResponse,
+    CVVersionForkRequest,
     CVVersionFromHistoryRequest,
+    CVVersionListResponse,
+    CVVersionMatchRequest,
+    CVVersionMatchResponse,
+    CVVersionMatchScore,
+    CVVersionResponse,
+    CVVersionUpdate,
 )
-from api.middleware.auth_middleware import get_current_user
-from data_store.cv_version_manager import get_cv_version_manager, CVVersionManager
+from data_store.cv_version_manager import get_cv_version_manager
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +60,7 @@ async def run_with_timeout(func, *args, timeout: float = AIRTABLE_TIMEOUT_SECOND
         logger.error(f"Airtable operation timed out after {timeout}s: {func.__name__}")
         raise HTTPException(
             status_code=504,
-            detail=f"Database operation timed out. Please try again."
+            detail="Database operation timed out. Please try again."
         )
 
 
@@ -582,8 +580,8 @@ async def create_from_history(
     This allows users to save a generated CV to their library for reuse.
     The PDF is downloaded from the history record and stored as a new version.
     """
-    from data_store.airtable_manager import AirtableManager
     from config.settings import Config
+    from data_store.airtable_manager import AirtableManager
 
     try:
         # Get the history record

@@ -1,5 +1,7 @@
-from apscheduler.schedulers.background import BackgroundScheduler
 import logging
+
+from apscheduler.schedulers.background import BackgroundScheduler
+
 
 class JobScheduler:
     def __init__(self):

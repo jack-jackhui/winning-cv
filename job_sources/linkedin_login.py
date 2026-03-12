@@ -19,11 +19,13 @@ The script will:
 Subsequent scraping runs will use the saved cookies automatically.
 """
 
-import sys
-import time
 import argparse
 import logging
+import sys
+import time
+
 from DrissionPage import Chromium, ChromiumOptions
+
 from config.settings import Config
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 

@@ -1,12 +1,14 @@
-import time
-import random
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
-from DrissionPage import Chromium, ChromiumOptions
-from config.settings import Config
-from job_sources.linkedin_cookie_manager import get_cookie_manager
 import logging
 import os
+import random
+import time
+from urllib.parse import urlparse
+
+from bs4 import BeautifulSoup
+from DrissionPage import Chromium, ChromiumOptions
+
+from config.settings import Config
+from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +261,7 @@ class LinkedInJobScraper:
             if cookie_button:
                 cookie_button.click()
                 self.random_delay(1, 2)
-        except Exception as e:
+        except Exception:
             logger.debug("No cookie consent button found or could not click it: {str(e)}")
 
     def extract_job_listings(self, soup):
@@ -444,7 +446,7 @@ class LinkedInJobScraper:
                 job_listings.append(job)
                 logger.debug(f"Extracted job: {title} at {company} ({location})")
             else:
-                logger.warning(f"Skipping job card with no title or URL")
+                logger.warning("Skipping job card with no title or URL")
 
         logger.info(f"Extracted {len(job_listings)} job listings")
         return job_listings
@@ -465,7 +467,7 @@ class LinkedInJobScraper:
             self.random_delay(3, 5)
             # Handle potential popups in new tab
             self.handle_login_wall(new_tab)
-            
+
             # Extract company name from detail page
             company = ""
             company_selectors = [
@@ -488,7 +490,7 @@ class LinkedInJobScraper:
             # Wait for description content
             description = ""
             try:
-                logger.debug(f"Extracting job description")
+                logger.debug("Extracting job description")
                 description_element = new_tab.ele('@@tag()=div@@class=description__text description__text--rich', timeout=5)
                 description = description_element.text.strip() if description_element else ""
             except Exception as e:

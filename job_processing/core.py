@@ -2,19 +2,19 @@
 import logging
 import os
 import uuid
-from datetime import datetime
-from typing import List, Dict, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import Callable, Dict, List, Optional
 
+from cv.cv_generator import CVGenerator
 from data_store.airtable_manager import AirtableManager
+from job_sources.additional_job_search import AdditionalJobProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from job_sources.seek_job_scraper import SeekJobScraper
-from job_sources.additional_job_search import AdditionalJobProcessor
 from utils.content_cleaner import ContentCleaner
 from utils.cv_loader import load_cv_content
-from utils.utils import create_pdf, canonicalize_url
 from utils.matcher import JobMatcher
-from cv.cv_generator import CVGenerator
+from utils.utils import canonicalize_url, create_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -332,8 +332,8 @@ class JobProcessor:
         Returns:
             URL to access the generated CV
         """
-        from ui.helpers import upload_pdf, get_storage_backend
         from config.settings import Config
+        from ui.helpers import get_storage_backend, upload_pdf
 
         generator = CVGenerator()
 

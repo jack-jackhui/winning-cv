@@ -2,15 +2,15 @@
 Authentication routes for WinningCV API.
 Proxies auth requests to external auth service.
 """
-import os
 import logging
+import os
 from typing import Optional
-from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import JSONResponse
-import httpx
 
-from api.schemas.auth import AuthStatus, UserInfo, CSRFToken
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from api.middleware.auth_middleware import get_current_user, get_optional_user
+from api.schemas.auth import AuthStatus, CSRFToken, UserInfo
 
 logger = logging.getLogger(__name__)
 

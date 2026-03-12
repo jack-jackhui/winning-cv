@@ -8,8 +8,8 @@ Provides secure CV storage with:
 - Automatic bucket initialization
 """
 
-import os
 import logging
+import os
 from datetime import timedelta
 from typing import Optional
 from urllib.parse import urlparse

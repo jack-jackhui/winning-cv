@@ -1,11 +1,11 @@
-from pyairtable import Api
-from pyairtable.formulas import AND, Field, EQ, NE
-from utils.logger import setup_logger
-from utils.airtable_client import create_airtable_api
-from datetime import datetime
-import os
 import logging
+from datetime import datetime
+
+from pyairtable.formulas import AND, EQ, NE, Field
+
 from config.settings import Config
+from utils.airtable_client import create_airtable_api
+
 
 class AirtableManager:
     def __init__(self, api_key, base_id, table_id):

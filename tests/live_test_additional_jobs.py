@@ -1,13 +1,14 @@
 # tests/live_test_additional_jobs.py
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import logging
 from datetime import datetime
-from job_sources.additional_job_search import AdditionalJobProcessor
+
 from config.settings import Config
+from job_sources.additional_job_search import AdditionalJobProcessor
 from utils.content_cleaner import ContentCleaner
 
 

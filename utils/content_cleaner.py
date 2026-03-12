@@ -1,5 +1,7 @@
-from bs4 import BeautifulSoup
 import logging
+
+from bs4 import BeautifulSoup
+
 
 class ContentCleaner:
     def __init__(self, max_length=15000):

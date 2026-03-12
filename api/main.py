@@ -2,9 +2,10 @@
 WinningCV FastAPI Application
 REST API backend for the React frontend.
 """
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -14,10 +15,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, profile_router
 from api.middleware.auth_middleware import auth_middleware
-from utils.logger import setup_logger
+from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, profile_router
 from scheduler.job_scheduler import JobScheduler
+from utils.logger import setup_logger
 
 # Configure logging
 setup_logger(log_file="logs/api.log", level=logging.DEBUG)
@@ -38,9 +39,9 @@ def setup_cookie_health_monitoring():
     global scheduler
     try:
         from job_sources.linkedin_cookie_health import (
-            run_cookie_health_check,
             check_cookie_health,
-            get_check_interval_hours
+            get_check_interval_hours,
+            run_cookie_health_check,
         )
 
         # Session-based detection uses fixed 24-hour interval

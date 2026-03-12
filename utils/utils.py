@@ -1,11 +1,13 @@
 # utils.py
-from PyPDF2 import PdfReader
-from docx import Document
 import io
 import logging
-from fpdf import FPDF
 import re
 from urllib.parse import urlparse, urlunparse
+
+from docx import Document
+from fpdf import FPDF
+from PyPDF2 import PdfReader
+
 
 class Struct:
     """Convert dict to object for config"""
@@ -129,7 +131,7 @@ def create_pdf(content, filename="customized_cv.pdf"):
                 continue
 
             # Sub-headers (bold text without pipes)
-            if line.startswith('**') and not '|' in line:
+            if line.startswith('**') and '|' not in line:
                 _handle_subheader(pdf, line, font_name, base_font_size)
                 continue
 
@@ -155,11 +157,8 @@ def create_docx(content, filename="customized_cv.docx"):
     """Create a styled Word document from markdown content - matches source CV style"""
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, RGBColor
         from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.style import WD_STYLE_TYPE
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
+        from docx.shared import Inches, Pt
 
         doc = Document()
 
@@ -264,8 +263,8 @@ def create_docx(content, filename="customized_cv.docx"):
 
 def _add_shading_to_paragraph(paragraph):
     """Add light gray shading to a paragraph (for section headers)"""
-    from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
 
     shading_elm = OxmlElement('w:shd')
     shading_elm.set(qn('w:fill'), 'E6E6E6')  # Light gray (#E6E6E6)
@@ -509,7 +508,7 @@ def _handle_section_header_compact(pdf, title, font_name):
     pdf.ln(4)  # Space before header
 
     # Save current position
-    x = pdf.get_x()
+    pdf.get_x()
     y = pdf.get_y()
 
     # Draw shaded background rectangle (light gray)

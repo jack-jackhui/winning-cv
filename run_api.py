@@ -7,8 +7,9 @@ Usage:
     # or
     uvicorn api.main:app --reload --port 8000
 """
-import uvicorn
 import os
+
+import uvicorn
 from dotenv import load_dotenv
 
 # Load environment variables

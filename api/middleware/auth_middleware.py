@@ -2,12 +2,13 @@
 Authentication middleware for WinningCV API.
 Supports both token-based auth (like sel-exam) and session cookies.
 """
-import os
 import logging
+import os
 from typing import Optional
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import APIKeyCookie, APIKeyHeader
+
 import httpx
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import APIKeyCookie, APIKeyHeader
 
 from api.schemas.auth import UserInfo
 

@@ -2,42 +2,39 @@
 Job Search routes for WinningCV API.
 Handles job search configuration, execution, and results.
 """
+import fcntl
 import json
-import os
-import uuid
 import logging
 import math
-import asyncio
-import fcntl
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Optional
+from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
-from urllib.parse import urlencode, quote
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
+from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.jobs import (
-    JobConfigRequest,
     JobConfigResponse,
-    SearchTaskResponse,
-    SearchStatusResponse,
-    SearchStatus,
     JobResult,
     JobResultsResponse,
+    SearchStatus,
+    SearchStatusResponse,
+    SearchTaskResponse,
 )
-from api.middleware.auth_middleware import get_current_user
+from config.settings import Config
 
 # Import existing functionality
 from data_store.airtable_manager import AirtableManager
 from data_store.cv_version_manager import get_cv_version_manager
-from utils.minio_storage import MinIOStorage
 from job_processing.core import JobProcessor
-from config.settings import Config
-from utils.utils import Struct
-from ui.helpers import upload_pdf_to_wordpress
 from job_sources.linkedin_cookie_manager import get_cookie_manager
+from ui.helpers import upload_pdf_to_wordpress
+from utils.minio_storage import MinIOStorage
+from utils.utils import Struct
 
 logger = logging.getLogger(__name__)
 
@@ -705,7 +702,7 @@ async def get_linkedin_cookie_health(
         Cookie health information including status, age, and recommendations
     """
     try:
-        from job_sources.linkedin_cookie_health import check_cookie_health, CookieStatus
+        from job_sources.linkedin_cookie_health import check_cookie_health
 
         health = check_cookie_health()
 

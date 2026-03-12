@@ -1,7 +1,10 @@
-import feedparser
 import hashlib
-from utils.logger import setup_logger
 from datetime import datetime
+
+import feedparser
+
+from utils.logger import setup_logger
+
 
 class LinkedInFeedProcessor:
     def __init__(self, feed_url):

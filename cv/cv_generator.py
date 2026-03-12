@@ -1,9 +1,10 @@
 # cv/cv_generator.py
 import os
+import re
+
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
-import re
 
 
 def remove_think_blocks(text):

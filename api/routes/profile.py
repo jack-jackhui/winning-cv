@@ -2,24 +2,20 @@
 Profile and notification preferences routes for WinningCV API.
 """
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.notifications import (
-    NotificationPreferences,
-    NotificationPreferencesUpdate,
     NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
     TestNotificationRequest,
-    TestNotificationResponse
+    TestNotificationResponse,
 )
-from api.middleware.auth_middleware import get_current_user
-from data_store.airtable_manager import AirtableManager
 from config.settings import Config
-from utils.notifications import (
-    send_email_notification,
-    send_telegram_to_user,
-    send_wechat_message
-)
+from data_store.airtable_manager import AirtableManager
+from utils.notifications import send_email_notification, send_telegram_to_user, send_wechat_message
 
 logger = logging.getLogger(__name__)
 

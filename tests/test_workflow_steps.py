@@ -1,17 +1,20 @@
 # tests/test_workflow_steps.py
-import os, sys
+import os
+import sys
+
 # Add parent directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import logging
+
 from config.settings import Config
 from data_store.airtable_manager import AirtableManager
 from feed.linkedin_feed import LinkedInFeedProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from utils.content_cleaner import ContentCleaner
-from utils.matcher import JobMatcher
 from utils.cv_loader import load_cv_content
 from utils.logger import setup_logger
+from utils.matcher import JobMatcher
 
 
 def test_real_workflow_steps_1_to_3():

@@ -1,7 +1,7 @@
 # utils/logger.py
 import logging
-from logging.handlers import RotatingFileHandler
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Add initialization flag

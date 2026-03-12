@@ -1,10 +1,10 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from utils.matcher import JobMatcher
 from utils.logger import setup_logger
+from utils.matcher import JobMatcher
 
 
 def test_llm_response():

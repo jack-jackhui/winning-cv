@@ -3,45 +3,42 @@ CV Generation routes for WinningCV API.
 Handles CV generation, upload, and history.
 Uses MinIO for file storage.
 """
-import os
-import uuid
 import logging
-import tempfile
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.cv import (
-    CVGenerateRequest,
+    ATSOptimizationSchema,
+    CVAnalysisResponse,
     CVGenerateResponse,
-    CVUploadResponse,
     CVHistoryItem,
     CVHistoryResponse,
-    CVAnalysisResponse,
-    KeywordMatchSchema,
-    TechnicalSkillsSchema,
-    SoftSkillsSchema,
-    SkillsCoverageSchema,
+    CVUploadResponse,
     ExperienceRelevanceSchema,
-    ATSOptimizationSchema,
     GapAnalysisSchema,
+    KeywordMatchSchema,
+    SkillsCoverageSchema,
+    SoftSkillsSchema,
     TalkingPointsSchema,
+    TechnicalSkillsSchema,
 )
-from api.middleware.auth_middleware import get_current_user, get_optional_user
+from config.settings import Config
+from cv.cv_analyzer import CVAnalyzer
 
 # Import existing functionality
 from cv.cv_generator import CVGenerator
-from cv.cv_analyzer import CVAnalyzer, analyze_cv_fit
-from utils.utils import extract_text_from_file, create_pdf, create_docx
-from utils.minio_storage import get_minio_storage
-from ui.helpers import extract_title_from_jd
 from data_store.airtable_manager import AirtableManager
-from config.settings import Config
+from ui.helpers import extract_title_from_jd
+from utils.minio_storage import get_minio_storage
+from utils.utils import create_docx, create_pdf, extract_text_from_file
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +142,7 @@ async def generate_cv(
     if cv_file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Allowed: PDF, DOCX, TXT"
+            detail="Invalid file type. Allowed: PDF, DOCX, TXT"
         )
 
     try:

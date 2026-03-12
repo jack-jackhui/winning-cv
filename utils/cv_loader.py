@@ -1,9 +1,10 @@
 # utils/cv_loader.py
-from utils.utils import extract_text_from_file
-import os
 import io
 import logging
+import os
 import tempfile
+
+from utils.utils import extract_text_from_file
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,13 @@
-import streamlit as st
 import pandas as pd
-from data_store.airtable_manager import AirtableManager
-from config.settings import Config
+import streamlit as st
+from great_tables import GT, loc, style
+
 # from datetime import datetime
 from streamlit_extras.great_tables import great_tables
-from great_tables import GT, style, loc
+
+from config.settings import Config
+from data_store.airtable_manager import AirtableManager
+
 
 # --- DIALOG FOR LOGIN ---
 @st.dialog("🔒 Please log in to view your CV history", width="medium")
@@ -71,7 +74,7 @@ def show_history_ui(user_email: str):
     df = pd.DataFrame(history_data)
 
     # Handle user name display
-    user_name = st.user.name if hasattr(st, "user") and getattr(st.user, "is_logged_in", False) else "Guest User"
+    st.user.name if hasattr(st, "user") and getattr(st.user, "is_logged_in", False) else "Guest User"
 
     # Create and format table
     try:

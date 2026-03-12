@@ -1,15 +1,18 @@
 # ui/job_search_ui.py
-import streamlit as st
+import logging
 import math
 import uuid
 from pathlib import Path
-# from utils.logger import setup_logger
-from utils.utils import Struct
-import logging
+from urllib.parse import quote, urlencode
+
+import streamlit as st
+
+from config.settings import Config
 from data_store.airtable_manager import AirtableManager
 from job_processing.core import JobProcessor
-from config.settings import Config
-from urllib.parse import urlencode, quote
+
+# from utils.logger import setup_logger
+from utils.utils import Struct
 
 logger = logging.getLogger(__name__)
 
@@ -501,11 +504,11 @@ def display_search_results(user_email):
             st.markdown("---")
             if reasons:
                 st.markdown("**Top Matching Factors:**")
-                st.markdown(f"- " + "\n- ".join(reasons.splitlines()) if isinstance(reasons, str) else reasons)
+                st.markdown("- " + "\n- ".join(reasons.splitlines()) if isinstance(reasons, str) else reasons)
             if suggestions:
                 st.markdown("**Suggestions to Improve Your CV:**")
                 st.markdown(
-                    f"- " + "\n- ".join(suggestions.splitlines()) if isinstance(suggestions, str) else suggestions)
+                    "- " + "\n- ".join(suggestions.splitlines()) if isinstance(suggestions, str) else suggestions)
 
     st.markdown("---")
     if st.button("🔄 Run a new search", key="new_search"):

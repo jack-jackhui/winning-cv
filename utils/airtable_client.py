@@ -8,8 +8,9 @@ This module provides a properly configured pyairtable Api instance that:
 """
 import logging
 from typing import Optional, Tuple
-from urllib3.util import Retry
+
 from pyairtable import Api
+from urllib3.util import Retry
 
 from config.settings import Config
 

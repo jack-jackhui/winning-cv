@@ -6,13 +6,13 @@ Uses Airtable for metadata storage and MinIO for file storage.
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pyairtable import Api
-from pyairtable.formulas import AND, OR, Field, EQ, NE, FIND
+from typing import Any, Dict, List, Optional
+
+from pyairtable.formulas import AND, EQ, Field
 
 from config.settings import Config
-from utils.minio_storage import get_minio_storage, MinIOStorage
 from utils.airtable_client import get_airtable_api
+from utils.minio_storage import MinIOStorage, get_minio_storage
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,8 @@ class CVVersionManager:
         Returns:
             Created version record
         """
-        import os
         import hashlib
+        import os
 
         # Generate unique version ID
         version_id = f"cv_{uuid.uuid4().hex[:12]}"
@@ -353,8 +353,8 @@ class CVVersionManager:
 
         # If no new file, we need to copy the existing one
         if not new_file_path:
-            import tempfile
             import os
+            import tempfile
 
             # Get download URL and fetch file
             download_url = self.get_download_url(source_version_id, user_email)
@@ -592,10 +592,10 @@ class CVVersionManager:
         Returns:
             Created version record
         """
-        import tempfile
-        import requests
         import os
-        from datetime import datetime
+        import tempfile
+
+        import requests
 
         fields = history_record.get('fields', {})
         job_title = fields.get('job_title', 'Generated CV')

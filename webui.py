@@ -1,10 +1,11 @@
-import streamlit as st
 import re
-from utils.utils import extract_text_from_file, create_pdf
-from utils.logger import setup_logger
-from utils.matcher import JobMatcher
-from cv.cv_generator import CVGenerator
+
+import streamlit as st
 from dotenv import load_dotenv
+
+from cv.cv_generator import CVGenerator
+from utils.logger import setup_logger
+from utils.utils import create_pdf, extract_text_from_file
 
 # Load environment variables
 load_dotenv()
@@ -44,13 +45,13 @@ def main():
 
         # Add welcome section
         st.markdown("""
-        ## Welcome to CV Helper! 
+        ## Welcome to CV Helper!
         **I'll help you create a job-winning resume by:**
         - 🔍 Analyzing your target job description
         - ✨ Highlighting your most relevant qualifications
         - 📈 Optimizing for applicant tracking systems (ATS)
         - 🎯 Tailoring content to specific industries
-    
+
         Let's get started by understanding your background and career goals!
         """)
 
