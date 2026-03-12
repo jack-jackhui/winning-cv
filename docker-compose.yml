@@ -45,6 +45,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     command: ["python", "run_api.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -130,6 +132,28 @@ services:
       - winningcv-net
 
 # =============================================================================
+# PostgreSQL - CV Knowledge Base
+# =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: winning-cv-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=winningcv
+      - POSTGRES_DB=winningcv
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-winningcv_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U winningcv -d winningcv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - winningcv-net
+
+# =============================================================================
 # Networks
 # =============================================================================
 networks:
@@ -142,3 +166,4 @@ networks:
 volumes:
   cv_data:
   minio_data:
+  postgres_data:

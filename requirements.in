@@ -36,3 +36,5 @@ pytest-cov>=4.1.0
 pytest-asyncio>=0.23.0
 ruff>=0.3.0
 pydantic-settings>=2.0.0
+# PostgreSQL async driver for CV Knowledge Base
+asyncpg>=0.29.0
