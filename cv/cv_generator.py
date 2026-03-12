@@ -1,10 +1,14 @@
 # cv/cv_generator.py
+import asyncio
+import logging
 import os
 import re
 
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
+
+logger = logging.getLogger(__name__)
 
 
 def remove_think_blocks(text):
@@ -280,3 +284,197 @@ Remember:
 
         except Exception as e:
             raise Exception(f"CV generation failed: {str(e)}")
+
+
+async def generate_cv_with_knowledge(
+    user_email: str,
+    job_desc: str,
+    instructions: str = "",
+    base_cv_content: str = None,
+) -> str:
+    """
+    Generate an optimal CV using content from ALL previous CV versions.
+
+    This function retrieves all indexed CV content from the knowledge base
+    and uses it to create the best possible CV for the given job description.
+
+    Args:
+        user_email: User's email for retrieving their CV history
+        job_desc: The job description to tailor the CV for
+        instructions: Optional additional instructions from the user
+        base_cv_content: Optional base CV to use as primary structure
+
+    Returns:
+        Optimized CV content in Markdown format
+
+    Raises:
+        ValueError: If no CV content is available
+        Exception: If CV generation fails
+    """
+    from cv.cv_knowledge_base import get_knowledge_base
+
+    kb = get_knowledge_base()
+
+    # Get unified experience from all CV versions
+    unified = await kb.build_unified_experience(user_email)
+
+    if not unified['experience_bullets'] and not base_cv_content:
+        raise ValueError(
+            "No CV content available. Please index at least one CV version first."
+        )
+
+    # Build comprehensive CV content from knowledge base
+    knowledge_context = _build_knowledge_context(unified)
+
+    logger.info(
+        f"Building CV with knowledge base: {unified['total_bullets']} bullets, "
+        f"{unified['total_summaries']} summaries"
+    )
+
+    # Generate CV with enhanced context
+    generator = CVGenerator()
+
+    # Build enhanced system prompt
+    enhanced_prompt = _build_enhanced_system_prompt(
+        job_desc, instructions, knowledge_context
+    )
+
+    # Prepare user message
+    if base_cv_content:
+        user_message = f"""Please create an optimized CV for the job description provided.
+
+## Base CV Structure (use as template)
+{base_cv_content}
+
+## Available Content from CV Knowledge Base
+{knowledge_context}
+
+---
+
+Instructions:
+- Use the Base CV Structure as your template
+- Draw the BEST content from the Knowledge Base that matches the job requirements
+- Combine and optimize content to create the strongest possible CV
+- Do not add any new skills, experiences, or qualifications not present in the sources
+- Output ONLY the optimized CV in Markdown format
+- No explanations or commentary"""
+    else:
+        user_message = f"""Please create an optimized CV for the job description provided.
+
+## Available Content from CV Knowledge Base
+{knowledge_context}
+
+---
+
+Instructions:
+- Create a well-structured CV using the best content from the Knowledge Base
+- Select content that best matches the job requirements
+- Do not add any new skills, experiences, or qualifications not present in the sources
+- Output ONLY the optimized CV in Markdown format
+- No explanations or commentary"""
+
+    try:
+        client = generator._get_client()
+
+        response = client.complete(
+            messages=[
+                SystemMessage(content=enhanced_prompt),
+                UserMessage(content=user_message)
+            ],
+            model=generator.model_name,
+            model_extras={"max_completion_tokens": 16384}
+        )
+
+        raw_cv = response.choices[0].message.content
+        cleaned_cv = remove_think_blocks(raw_cv)
+        cleaned_cv = remove_markdown_wrappers(cleaned_cv)
+        return cleaned_cv
+
+    except Exception as e:
+        raise Exception(f"CV generation with knowledge base failed: {str(e)}")
+
+
+def _build_knowledge_context(unified: dict) -> str:
+    """Build formatted context from unified experience data."""
+    sections = []
+
+    # Add summaries
+    if unified['summaries']:
+        sections.append("### Previous Professional Summaries")
+        for i, s in enumerate(unified['summaries'][:5], 1):
+            sections.append(f"\n**Version: {s['version_name'] or 'Unnamed'}**")
+            sections.append(s['content'])
+
+    # Add experience bullets grouped by relevance
+    if unified['experience_bullets']:
+        sections.append("\n### Experience Achievements (from all CV versions)")
+        sections.append(
+            "Select the most relevant achievements that match the job requirements:\n"
+        )
+
+        # Group by job title for better organization
+        by_title = {}
+        for b in unified['experience_bullets']:
+            title = b['job_title'] or 'Other Experience'
+            if title not in by_title:
+                by_title[title] = []
+            by_title[title].append(b)
+
+        for title, bullets in by_title.items():
+            sections.append(f"\n**{title}**")
+            for b in bullets[:10]:  # Limit bullets per title
+                company = f" ({b['company_name']})" if b['company_name'] else ""
+                sections.append(f"• {b['bullet_text']}{company}")
+
+    # Add skills sections
+    if unified['skills_sections']:
+        sections.append("\n### Technical Skills (consolidated)")
+        for s in unified['skills_sections'][:3]:
+            sections.append(s['content'])
+
+    return "\n".join(sections)
+
+
+def _build_enhanced_system_prompt(
+    job_desc: str,
+    instructions: str,
+    knowledge_context: str
+) -> str:
+    """Build system prompt enhanced for knowledge-based generation."""
+    enhanced_instructions = """
+## KNOWLEDGE-BASED CV GENERATION MODE
+
+You have access to content from MULTIPLE previous CV versions in the knowledge base.
+Your task is to create the OPTIMAL CV by intelligently selecting and combining
+the best content that matches the target job description.
+
+### Selection Strategy
+1. Analyze the job description for key requirements, skills, and keywords
+2. Select achievements and experiences that best demonstrate these requirements
+3. Choose the strongest, most impactful bullet points from the available content
+4. Combine similar achievements into more powerful statements when appropriate
+5. Ensure selected content creates a coherent narrative
+
+### Quality Criteria
+- Prioritize quantified achievements with metrics
+- Select experiences most relevant to the target role
+- Choose content that demonstrates leadership, impact, and results
+- Avoid redundancy - pick the single best version of similar achievements
+- Maintain chronological and logical consistency
+
+"""
+    prompt_parts = [
+        CV_OPTIMIZATION_SYSTEM_PROMPT,
+        enhanced_instructions,
+        CV_FORMAT_REQUIREMENTS,
+        "\n## Target Job Description\n",
+        job_desc,
+    ]
+
+    if instructions and instructions.strip():
+        prompt_parts.extend([
+            "\n\n## Additional User Instructions\n",
+            instructions,
+        ])
+
+    return "\n".join(prompt_parts)

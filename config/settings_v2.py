@@ -66,6 +66,20 @@ class Settings(BaseSettings):
     default_from_email: Optional[str] = None
     default_to_email: Optional[str] = None
 
+    # PostgreSQL (CV Knowledge Base)
+    postgres_host: str = "postgres"
+    postgres_port: int = 5432
+    postgres_user: str = "winningcv"
+    postgres_password: str = "winningcv_secret"
+    postgres_db: str = "winningcv"
+    postgres_pool_min: int = 2
+    postgres_pool_max: int = 10
+
+    @property
+    def postgres_dsn(self) -> str:
+        """Get PostgreSQL connection DSN."""
+        return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
     # MinIO
     minio_endpoint: str = "minio:9000"
     minio_external_endpoint: Optional[str] = None
