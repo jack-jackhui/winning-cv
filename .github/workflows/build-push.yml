@@ -120,14 +120,13 @@ jobs:
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          format: markdown
+          format: html
           message: |
-            ✅ *WinningCV Deployment Successful*
+            ✅ <b>WinningCV Deployment Successful</b>
             
-            📦 *Commit:* `${{ github.sha }}`
-            📝 *Message:* ${{ github.event.head_commit.message }}
-            👤 *Author:* ${{ github.actor }}
-            🔗 [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            📦 Commit: <code>${{ github.sha }}</code>
+            👤 Author: ${{ github.actor }}
+            🔗 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a>
 
   notify-failure:
     needs: [build-backend, build-frontend, deploy]
@@ -139,11 +138,10 @@ jobs:
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          format: markdown
+          format: html
           message: |
-            ❌ *WinningCV Deployment Failed*
+            ❌ <b>WinningCV Deployment Failed</b>
             
-            📦 *Commit:* `${{ github.sha }}`
-            📝 *Message:* ${{ github.event.head_commit.message }}
-            👤 *Author:* ${{ github.actor }}
-            🔗 [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            📦 Commit: <code>${{ github.sha }}</code>
+            👤 Author: ${{ github.actor }}
+            🔗 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a>
