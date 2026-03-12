@@ -16,7 +16,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.middleware.auth_middleware import auth_middleware
-from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, profile_router
+from api.routes import (
+    auth_router,
+    cv_router,
+    cv_versions_router,
+    jobs_router,
+    knowledge_base_router,
+    profile_router,
+)
 from scheduler.job_scheduler import JobScheduler
 from utils.logger import setup_logger
 
@@ -83,6 +90,15 @@ async def lifespan(app: FastAPI):
     if scheduler:
         scheduler.shutdown()
     await auth_middleware.close()
+
+    # Close knowledge base connection pool
+    try:
+        from cv.cv_knowledge_base import get_knowledge_base
+        kb = get_knowledge_base()
+        await kb.close()
+    except Exception as e:
+        logger.warning(f"Error closing knowledge base pool: {e}")
+
     logger.info("Shutting down WinningCV API server")
 
 
@@ -137,6 +153,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cv_router, prefix="/api/v1")
 app.include_router(cv_versions_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(knowledge_base_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
 
 
@@ -162,6 +179,7 @@ async def api_root():
             "cv": "/api/v1/cv",
             "cv_versions": "/api/v1/cv/versions",
             "jobs": "/api/v1/jobs",
+            "knowledge_base": "/api/v1/knowledge-base",
             "profile": "/api/v1/profile",
             "docs": "/api/docs"
         }
