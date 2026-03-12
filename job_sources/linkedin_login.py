@@ -44,13 +44,12 @@ LINKEDIN_JOBS_URL = "https://www.linkedin.com/jobs/"
 def create_visible_browser() -> Chromium:
     """Create a visible (non-headless) browser for manual login."""
     options = ChromiumOptions()
-    config = Config()
 
     options.auto_port(True) \
         .headless(False) \
         .no_imgs(False) \
         .mute(True) \
-        .set_paths(browser_path=config.CHROMIUM_PATH or config.CHROME_PATH) \
+        .set_paths(browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH) \
         .set_user_agent(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -59,7 +58,7 @@ def create_visible_browser() -> Chromium:
     # Don't use incognito mode - we want to save session
     # options.incognito(False)
 
-    if config.RUNNING_IN_DOCKER:
+    if Config.RUNNING_IN_DOCKER:
         logger.error("Cannot run interactive login in Docker. Run locally first.")
         sys.exit(1)
 
