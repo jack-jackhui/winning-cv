@@ -130,9 +130,8 @@ The fastest way to get started with all services running:
 git clone https://github.com/jack-jackhui/winning-cv.git
 cd winning-cv
 
-# Create configuration files
+# Create configuration file
 cp env.example .env
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
 # Edit .env with your API keys and settings (see Configuration section)
 
@@ -157,7 +156,6 @@ cd winning-cv
 
 # Create configuration
 cp env.example .env
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
 # Install Python dependencies (requires Python 3.10+)
 pip install uv  # or: brew install uv
@@ -287,23 +285,6 @@ RUNNING_IN_DOCKER=false
 
 </details>
 
-### Authentication Setup
-
-Configure OAuth providers in `.streamlit/secrets.toml`:
-
-```toml
-[connections.google]
-client_id = "your-google-client-id"
-client_secret = "your-google-secret"
-redirect_uri = "https://your-domain.com/oauth/callback"
-
-[connections.microsoft]
-client_id = "your-microsoft-client-id"
-client_secret = "your-microsoft-secret"
-```
-
-See [Streamlit Authentication Docs](https://docs.streamlit.io/develop/concepts/connections/authentication) for setup guides.
-
 ---
 
 ## Architecture
@@ -393,16 +374,14 @@ Full interactive docs at: `http://localhost:8000/api/docs`
 ```bash
 # Never commit secrets
 echo ".env" >> .gitignore
-echo ".streamlit/secrets.toml" >> .gitignore
 
 # Restrict file permissions
-chmod 600 .env .streamlit/secrets.toml
+chmod 600 .env
 ```
 
 - Rotate credentials regularly
 - Use environment variables in CI/CD
 - Keep API keys and tokens secure
-- Review [Streamlit security recommendations](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
 
 ---
 

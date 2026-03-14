@@ -132,7 +132,6 @@ cd winning-cv
 
 # 创建配置文件
 cp env.example .env
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
 # 编辑 .env 填写API密钥等配置（参见配置说明）
 
@@ -157,7 +156,6 @@ cd winning-cv
 
 # 创建配置文件
 cp env.example .env
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
 # 安装Python依赖（需要Python 3.10+）
 pip install uv  # 或: brew install uv
@@ -287,23 +285,6 @@ RUNNING_IN_DOCKER=false
 
 </details>
 
-### 认证配置
-
-在 `.streamlit/secrets.toml` 中配置OAuth：
-
-```toml
-[connections.google]
-client_id = "your-google-client-id"
-client_secret = "your-google-secret"
-redirect_uri = "https://your-domain.com/oauth/callback"
-
-[connections.microsoft]
-client_id = "your-microsoft-client-id"
-client_secret = "your-microsoft-secret"
-```
-
-详见 [Streamlit认证文档](https://docs.streamlit.io/develop/concepts/connections/authentication)。
-
 ---
 
 ## 系统架构
@@ -393,16 +374,14 @@ FastAPI后端提供完整的REST API：
 ```bash
 # 切勿提交敏感文件
 echo ".env" >> .gitignore
-echo ".streamlit/secrets.toml" >> .gitignore
 
 # 限制文件权限
-chmod 600 .env .streamlit/secrets.toml
+chmod 600 .env
 ```
 
 - 定期轮换凭证
 - CI/CD中使用环境变量
 - 妥善保管API密钥和令牌
-- 参阅 [Streamlit安全建议](https://docs.streamlit.io/develop/concepts/connections/authentication#security-considerations)
 
 ---
 
