@@ -52,6 +52,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run job search and CV tailoring")
     parser.add_argument("--user-email", type=str, required=True, help="User email for job search session")
     args = parser.parse_args()
-    config_data = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
+    # Config is now a singleton instance, use type() to get class attributes
+    config_data = {k.lower(): v for k, v in type(Config).__dict__.items() 
+                   if not k.startswith("_") and not callable(v)}
     config_data["user_email"] = args.user_email
     main(config_data)
