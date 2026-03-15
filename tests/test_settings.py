@@ -36,6 +36,20 @@ class TestSettingsValidation:
             s = Settings()
             assert s.country == "USA"
 
+    def test_country_validation_case_insensitive(self):
+        """Test country validation is case-insensitive."""
+        from config.settings_v2 import Settings
+
+        # Lowercase should work and be normalized to proper case
+        with patch.dict(os.environ, {"COUNTRY": "australia"}, clear=True):
+            s = Settings()
+            assert s.country == "Australia"
+
+        # Mixed case should also work
+        with patch.dict(os.environ, {"COUNTRY": "UNITED ARAB EMIRATES"}, clear=True):
+            s = Settings()
+            assert s.country == "United Arab Emirates"
+
     def test_country_validation_invalid(self):
         """Test invalid country raises error."""
         from config.settings_v2 import Settings

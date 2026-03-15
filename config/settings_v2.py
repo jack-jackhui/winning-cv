@@ -108,9 +108,11 @@ class Settings(BaseSettings):
     @field_validator("country")
     @classmethod
     def validate_country(cls, v: str) -> str:
-        if v not in SUPPORTED_COUNTRIES:
+        # Case-insensitive matching, return properly cased country name
+        country_map = {c.lower(): c for c in SUPPORTED_COUNTRIES}
+        if v.lower() not in country_map:
             raise ValueError(f"Invalid country: {v}")
-        return v
+        return country_map[v.lower()]
 
 try:
     settings = Settings()
