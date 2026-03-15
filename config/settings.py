@@ -193,7 +193,9 @@ except ImportError as e:
         def validate_country_and_location(cls):
             country = cls.COUNTRY
             location = cls.LOCATION
-            if country not in cls.SUPPORTED_COUNTRIES:
+            # Case-insensitive matching
+            country_map = {c.lower(): c for c in cls.SUPPORTED_COUNTRIES}
+            if country.lower() not in country_map:
                 raise ValueError(f"Invalid country '{country}'")
             if not location or len(location.strip()) < 2:
                 raise ValueError("Location is required")
