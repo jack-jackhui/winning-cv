@@ -178,7 +178,7 @@ async def get_job_config(
         Job search configuration
     """
     try:
-        cfg = Config()
+        cfg = Config
         airtable = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
@@ -252,7 +252,7 @@ async def save_job_config(
         Saved configuration
     """
     try:
-        cfg = Config()
+        cfg = Config
         airtable = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
@@ -450,7 +450,7 @@ async def start_job_search(
         Task ID to poll for status
     """
     try:
-        cfg = Config()
+        cfg = Config
         airtable = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
@@ -543,7 +543,7 @@ async def get_job_results(
         List of job results with CV generation status
     """
     try:
-        cfg = Config()
+        cfg = Config
         joblist_manager = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
