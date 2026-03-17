@@ -87,6 +87,12 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:frontend
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:frontend-${{ github.sha }}
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_AUTH_SERVICE_URL=${{ secrets.VITE_AUTH_SERVICE_URL }}
+            VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+            VITE_MICROSOFT_CLIENT_ID=${{ secrets.VITE_MICROSOFT_CLIENT_ID }}
+            VITE_GITHUB_CLIENT_ID=${{ secrets.VITE_GITHUB_CLIENT_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

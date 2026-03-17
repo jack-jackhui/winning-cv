@@ -5,6 +5,20 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Build-time arguments for Vite (baked into bundle)
+ARG VITE_API_URL
+ARG VITE_AUTH_SERVICE_URL
+ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_MICROSOFT_CLIENT_ID
+ARG VITE_GITHUB_CLIENT_ID
+
+# Convert to ENV so they're available during npm run build
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_AUTH_SERVICE_URL=$VITE_AUTH_SERVICE_URL
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_MICROSOFT_CLIENT_ID=$VITE_MICROSOFT_CLIENT_ID
+ENV VITE_GITHUB_CLIENT_ID=$VITE_GITHUB_CLIENT_ID
+
 # Copy package files first for better caching
 COPY frontend/package*.json ./
 
