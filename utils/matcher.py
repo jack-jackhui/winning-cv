@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from typing import Any, Dict, Optional, Tuple
 
 import spacy
 from azure.ai.inference import ChatCompletionsClient
@@ -11,6 +12,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config.settings import Config
+from utils.ats_scorer import score_resume_ats
+from utils.hr_scorer import score_resume_hr
 
 
 class JobMatcher:
@@ -137,35 +140,122 @@ class JobMatcher:
         doc = self.nlp(text)
         return ' '.join([token.lemma_ for token in doc if not token.is_stop])
 
-    def calculate_match_score(self, job_desc, cv_text, use_llm=True, weights=None):
+    def calculate_match_score(
+        self,
+        job_desc: str,
+        cv_text: str,
+        use_llm: bool = True,
+        weights: Optional[Dict[str, float]] = None
+    ) -> Tuple[float, Dict[str, Any]]:
         """
-        Fixed scoring logic:
-        - Always calculates TF-IDF first
-        - Conditionally adds LLM analysis
+        Calculate comprehensive match score using ATS, HR, and optionally LLM evaluation.
+
+        Args:
+            job_desc: Job description text
+            cv_text: CV/resume text
+            use_llm: Whether to include LLM evaluation (expensive, optional)
+            weights: Optional custom weights. Defaults:
+                     - With LLM: ATS(25%) + HR(35%) + LLM(40%)
+                     - Without LLM: ATS(40%) + HR(60%)
+
+        Returns:
+            Tuple of (overall_score on 0-10 scale, analysis_dict)
         """
-        tfidf_score = self.basic_match_score(job_desc, cv_text)
-        default_result = {
-            'score': tfidf_score,
+        # Run ATS and HR scorers (rule-based, fast)
+        ats_result = self._safe_ats_score(job_desc, cv_text)
+        hr_result = self._safe_hr_score(job_desc, cv_text)
+
+        # Extract scores (0-100 scale from scorers)
+        ats_score = ats_result.get('total_score', 0) if ats_result else 0
+        hr_score = hr_result.get('overall_score', 0) if hr_result else 0
+
+        # Build analysis result
+        analysis = {
+            'ats_score': round(ats_score, 1),
+            'hr_score': round(hr_score, 1),
+            'llm_score': None,
+            'ats_breakdown': ats_result,
+            'hr_breakdown': hr_result,
+            'recommendation': hr_result.get('recommendation') if hr_result else None,
             'reasons': [],
             'suggestions': []
         }
 
-        if not use_llm:
-            return tfidf_score, None
+        # Collect reasons and suggestions from HR scorer
+        if hr_result:
+            analysis['reasons'] = hr_result.get('strengths', [])
+            analysis['suggestions'] = hr_result.get('concerns', [])
 
+        # Add keyword info from ATS
+        if ats_result:
+            matched_kw = ats_result.get('matched_keywords', [])
+            missing_kw = ats_result.get('missing_keywords', [])
+            if matched_kw:
+                analysis['reasons'].insert(0, f"Matched keywords: {', '.join(matched_kw[:5])}")
+            if missing_kw:
+                analysis['suggestions'].append(f"Missing keywords: {', '.join(missing_kw[:5])}")
+
+        llm_score = None
+        if use_llm:
+            try:
+                llm_result = self._llm_evaluation(job_desc, cv_text)
+                if llm_result:
+                    llm_score = llm_result.get('score', 0)  # 0-10 scale
+                    analysis['llm_score'] = round(llm_score, 1)
+                    # Merge LLM reasons/suggestions
+                    if llm_result.get('reasons'):
+                        analysis['reasons'].extend(llm_result['reasons'])
+                    if llm_result.get('suggestions'):
+                        analysis['suggestions'].extend(llm_result['suggestions'])
+                    self.logger.debug(f"LLM evaluation: score={llm_score}")
+            except Exception as e:
+                self.logger.warning(f"LLM evaluation failed, continuing without: {e}")
+
+        # Calculate overall score
+        # Convert ATS and HR from 0-100 to 0-10 scale for consistency
+        ats_normalized = ats_score / 10
+        hr_normalized = hr_score / 10
+
+        if llm_score is not None:
+            # With LLM: ATS(25%) + HR(35%) + LLM(40%)
+            w = weights or {'ats': 0.25, 'hr': 0.35, 'llm': 0.40}
+            overall_score = (
+                ats_normalized * w.get('ats', 0.25) +
+                hr_normalized * w.get('hr', 0.35) +
+                llm_score * w.get('llm', 0.40)
+            )
+        else:
+            # Without LLM: ATS(40%) + HR(60%)
+            w = weights or {'ats': 0.40, 'hr': 0.60}
+            overall_score = (
+                ats_normalized * w.get('ats', 0.40) +
+                hr_normalized * w.get('hr', 0.60)
+            )
+
+        overall_score = round(max(0, min(10, overall_score)), 2)
+        analysis['overall_score'] = overall_score
+
+        # De-duplicate reasons and suggestions
+        analysis['reasons'] = list(dict.fromkeys(analysis['reasons']))[:10]
+        analysis['suggestions'] = list(dict.fromkeys(analysis['suggestions']))[:10]
+
+        return overall_score, analysis
+
+    def _safe_ats_score(self, job_desc: str, cv_text: str) -> Optional[Dict[str, Any]]:
+        """Safely run ATS scorer with error handling."""
         try:
-            llm_result = self._llm_evaluation(job_desc, cv_text)
-            self.logger.debug(f"LLM evaluation result: {llm_result}")
-            if llm_result:
-                final_score = (tfidf_score * 0.1) + (llm_result['score'] * 0.9)
-                return final_score, llm_result
-
-            self.logger.warning("LLM returned no result, using TF-IDF only")
-            return tfidf_score, default_result
-
+            return score_resume_ats(cv_text, job_desc)
         except Exception as e:
-            self.logger.warning(f"LLM scoring failed, using TF-IDF only: {str(e)}")
-            return tfidf_score, default_result
+            self.logger.error(f"ATS scoring failed: {e}")
+            return None
+
+    def _safe_hr_score(self, job_desc: str, cv_text: str) -> Optional[Dict[str, Any]]:
+        """Safely run HR scorer with error handling."""
+        try:
+            return score_resume_hr(cv_text, job_desc)
+        except Exception as e:
+            self.logger.error(f"HR scoring failed: {e}")
+            return None
 
     def basic_match_score(self, job_desc, cv_text):
         """TF-IDF scoring without LLM"""

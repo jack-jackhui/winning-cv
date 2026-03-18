@@ -59,15 +59,26 @@ class SearchStatusResponse(BaseModel):
     results_count: Optional[int] = None
 
 
+class ScoreBreakdown(BaseModel):
+    """Detailed score breakdown from ATS/HR scorers"""
+    ats_score: Optional[float] = Field(None, ge=0, le=100, description="ATS compatibility score (0-100)")
+    hr_score: Optional[float] = Field(None, ge=0, le=100, description="HR evaluation score (0-100)")
+    llm_score: Optional[float] = Field(None, ge=0, le=10, description="LLM evaluation score (0-10)")
+    recommendation: Optional[str] = Field(None, description="HR recommendation: STRONG INTERVIEW, INTERVIEW, MAYBE, PASS")
+    matched_keywords: Optional[List[str]] = Field(None, description="Keywords from JD found in resume")
+    missing_keywords: Optional[List[str]] = Field(None, description="Important JD keywords missing from resume")
+
+
 class JobResult(BaseModel):
     """Single job search result"""
     id: str
     job_title: str
     company: str
     location: Optional[str] = None
-    score: float = Field(ge=0, le=10)
+    score: float = Field(ge=0, le=10, description="Overall match score (0-10)")
+    score_breakdown: Optional[ScoreBreakdown] = Field(None, description="Detailed score breakdown")
     cv_link: Optional[str] = None
-    cv_generated_at: Optional[datetime] = None  # When the CV was generated
+    cv_generated_at: Optional[datetime] = None
     job_link: str
     posted_date: Optional[str] = None
     description: Optional[str] = None

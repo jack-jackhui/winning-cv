@@ -21,6 +21,7 @@ from api.schemas.jobs import (
     JobConfigResponse,
     JobResult,
     JobResultsResponse,
+    ScoreBreakdown,
     SearchStatus,
     SearchStatusResponse,
     SearchTaskResponse,
@@ -588,12 +589,33 @@ async def get_job_results(
                 except (ValueError, AttributeError):
                     pass
 
+            # Build score breakdown (may be None for older records)
+            score_breakdown = None
+            ats_score = fields.get("ATS Score")
+            hr_score = fields.get("HR Score")
+            if ats_score is not None or hr_score is not None:
+                # Parse matched/missing keywords from comma-separated strings
+                matched_kw_raw = fields.get("Matched Keywords", "")
+                missing_kw_raw = fields.get("Missing Keywords", "")
+                matched_keywords = [kw.strip() for kw in matched_kw_raw.split(",") if kw.strip()] if matched_kw_raw else None
+                missing_keywords = [kw.strip() for kw in missing_kw_raw.split(",") if kw.strip()] if missing_kw_raw else None
+
+                score_breakdown = ScoreBreakdown(
+                    ats_score=float(ats_score) if ats_score else None,
+                    hr_score=float(hr_score) if hr_score else None,
+                    llm_score=float(fields.get("LLM Score")) if fields.get("LLM Score") else None,
+                    recommendation=fields.get("HR Recommendation"),
+                    matched_keywords=matched_keywords,
+                    missing_keywords=missing_keywords
+                )
+
             items.append(JobResult(
                 id=rec.get("id", ""),
                 job_title=fields.get("Job Title", "Untitled"),
                 company=fields.get("Company", "Unknown"),
                 location=fields.get("Location"),
                 score=float(fields.get("Matching Score", 0)),
+                score_breakdown=score_breakdown,
                 cv_link=cv_link,
                 cv_generated_at=cv_generated_at,
                 job_link=fields.get("Job Link", ""),

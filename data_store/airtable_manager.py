@@ -67,13 +67,22 @@ class AirtableManager:
             self.logger.error(f"Create failed: {str(e)}")
             return None
 
-    def update_cv_info(self, job_link, score, cv_url, reasons=None, suggestions=None):
-        """Update matching score and CV link for existing job"""
+    def update_cv_info(
+        self,
+        job_link,
+        score,
+        cv_url,
+        reasons=None,
+        suggestions=None,
+        ats_score=None,
+        hr_score=None,
+        llm_score=None,
+        recommendation=None,
+        matched_keywords=None,
+        missing_keywords=None
+    ):
+        """Update matching score, CV link, and score breakdown for existing job"""
         try:
-            # record = self.table.first(
-            #    formula=f"FIND('{job_link}', {{Job Link}})",
-            #    fields=["Job Link"]
-            # )
             record = self.table.first(
                 formula=str(EQ(Field("Job Link"), job_link)),
                 fields=["Job Link"]
@@ -86,8 +95,20 @@ class AirtableManager:
                 if reasons is not None:
                     update_fields['Match Reasons'] = "\n".join(reasons) if isinstance(reasons, list) else reasons
                 if suggestions is not None:
-                    update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions,
-                                                                                              list) else suggestions
+                    update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions, list) else suggestions
+                # Store score breakdown (new fields - Airtable will create them if they don't exist)
+                if ats_score is not None:
+                    update_fields['ATS Score'] = ats_score
+                if hr_score is not None:
+                    update_fields['HR Score'] = hr_score
+                if llm_score is not None:
+                    update_fields['LLM Score'] = llm_score
+                if recommendation is not None:
+                    update_fields['HR Recommendation'] = recommendation
+                if matched_keywords is not None:
+                    update_fields['Matched Keywords'] = ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords
+                if missing_keywords is not None:
+                    update_fields['Missing Keywords'] = ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords
                 return self.table.update(
                     record['id'],
                     update_fields

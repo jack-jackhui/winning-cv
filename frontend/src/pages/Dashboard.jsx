@@ -189,9 +189,21 @@ export default function Dashboard() {
                       </h3>
                       <p className="text-sm text-text-secondary">{job.company}</p>
                     </div>
-                    <span className="badge-primary flex-shrink-0">
-                      {Math.round(job.score || job.matchScore || 0)}% match
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="badge-primary">
+                        {Math.round(job.score || job.matchScore || 0)}% match
+                      </span>
+                      {job.score_breakdown?.recommendation && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                          job.score_breakdown.recommendation === 'STRONG INTERVIEW' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                          job.score_breakdown.recommendation === 'INTERVIEW' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
+                          job.score_breakdown.recommendation === 'MAYBE' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                          'bg-red-500/20 text-red-400 border-red-500/30'
+                        }`}>
+                          {job.score_breakdown.recommendation}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-sm text-text-muted">
                     {job.location && (

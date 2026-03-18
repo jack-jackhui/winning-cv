@@ -237,7 +237,7 @@ class JobProcessor:
                     logger.warning(f"Skipping match calculation for {job_link} - missing description.")
                     continue
 
-                # Calculate match score
+                # Calculate match score (now includes ATS + HR + optional LLM)
                 try:
                     score, analysis = self.matcher.calculate_match_score(job_desc, cv_text)
                 except ValueError as err:
@@ -245,16 +245,28 @@ class JobProcessor:
                     continue
 
                 logger.info(f"Match analysis for '{job_title}' [{job_link}]: Score={score:.2f}/10")
-                logger.debug(f"Key reasons: {analysis.get('reasons', [])}")
-                logger.debug(f"Suggestions: {analysis.get('suggestions', [])}")
+                if analysis:
+                    logger.debug(f"ATS: {analysis.get('ats_score')}, HR: {analysis.get('hr_score')}, LLM: {analysis.get('llm_score')}")
+                    logger.debug(f"Recommendation: {analysis.get('recommendation')}")
+                    logger.debug(f"Key reasons: {analysis.get('reasons', [])}")
 
-                # 3) Always store the match score
+                # Extract score breakdown from analysis
+                ats_breakdown = analysis.get('ats_breakdown') if analysis else None
+                hr_breakdown = analysis.get('hr_breakdown') if analysis else None
+
+                # 3) Always store the match score with full breakdown
                 updated_record = self.airtable.update_cv_info(
                     job_link=job_link,
                     score=score,
                     cv_url=None,
                     reasons=analysis.get('reasons') if analysis else None,
                     suggestions=analysis.get('suggestions') if analysis else None,
+                    ats_score=analysis.get('ats_score') if analysis else None,
+                    hr_score=analysis.get('hr_score') if analysis else None,
+                    llm_score=analysis.get('llm_score') if analysis else None,
+                    recommendation=analysis.get('recommendation') if analysis else None,
+                    matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
+                    missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
                 )
                 if not updated_record:
                     logger.warning(f"Failed to update job with match score for {job_link}.")
@@ -271,6 +283,12 @@ class JobProcessor:
                             cv_url=cv_url,
                             reasons=analysis.get('reasons') if analysis else None,
                             suggestions=analysis.get('suggestions') if analysis else None,
+                            ats_score=analysis.get('ats_score') if analysis else None,
+                            hr_score=analysis.get('hr_score') if analysis else None,
+                            llm_score=analysis.get('llm_score') if analysis else None,
+                            recommendation=analysis.get('recommendation') if analysis else None,
+                            matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
+                            missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
                         )
                         if updated_record:
                             logger.info(f"Generated targeted CV for '{job_title}' -> {cv_url}")
