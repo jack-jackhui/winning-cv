@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 
 const AuthContext = createContext(null)
 
@@ -9,13 +9,79 @@ const AUTH_SERVICE_URL = import.meta.env.VITE_AUTH_SERVICE_URL || 'https://ai-vi
 // Check if Google Identity Services SDK is available
 const hasGoogleSDK = () => typeof window !== 'undefined' && window.google?.accounts?.oauth2
 
-// MSAL instance for Microsoft OAuth
+// MSAL instance for Microsoft OAuth (singleton)
 let msalInstance = null
+let msalInitPromise = null
+
+// Pre-initialize MSAL instance
+const initializeMSAL = async () => {
+  const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID
+  if (!clientId) {
+    console.warn('Microsoft OAuth not configured (missing VITE_MICROSOFT_CLIENT_ID)')
+    return null
+  }
+
+  // Return existing instance if already initialized
+  if (msalInstance) {
+    return msalInstance
+  }
+
+  // Return existing promise if initialization is in progress
+  if (msalInitPromise) {
+    return msalInitPromise
+  }
+
+  // Start initialization
+  msalInitPromise = (async () => {
+    try {
+      const { PublicClientApplication } = await import('@azure/msal-browser')
+
+      const redirectUri = window.location.origin.replace(/\/$/, '')
+      const msalConfig = {
+        auth: {
+          clientId: clientId,
+          authority: 'https://login.microsoftonline.com/common',
+          redirectUri: redirectUri,
+          navigateToLoginRequestUrl: false,
+        },
+        cache: {
+          cacheLocation: 'sessionStorage',
+          storeAuthStateInCookie: false,
+        },
+      }
+
+      msalInstance = new PublicClientApplication(msalConfig)
+      await msalInstance.initialize()
+      console.log('MSAL: Pre-initialized successfully')
+      return msalInstance
+    } catch (err) {
+      console.error('MSAL: Failed to pre-initialize:', err)
+      msalInitPromise = null
+      return null
+    }
+  })()
+
+  return msalInitPromise
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [msalReady, setMsalReady] = useState(false)
+  const msalInitRef = useRef(false)
+
+  // Pre-initialize MSAL on mount
+  useEffect(() => {
+    if (!msalInitRef.current) {
+      msalInitRef.current = true
+      initializeMSAL().then((instance) => {
+        if (instance) {
+          setMsalReady(true)
+        }
+      })
+    }
+  }, [])
 
   // Check authentication status on mount
   const checkAuth = useCallback(async () => {
@@ -167,26 +233,10 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      // Initialize MSAL instance if not already done
-      if (!msalInstance) {
-        const { PublicClientApplication } = await import('@azure/msal-browser')
-
-        const redirectUri = window.location.origin.replace(/\/$/, '')
-        const msalConfig = {
-          auth: {
-            clientId: clientId,
-            authority: 'https://login.microsoftonline.com/common',
-            redirectUri: redirectUri,
-            navigateToLoginRequestUrl: false,
-          },
-          cache: {
-            cacheLocation: 'sessionStorage',
-            storeAuthStateInCookie: false,
-          },
-        }
-
-        msalInstance = new PublicClientApplication(msalConfig)
-        await msalInstance.initialize()
+      // Ensure MSAL is initialized (should already be done, but wait if in progress)
+      const instance = await initializeMSAL()
+      if (!instance) {
+        throw new Error('Failed to initialize Microsoft authentication')
       }
 
       // Request configuration for login
@@ -197,7 +247,9 @@ export function AuthProvider({ children }) {
       }
 
       // Perform popup login
-      const loginResponse = await msalInstance.loginPopup(loginRequest)
+      console.log('MSAL: Starting popup login...')
+      const loginResponse = await instance.loginPopup(loginRequest)
+      console.log('MSAL: Popup login successful')
 
       // Acquire access token
       let accessToken = loginResponse.accessToken
@@ -208,17 +260,17 @@ export function AuthProvider({ children }) {
         }
 
         try {
-          const tokenResponse = await msalInstance.acquireTokenSilent(tokenRequest)
+          const tokenResponse = await instance.acquireTokenSilent(tokenRequest)
           accessToken = tokenResponse.accessToken
         } catch {
-          const tokenResponse = await msalInstance.acquireTokenPopup(tokenRequest)
+          const tokenResponse = await instance.acquireTokenPopup(tokenRequest)
           accessToken = tokenResponse.accessToken
         }
       }
 
       if (accessToken) {
         // Exchange Microsoft token with auth backend
-        console.log('MSAL: Got access token, exchanging with backend at:', `${AUTH_SERVICE_URL}/api/dj-rest-auth/microsoft/`)
+        console.log('MSAL: Got access token, exchanging with backend...')
 
         const authResponse = await fetch(`${AUTH_SERVICE_URL}/api/dj-rest-auth/microsoft/`, {
           method: 'POST',
@@ -379,7 +431,7 @@ export function AuthProvider({ children }) {
         if (success) return
         // Don't fall back to redirect if popup was attempted but failed
         // (user already saw the popup, falling back would be confusing)
-        throw new Error('Microsoft authentication failed. Please check browser console for details.')
+        throw new Error('Microsoft authentication failed. Please try again.')
       }
 
       if (provider === 'github' && handleGitHubLogin()) {
@@ -513,6 +565,7 @@ export function AuthProvider({ children }) {
     loading,
     error,
     isAuthenticated: !!user,
+    msalReady,
     loginWithOAuth,
     handleOAuthCallback,
     logout,
