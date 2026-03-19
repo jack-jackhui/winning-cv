@@ -10,6 +10,7 @@ import {
   ChevronRight,
   FolderOpen,
   BarChart3,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -23,40 +24,57 @@ const navigation = [
   { name: 'Profile', href: '/profile', icon: User },
 ]
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ collapsed, onToggle, isMobile = false, onClose }) {
   const location = useLocation()
   const { user, logout } = useAuth()
 
+  const handleNavClick = () => {
+    // Close mobile menu when navigating
+    if (isMobile && onClose) {
+      onClose()
+    }
+  }
+
   return (
     <aside
-      className={`fixed top-0 left-0 h-full bg-surface border-r border-border z-40 transition-all duration-300 ${
-        collapsed ? 'w-20' : 'w-64'
+      className={`h-full bg-surface border-r border-border transition-all duration-300 ${
+        isMobile ? 'w-64' : collapsed ? 'w-20' : 'w-64'
       }`}
     >
       <div className="flex flex-col h-full">
         {/* Logo */}
         <div className="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-2 overflow-hidden">
+          <Link to="/dashboard" className="flex items-center gap-2 overflow-hidden" onClick={handleNavClick}>
             <div className="w-10 h-10 bg-accent-600 rounded-xl flex items-center justify-center flex-shrink-0">
               <FileText className="w-5 h-5 text-white" />
             </div>
-            {!collapsed && (
+            {(!collapsed || isMobile) && (
               <span className="text-lg font-semibold text-text-primary whitespace-nowrap">
                 WinningCV
               </span>
             )}
           </Link>
-          <button
-            onClick={onToggle}
-            className="btn-icon hidden lg:flex"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
-          </button>
+          {isMobile ? (
+            <button
+              onClick={onClose}
+              className="btn-icon"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              onClick={onToggle}
+              className="btn-icon hidden lg:flex"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <ChevronLeft className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Navigation */}
@@ -68,10 +86,11 @@ export default function Sidebar({ collapsed, onToggle }) {
                 key={item.name}
                 to={item.href}
                 className={isActive ? 'nav-item-active' : 'nav-item'}
-                title={collapsed ? item.name : undefined}
+                title={collapsed && !isMobile ? item.name : undefined}
+                onClick={handleNavClick}
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
-                {!collapsed && <span>{item.name}</span>}
+                {(!collapsed || isMobile) && <span>{item.name}</span>}
               </Link>
             )
           })}
@@ -79,7 +98,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
         {/* User section */}
         <div className="p-3 border-t border-border">
-          {!collapsed && user && (
+          {(!collapsed || isMobile) && user && (
             <div className="px-4 py-3 mb-2">
               <p className="text-sm font-medium text-text-primary truncate">{user.name}</p>
               <p className="text-xs text-text-muted truncate">{user.email}</p>
@@ -88,10 +107,10 @@ export default function Sidebar({ collapsed, onToggle }) {
           <button
             onClick={logout}
             className="nav-item w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            title={collapsed ? 'Sign out' : undefined}
+            title={collapsed && !isMobile ? 'Sign out' : undefined}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            {!collapsed && <span>Sign out</span>}
+            {(!collapsed || isMobile) && <span>Sign out</span>}
           </button>
         </div>
       </div>
