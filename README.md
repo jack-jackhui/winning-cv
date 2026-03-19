@@ -114,7 +114,7 @@ Winning CV is an open-source application that transforms how you apply for jobs.
 | Backend | FastAPI, Python 3.10+ |
 | Admin UI | Streamlit with OAuth |
 | Storage | MinIO (S3-compatible), Airtable |
-| NLP | spaCy with en-core-web-sm |
+| NLP | spaCy with en_core_web_sm |
 | Containerization | Docker, Docker Compose |
 
 ---
@@ -162,7 +162,7 @@ pip install uv  # or: brew install uv
 uv pip install -r requirements.txt
 
 # Install spaCy language model
-python -m spacy download en-core-web-sm
+python -m spacy download en_core_web_sm
 
 # Configure browser path in .env
 # macOS: CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
