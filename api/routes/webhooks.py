@@ -138,14 +138,14 @@ async def ensure_user_in_airtable(user: WebhookUser) -> dict:
         Airtable record dict
     """
     from pyairtable import Api
-    from pyairtable.formulas import EQUAL, Field
+    from pyairtable.formulas import EQ, Field
     
     try:
         api = Api(Config.AIRTABLE_API_KEY)
         table = api.table(Config.AIRTABLE_BASE_ID, Config.AIRTABLE_TABLE_ID_USER_CONFIGS)
         
         # Check if user already exists
-        formula = str(EQUAL(Field("user_email"), user.email))
+        formula = str(EQ(Field("user_email"), user.email))
         existing = table.all(formula=formula, max_records=1)
         
         if existing:
