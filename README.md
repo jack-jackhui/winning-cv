@@ -452,3 +452,47 @@ Built with these amazing open-source technologies:
 - **[Docker](https://docker.com)** — Containerization
 
 *Special thanks to all open-source maintainers and contributors who make projects like this possible.*
+
+---
+
+## User Lifecycle Webhooks
+
+WinningCV receives user lifecycle events from the shared auth backend (`ai-video-backend`).
+
+### Webhook Endpoint
+```
+POST /api/v1/webhooks/auth
+```
+
+### Events Supported
+| Event | Description | Action |
+|-------|-------------|--------|
+| `user.created` | New user signup | Creates Airtable record, sends Telegram alert |
+| `user.login` | User logged in | Updates `last_active_at` in Airtable |
+
+### Configuration (`.env`)
+```bash
+# Secret for verifying webhook signatures (must match ai-video-backend)
+AUTH_WEBHOOK_SECRET=your-shared-secret
+
+# Admin Telegram chat ID for signup alerts
+ADMIN_TELEGRAM_CHAT_ID=2055631678
+```
+
+### Payload Structure
+```json
+{
+  "event": "user.created",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "user": {
+    "id": 123,
+    "email": "user@example.com",
+    "username": "username",
+    "date_joined": "2024-01-01T00:00:00",
+    "provider": "google"
+  }
+}
+```
+
+### Security
+Webhooks are signed using HMAC-SHA256. The signature is sent in the `X-Webhook-Signature` header.

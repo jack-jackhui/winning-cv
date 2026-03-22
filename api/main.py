@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from api.middleware.auth_middleware import auth_middleware
 from api.routes import (
+    webhooks_router,
     auth_router,
     cv_router,
     cv_versions_router,
@@ -155,6 +156,7 @@ app.include_router(cv_versions_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(knowledge_base_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
+app.include_router(webhooks_router, prefix="/api/v1")
 
 
 # Health check endpoint
