@@ -154,14 +154,14 @@ async def ensure_user_in_airtable(user: WebhookUser) -> dict:
             record_id = existing[0]['id']
             table.update(record_id, {
                 "last_active_at": datetime.utcnow().isoformat(),
-                "auth_user_id": user.id,  # Ensure this is set
+                # auth_user_id removed - field doesn"t exist in Airtable
             })
             return existing[0]
         
         # Create new user record
         new_record = table.create({
             "user_email": user.email,
-            "auth_user_id": user.id,
+            # "auth_user_id": user.id,  # Field doesn"t exist
             "plan": "free",
             "signup_provider": user.provider,
             "created_at": user.date_joined or datetime.utcnow().isoformat(),
