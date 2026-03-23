@@ -117,6 +117,7 @@ async def generate_cv(
     job_description: str = Form(..., min_length=50),
     cv_file: UploadFile = File(...),
     instructions: Optional[str] = Form(None),
+    use_knowledge_base: bool = Form(False),
     user: UserInfo = Depends(get_current_user)
 ) -> CVGenerateResponse:
     """
@@ -128,6 +129,7 @@ async def generate_cv(
         job_description: The job description to tailor the CV for
         cv_file: The user's current CV (PDF/DOCX/TXT)
         instructions: Optional special instructions for CV generation
+        use_knowledge_base: If True, enhance CV with content from all indexed CVs
         user: Authenticated user
 
     Returns:
@@ -160,8 +162,18 @@ async def generate_cv(
             )
 
         # Generate tailored CV
-        generator = CVGenerator()
-        raw_md = generator.generate_cv(orig_cv, job_description, instructions or "")
+        if use_knowledge_base:
+            # Use knowledge base enhanced generation
+            from cv.cv_generator import generate_cv_with_knowledge
+            raw_md = await generate_cv_with_knowledge(
+                user_email=user.email,
+                job_desc=job_description,
+                instructions=instructions or "",
+                base_cv_content=orig_cv,
+            )
+        else:
+            generator = CVGenerator()
+            raw_md = generator.generate_cv(orig_cv, job_description, instructions or "")
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)

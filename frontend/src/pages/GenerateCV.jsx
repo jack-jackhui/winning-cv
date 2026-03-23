@@ -18,6 +18,8 @@ import {
   Save,
   Edit3,
   Library,
+  Database,
+  Sparkles,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
@@ -64,6 +66,10 @@ export default function GenerateCV() {
   const [editingName, setEditingName] = useState(false)
   const [customVersionName, setCustomVersionName] = useState('')
 
+  // Knowledge base / Smart Content state
+  const [useKnowledgeBase, setUseKnowledgeBase] = useState(false)
+  const [kbStats, setKbStats] = useState(null) // { indexed_count, total_sections, total_bullets }
+
   // Pre-fill form when navigating from Job Matches page
   useEffect(() => {
     if (location.state) {
@@ -82,6 +88,19 @@ export default function GenerateCV() {
       }
     }
   }, [location.state])
+
+  // Fetch knowledge base stats on mount
+  useEffect(() => {
+    const fetchKBStats = async () => {
+      try {
+        const stats = await cvVersionsService.getKBStats()
+        setKbStats(stats)
+      } catch (err) {
+        console.error('Failed to fetch KB stats:', err)
+      }
+    }
+    fetchKBStats()
+  }, [])
 
   // Close download menu when clicking outside
   useEffect(() => {
@@ -301,13 +320,13 @@ export default function GenerateCV() {
           type: blob.type || 'application/pdf',
         })
 
-        response = await cvService.generateCV(jobDescription, file, instructions)
+        response = await cvService.generateCV(jobDescription, file, instructions, useKnowledgeBase)
 
         // Record usage of this CV version
         await cvVersionsService.recordUsage(selectedVersion.version_id)
       } else {
         // Using uploaded file
-        response = await cvService.generateCV(jobDescription, cvFile, instructions)
+        response = await cvService.generateCV(jobDescription, cvFile, instructions, useKnowledgeBase)
       }
 
       setResult(response)
@@ -368,6 +387,8 @@ export default function GenerateCV() {
     setSaveError(null)
     setEditingName(false)
     setCustomVersionName('')
+    // Reset knowledge base state
+    setUseKnowledgeBase(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -726,6 +747,40 @@ export default function GenerateCV() {
                 placeholder="Add any specific instructions for CV generation...&#10;&#10;Examples:&#10;- Emphasize leadership experience&#10;- Focus on Python and cloud technologies&#10;- Keep it to 2 pages"
               />
             </div>
+
+            {/* Smart Content Toggle */}
+            {kbStats && kbStats.indexed_count > 0 && (
+              <div className="card">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                    <Database className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-medium text-text-primary flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        Smart Content
+                      </h2>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useKnowledgeBase}
+                          onChange={(e) => setUseKnowledgeBase(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-surface-elevated peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent-500/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+                    <p className="text-sm text-text-muted mt-1">
+                      Enhance your CV with content from all {kbStats.indexed_count} indexed CV{kbStats.indexed_count !== 1 ? 's' : ''}.
+                    </p>
+                    <p className="text-xs text-text-muted mt-2">
+                      {kbStats.total_sections} sections • {kbStats.total_bullets} experience bullets available
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column - Job Description */}

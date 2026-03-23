@@ -25,6 +25,7 @@ import {
   Send,
   MessageCircle,
   Sparkles,
+  Database,
 } from 'lucide-react'
 import { cvVersionsService } from '../services/api'
 
@@ -105,6 +106,11 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
                 <Sparkles className="w-3 h-3" />
                 Generated
+              </span>
+            )}
+            {version.index_status === 'indexed' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title="Indexed for Smart Content">
+                <Database className="w-3 h-3" />
               </span>
             )}
             {version.is_archived && (
@@ -276,11 +282,18 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
 
       <div className="flex items-start gap-2 mb-1">
         <h3 className="font-medium text-text-primary line-clamp-2 flex-1">{version.version_name}</h3>
-        {isGenerated && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">
-            <Sparkles className="w-3 h-3" />
-          </span>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {isGenerated && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
+              <Sparkles className="w-3 h-3" />
+            </span>
+          )}
+          {version.index_status === 'indexed' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title="Indexed for Smart Content">
+              <Database className="w-3 h-3" />
+            </span>
+          )}
+        </div>
       </div>
 
       {version.auto_category && version.auto_category !== 'Generated' && (

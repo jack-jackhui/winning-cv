@@ -198,12 +198,15 @@ export const cvService = {
   },
 
   // Generate a tailored CV
-  async generateCV(jobDescription, cvFile, instructions = '') {
+  async generateCV(jobDescription, cvFile, instructions = '', useKnowledgeBase = false) {
     const formData = new FormData()
     formData.append('job_description', jobDescription)
     formData.append('cv_file', cvFile)
     if (instructions) {
       formData.append('instructions', instructions)
+    }
+    if (useKnowledgeBase) {
+      formData.append('use_knowledge_base', 'true')
     }
 
     return fetchAPI('/api/v1/cv/generate', {
@@ -438,6 +441,24 @@ export const cvVersionsService = {
         user_tags: userTags,
       }),
     })
+  },
+
+  // Get knowledge base statistics
+  async getKBStats() {
+    return fetchAPI('/api/v1/knowledge-base/stats')
+  },
+
+  // Index a CV version into the knowledge base
+  async indexVersion(versionId) {
+    return fetchAPI('/api/v1/knowledge-base/index', {
+      method: 'POST',
+      body: JSON.stringify({ cv_version_id: versionId }),
+    })
+  },
+
+  // Get indexed versions from knowledge base
+  async getIndexedVersions() {
+    return fetchAPI('/api/v1/knowledge-base/versions')
   },
 }
 

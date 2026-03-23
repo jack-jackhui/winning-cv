@@ -89,9 +89,39 @@ class GenerateSmartCVResponse(BaseModel):
     generation_method: str = "knowledge_base"
 
 
+class KBStatsResponse(BaseModel):
+    """Response containing knowledge base statistics."""
+    indexed_count: int
+    total_sections: int
+    total_bullets: int
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
+
+
+@router.get("/stats", response_model=KBStatsResponse)
+async def get_kb_stats(
+    user: UserInfo = Depends(get_current_user)
+) -> KBStatsResponse:
+    """
+    Get knowledge base statistics for the current user.
+
+    Returns the number of indexed CVs, total sections, and experience bullets.
+    """
+    kb = get_knowledge_base()
+    versions = await kb.get_indexed_versions(user.email)
+
+    indexed_count = len(versions)
+    total_sections = sum(v.get('section_count', 0) for v in versions)
+    total_bullets = sum(v.get('bullet_count', 0) for v in versions)
+
+    return KBStatsResponse(
+        indexed_count=indexed_count,
+        total_sections=total_sections,
+        total_bullets=total_bullets
+    )
 
 
 @router.post("/index", response_model=IndexCVResponse)

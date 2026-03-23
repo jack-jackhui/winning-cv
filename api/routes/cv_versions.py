@@ -12,7 +12,7 @@ from functools import partial
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from api.middleware.auth_middleware import get_current_user
@@ -43,6 +43,60 @@ _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="airtable_")
 AIRTABLE_TIMEOUT_SECONDS = 45
 
 
+def run_background_indexing(
+    cv_version_id: str,
+    user_email: str,
+    storage_path: str,
+    version_name: str
+):
+    """
+    Background task to index CV into the knowledge base.
+
+    Downloads the CV from MinIO, extracts text, and indexes it.
+    """
+    import asyncio
+    from pathlib import Path
+    import tempfile
+
+    from cv.cv_knowledge_base import get_knowledge_base
+    from utils.cv_loader import load_cv_content
+    from utils.minio_storage import get_minio_storage
+
+    logger.info(f"Starting background indexing for CV {cv_version_id}")
+
+    try:
+        # Download from MinIO
+        minio = get_minio_storage()
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            minio.client.fget_object(minio.bucket, storage_path, tmp.name)
+            tmp_path = tmp.name
+
+        # Extract text content
+        cv_content = load_cv_content(tmp_path)
+
+        # Cleanup temp file
+        Path(tmp_path).unlink(missing_ok=True)
+
+        if not cv_content or not cv_content.strip():
+            logger.warning(f"Could not extract text from CV {cv_version_id}")
+            return
+
+        # Index the CV using asyncio.run since this is a sync background task
+        kb = get_knowledge_base()
+        result = asyncio.run(kb.index_cv(
+            cv_version_id=cv_version_id,
+            user_email=user_email,
+            cv_content=cv_content,
+            version_name=version_name,
+        ))
+
+        logger.info(f"Background indexing complete for CV {cv_version_id}: {result}")
+
+    except Exception as e:
+        logger.error(f"Background indexing failed for CV {cv_version_id}: {e}")
+
+
 async def run_with_timeout(func, *args, timeout: float = AIRTABLE_TIMEOUT_SECONDS, **kwargs):
     """
     Run a sync function in a thread pool with a timeout.
@@ -64,7 +118,7 @@ async def run_with_timeout(func, *args, timeout: float = AIRTABLE_TIMEOUT_SECOND
         )
 
 
-def _version_to_response(version: dict, include_url: bool = False) -> CVVersionResponse:
+def _version_to_response(version: dict, include_url: bool = False, index_status: str = None) -> CVVersionResponse:
     """Convert version dict to response schema."""
     # Parse tags from comma-separated string
     tags = []
@@ -96,7 +150,8 @@ def _version_to_response(version: dict, include_url: bool = False) -> CVVersionR
         file_size=version.get('file_size', 0),
         content_hash=version.get('content_hash') or None,
         created_at=created_at,
-        download_url=version.get('download_url') if include_url else None
+        download_url=version.get('download_url') if include_url else None,
+        index_status=index_status or version.get('index_status')
     )
 
 
@@ -116,6 +171,8 @@ async def list_versions(
     Optimized to minimize Airtable API calls.
     Uses async timeout to prevent Cloudflare 524 errors.
     """
+    from cv.cv_knowledge_base import get_knowledge_base
+
     manager = get_cv_version_manager()
 
     tag_list = None
@@ -140,6 +197,11 @@ async def list_versions(
     # Apply pagination in memory
     paginated_versions = all_versions[offset:offset + limit]
 
+    # Get indexed versions from knowledge base
+    kb = get_knowledge_base()
+    indexed_versions = await kb.get_indexed_versions(user.email)
+    indexed_ids = {v['cv_version_id'] for v in indexed_versions}
+
     # Extract categories and tags from fetched data (no extra API calls)
     categories_set = set()
     tags_set = set()
@@ -160,7 +222,12 @@ async def list_versions(
                     if tag and str(tag).strip():
                         tags_set.add(str(tag).strip())
 
-    items = [_version_to_response(v) for v in paginated_versions]
+    # Build response items with index status
+    items = []
+    for v in paginated_versions:
+        version_id = v.get('version_id') or v.get('id')
+        index_status = 'indexed' if version_id in indexed_ids else None
+        items.append(_version_to_response(v, index_status=index_status))
 
     return CVVersionListResponse(
         items=items,
@@ -172,6 +239,7 @@ async def list_versions(
 
 @router.post("", response_model=CVVersionResponse)
 async def create_version(
+    background_tasks: BackgroundTasks,
     cv_file: UploadFile = File(..., description="CV file (PDF/DOCX)"),
     version_name: str = Form(..., min_length=1, max_length=100),
     auto_category: Optional[str] = Form(None),
@@ -185,6 +253,7 @@ async def create_version(
     Create a new CV version by uploading a file.
 
     The file is stored in MinIO and metadata in Airtable.
+    Also triggers background indexing for the knowledge base.
     """
     # Validate file type
     allowed_types = [
@@ -224,7 +293,19 @@ async def create_version(
         # Cleanup temp file
         Path(tmp_path).unlink(missing_ok=True)
 
-        return _version_to_response(version)
+        # Trigger background indexing for the knowledge base
+        storage_path = version.get('storage_path')
+        if storage_path:
+            background_tasks.add_task(
+                run_background_indexing,
+                cv_version_id=version.get('version_id') or version.get('id'),
+                user_email=user.email,
+                storage_path=storage_path,
+                version_name=version_name
+            )
+            logger.info(f"Queued background indexing for CV {version.get('version_id')}")
+
+        return _version_to_response(version, index_status='pending')
 
     except Exception as e:
         logger.error(f"Failed to create CV version: {e}")

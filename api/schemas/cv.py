@@ -87,6 +87,7 @@ class CVVersionResponse(CVVersionBase):
     content_hash: Optional[str] = None
     created_at: datetime
     download_url: Optional[str] = None  # Presigned URL, populated on request
+    index_status: Optional[str] = None  # Knowledge base index status: indexed | pending | null
 
 
 class CVVersionListResponse(BaseModel):
