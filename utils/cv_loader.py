@@ -141,18 +141,19 @@ def load_cv_content(file_path="user_cv/CV_Jack_HUI_08042025_EL.docx"):
             def getvalue(self):
                 return self.file.getvalue()
 
-        # Detect MIME type from extension
-        if file_path.lower().endswith('.docx'):
+        # Detect MIME type from file content (magic bytes), not extension
+        # This handles cases where DOCX files are saved with .pdf extension
+        if file_bytes[:4] == b"PK\x03\x04":  # DOCX/ZIP magic bytes
             file_obj = FileWrapper(file_bytes,
                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        elif file_path.lower().endswith('.pdf'):
+            logger.info("Detected DOCX format from magic bytes")
+        elif file_bytes[:4] == b"%PDF":  # PDF magic bytes
             file_obj = FileWrapper(file_bytes, 'application/pdf')
-
+            logger.info("Detected PDF format from magic bytes")
         elif file_path.lower().endswith('.txt') or file_path.lower().endswith('.md'):
             file_obj = FileWrapper(file_bytes, 'text/plain')
-
         else:
-            logger.error("Unsupported file format")
+            logger.error("Unsupported file format (not DOCX, PDF, TXT, or MD)")
             return ""
 
         return extract_text_from_file(file_obj)
