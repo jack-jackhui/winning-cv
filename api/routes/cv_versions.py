@@ -497,8 +497,28 @@ async def stream_cv_file(
         # Get file info for headers
         stat = minio.client.stat_object(minio.bucket, storage_path)
 
-        # Determine filename from version name or storage path
-        filename = f"{version.get('version_name', version_id)}.pdf"
+        # Read first few bytes to detect actual file type
+        first_bytes = response.read(4)
+        response.close()
+        response.release_conn()
+        
+        # Re-fetch for streaming (MinIO doesn't support seek)
+        response = minio.client.get_object(minio.bucket, storage_path)
+        
+        # Detect MIME type from magic bytes
+        if first_bytes[:4] == b"PK\x03\x04":  # DOCX/ZIP
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            file_ext = ".docx"
+        elif first_bytes[:4] == b"%PDF":  # PDF
+            media_type = "application/pdf"
+            file_ext = ".pdf"
+        else:
+            media_type = stat.content_type or "application/octet-stream"
+            file_ext = ".pdf"  # fallback
+        
+        # Determine filename from version name
+        base_name = version.get('version_name', version_id)
+        filename = f"{base_name}{file_ext}"
         # Sanitize filename for Content-Disposition header
         filename = filename.replace('"', '\\"')
 
@@ -513,7 +533,7 @@ async def stream_cv_file(
 
         return StreamingResponse(
             iterfile(),
-            media_type=stat.content_type or "application/pdf",
+            media_type=media_type,
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',
                 "Content-Length": str(stat.size),
