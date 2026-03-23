@@ -745,10 +745,25 @@ export default function CVLibrary() {
 
   const handleDownload = async (version) => {
     try {
-      const { download_url } = await cvVersionsService.getDownloadUrl(version.version_id)
-      if (download_url) {
-        window.open(download_url, '_blank')
-      }
+      // Use /file endpoint which detects actual file type from magic bytes
+      const token = localStorage.getItem('auth_token')
+      const response = await fetch(`/api/v1/cv/versions/${version.version_id}/file`, {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      })
+      if (!response.ok) throw new Error('Download failed')
+      
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('content-disposition')
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `${version.version_name || version.version_id}.pdf`
+      
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Download failed:', err)
     }
