@@ -746,7 +746,7 @@ export default function CVLibrary() {
   const handleDownload = async (version) => {
     try {
       // Use /file endpoint which detects actual file type from magic bytes
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('winningcv_auth_token')
       const response = await fetch(`/api/v1/cv/versions/${version.version_id}/file`, {
         headers: {
           'Authorization': `Token ${token}`
