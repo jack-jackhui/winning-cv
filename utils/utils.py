@@ -27,8 +27,23 @@ def extract_text_from_file(file):
     try:
         content = []
         file_bytes = file.getvalue()
+        
+        # Detect actual file type from magic bytes (not MIME type which may be wrong)
+        magic_bytes = file_bytes[:4] if len(file_bytes) >= 4 else b""
+        
+        # Determine actual type from magic bytes
+        if magic_bytes[:4] == b"PK\x03\x04":  # DOCX/ZIP
+            actual_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif magic_bytes[:4] == b"%PDF":  # PDF
+            actual_type = "application/pdf"
+        elif file_bytes[:3] == b"\xef\xbb\xbf" or file_bytes[:100].decode("utf-8", errors="ignore").isprintable():
+            actual_type = "text/plain"
+        else:
+            actual_type = getattr(file, "type", "application/octet-stream")
+        
+        logging.info(f"File magic bytes: {magic_bytes[:4]!r}, detected type: {actual_type}, declared type: {getattr(file, 'type', 'unknown')}")
 
-        if file.type == "application/pdf":
+        if actual_type == "application/pdf":
             pdf = PdfReader(io.BytesIO(file_bytes))
             for page in pdf.pages:
                 if text := page.extract_text():
@@ -41,7 +56,7 @@ def extract_text_from_file(file):
                 logging.warning("PDF appears to be image-based - text extraction limited")
                 content = ["[PDF content requires OCR extraction]"]
 
-        elif file.type == "text/plain":
+        elif actual_type == "text/plain":
             # Handle different encodings
             try:
                 text = file_bytes.decode('utf-8')
@@ -49,7 +64,7 @@ def extract_text_from_file(file):
                 text = file_bytes.decode('latin-1')
             content = [text]
 
-        elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        elif actual_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             doc = Document(io.BytesIO(file_bytes))
             doc_content = []
 
