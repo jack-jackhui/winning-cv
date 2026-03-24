@@ -563,3 +563,239 @@ async def get_cv_analysis(
             status_code=500,
             detail=f"Failed to get analysis: {str(e)}"
         )
+
+
+# ──────────────────────────────────────────────────────────
+# REGENERATE CV WITH IMPROVEMENTS FROM ANALYSIS
+# ──────────────────────────────────────────────────────────
+
+def _build_improvement_instructions(analysis_data: dict) -> str:
+    """
+    Build improvement instructions from CV-JD analysis results.
+
+    Args:
+        analysis_data: The parsed analysis JSON
+
+    Returns:
+        Formatted improvement instructions string
+    """
+    instructions = []
+    instructions.append("IMPORTANT IMPROVEMENTS TO APPLY:")
+    instructions.append("")
+
+    # Missing keywords
+    keyword_match = analysis_data.get("keyword_match", {})
+    missing_keywords = keyword_match.get("missing", [])
+    if missing_keywords:
+        instructions.append(f"Missing Keywords to Add: {', '.join(missing_keywords[:10])}")
+
+    # Missing technical skills
+    skills_coverage = analysis_data.get("skills_coverage", {})
+    tech_skills = skills_coverage.get("technical_skills", {})
+    missing_tech = tech_skills.get("missing", [])
+    if missing_tech:
+        instructions.append(f"Missing Technical Skills: {', '.join(missing_tech[:8])}")
+
+    # ATS recommendations
+    ats = analysis_data.get("ats_optimization", {})
+    ats_recommendations = ats.get("recommendations", [])
+    if ats_recommendations:
+        instructions.append("")
+        instructions.append("ATS Recommendations:")
+        for rec in ats_recommendations[:5]:
+            instructions.append(f"- {rec}")
+
+    # Critical gaps
+    gap_analysis = analysis_data.get("gap_analysis", {})
+    critical_gaps = gap_analysis.get("critical_gaps", [])
+    if critical_gaps:
+        instructions.append("")
+        instructions.append("Critical Gaps to Address:")
+        for gap in critical_gaps[:5]:
+            instructions.append(f"- {gap}")
+
+    # Minor gaps (if not too many items already)
+    minor_gaps = gap_analysis.get("minor_gaps", [])
+    if minor_gaps and len(instructions) < 20:
+        instructions.append("")
+        instructions.append("Minor Gaps to Consider:")
+        for gap in minor_gaps[:3]:
+            instructions.append(f"- {gap}")
+
+    return "\n".join(instructions)
+
+
+@router.post("/regenerate-with-improvements", response_model=CVGenerateResponse)
+async def regenerate_cv_with_improvements(
+    background_tasks: BackgroundTasks,
+    history_id: str = Form(...),
+    user: UserInfo = Depends(get_current_user)
+) -> CVGenerateResponse:
+    """
+    Regenerate a CV with improvements based on analysis feedback.
+
+    Takes the previously generated CV and job description, extracts improvement
+    suggestions from the analysis, and regenerates with those improvements applied.
+
+    Args:
+        background_tasks: FastAPI background tasks handler
+        history_id: Airtable record ID of the original CV generation
+        user: Authenticated user
+
+    Returns:
+        New CV with improvements applied
+    """
+    import json
+
+    try:
+        cfg = Config
+        history_at = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+
+        # Fetch the original history record
+        record = history_at.get_history_record(history_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="History record not found")
+
+        fields = record.get("fields", {})
+
+        # Verify ownership
+        if fields.get("user_email") != user.email:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get required fields
+        cv_markdown = fields.get("cv_markdown")
+        job_description = fields.get("job_description")
+        original_instructions = fields.get("instructions", "")
+        analysis_json = fields.get("cv_analysis")
+
+        if not cv_markdown or not job_description:
+            raise HTTPException(
+                status_code=400,
+                detail="Original CV or job description not found in history"
+            )
+
+        # Parse and extract improvement instructions from analysis
+        improvement_instructions = ""
+        if analysis_json:
+            try:
+                analysis_data = json.loads(analysis_json)
+                improvement_instructions = _build_improvement_instructions(analysis_data)
+            except json.JSONDecodeError:
+                logger.warning(f"Could not parse analysis JSON for history_id={history_id}")
+
+        # Combine original instructions with improvements
+        combined_instructions = original_instructions
+        if improvement_instructions:
+            if combined_instructions:
+                combined_instructions += "\n\n" + improvement_instructions
+            else:
+                combined_instructions = improvement_instructions
+
+        # Regenerate CV using the existing CV as base
+        generator = CVGenerator()
+        raw_md = generator.generate_cv(cv_markdown, job_description, combined_instructions)
+
+        # Generate file names
+        job_title = extract_title_from_jd(job_description)
+        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        today = datetime.now().strftime("%Y-%m-%d")
+        unique_id = uuid.uuid4().hex[:8]
+
+        # Create temp directory for files
+        output_dir = Path("customised_cv")
+        output_dir.mkdir(exist_ok=True)
+
+        base_filename = f"{today}_{safe_title}_{unique_id}_improved_cv"
+        pdf_filename = f"{base_filename}.pdf"
+        docx_filename = f"{base_filename}.docx"
+        pdf_path = output_dir / pdf_filename
+        docx_path = output_dir / docx_filename
+
+        # Generate PDF
+        pdf_result = create_pdf(raw_md, str(pdf_path))
+        if not pdf_result:
+            raise HTTPException(status_code=500, detail="Failed to generate PDF")
+
+        # Generate DOCX
+        docx_result = create_docx(raw_md, str(docx_path))
+        if not docx_result:
+            logger.warning("Failed to generate DOCX, continuing with PDF only")
+
+        # Upload to MinIO storage
+        minio = get_minio_storage()
+        cv_pdf_url = ""
+        cv_docx_url = ""
+
+        # Upload PDF to MinIO
+        try:
+            pdf_object_path = minio.upload_cv(
+                file_path=str(pdf_path),
+                user_id=user.email,
+                filename=pdf_filename
+            )
+            cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
+            logger.info(f"Uploaded improved PDF to MinIO: {pdf_object_path}")
+        except Exception as e:
+            logger.error(f"Failed to upload PDF to MinIO: {e}")
+
+        # Upload DOCX to MinIO
+        if docx_result:
+            try:
+                docx_object_path = minio.upload_cv(
+                    file_path=str(docx_path),
+                    user_id=user.email,
+                    filename=docx_filename,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
+                logger.info(f"Uploaded improved DOCX to MinIO: {docx_object_path}")
+            except Exception as e:
+                logger.error(f"Failed to upload DOCX to MinIO: {e}")
+
+        # Save to history as a new record
+        new_history_id = None
+        try:
+            history_data = {
+                "user_email": user.email,
+                "job_title": f"{job_title} (Improved)",
+                "job_description": job_description,
+                "instructions": combined_instructions,
+                "cv_markdown": raw_md,
+                "cv_pdf_url": cv_pdf_url,
+                "analysis_status": "pending",
+            }
+            new_history_id = history_at.create_history_record(history_data)
+
+            # Trigger background analysis for the improved CV
+            if new_history_id:
+                background_tasks.add_task(
+                    run_cv_analysis_background,
+                    history_id=new_history_id,
+                    cv_markdown=raw_md,
+                    job_description=job_description
+                )
+                logger.info(f"Queued background analysis for improved CV, history_id={new_history_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save improved CV history: {e}")
+
+        return CVGenerateResponse(
+            cv_markdown=raw_md,
+            cv_pdf_url=cv_pdf_url,
+            cv_docx_url=cv_docx_url if cv_docx_url else None,
+            job_title=f"{job_title} (Improved)",
+            history_id=new_history_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CV regeneration with improvements failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"CV regeneration failed: {str(e)}"
+        )

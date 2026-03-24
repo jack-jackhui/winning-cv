@@ -12,7 +12,11 @@ import {
   CheckCircle2,
   XCircle,
   Minus,
+  RefreshCw,
+  Loader2,
+  Sparkles,
 } from 'lucide-react'
+import { cvService } from '../../services/api'
 
 /**
  * Score bar component for displaying scores with color coding
@@ -114,7 +118,10 @@ function ItemList({ items, type = 'matched' }) {
 /**
  * CV-JD Fit Analysis Modal
  */
-export default function AnalysisModal({ analysis, onClose }) {
+export default function AnalysisModal({ analysis, onClose, historyId, onRegenerate }) {
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenerateError, setRegenerateError] = useState(null)
+
   if (!analysis) return null
 
   const {
@@ -127,6 +134,41 @@ export default function AnalysisModal({ analysis, onClose }) {
     gap_analysis,
     talking_points,
   } = analysis
+
+  // Check if there are improvements to apply
+  const hasImprovements =
+    (keyword_match?.missing?.length > 0) ||
+    (skills_coverage?.technical_skills?.missing?.length > 0) ||
+    (ats_optimization?.recommendations?.length > 0) ||
+    (gap_analysis?.critical_gaps?.length > 0) ||
+    (gap_analysis?.minor_gaps?.length > 0)
+
+  const handleRegenerate = async () => {
+    if (!historyId) {
+      setRegenerateError('Cannot regenerate: missing history reference')
+      return
+    }
+
+    setRegenerating(true)
+    setRegenerateError(null)
+
+    try {
+      const result = await cvService.regenerateWithImprovements(historyId)
+
+      // Call the parent callback with the new result
+      if (onRegenerate) {
+        onRegenerate(result)
+      }
+
+      // Close the modal
+      onClose()
+    } catch (err) {
+      console.error('Regeneration failed:', err)
+      setRegenerateError(err.message || 'Failed to regenerate CV. Please try again.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -342,9 +384,38 @@ export default function AnalysisModal({ analysis, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border">
+        <div className="px-6 py-4 border-t border-border space-y-3">
+          {/* Regenerate Error */}
+          {regenerateError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {regenerateError}
+            </div>
+          )}
+
+          {/* Regenerate Button - only show if there are improvements and we have historyId */}
+          {hasImprovements && historyId && onRegenerate && (
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="w-full btn-primary"
+            >
+              {regenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Regenerating CV with Improvements...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Regenerate with Improvements
+                </>
+              )}
+            </button>
+          )}
+
           <button
             onClick={onClose}
+            disabled={regenerating}
             className="w-full btn-secondary"
           >
             Close

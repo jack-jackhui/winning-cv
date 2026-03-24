@@ -845,6 +845,29 @@ export default function GenerateCV() {
         <AnalysisModal
           analysis={analysis}
           onClose={() => setShowAnalysisModal(false)}
+          historyId={result?.history_id}
+          onRegenerate={(newResult) => {
+            // Update the result with the regenerated CV
+            setResult(newResult)
+
+            // Reset analysis state for the new CV
+            setAnalysisStatus('idle')
+            setAnalysis(null)
+
+            // Reset library save state for the new CV
+            setSavedToLibrary(null)
+            setSavingToLibrary(false)
+            setSaveError(null)
+            setEditingName(false)
+            setCustomVersionName('')
+
+            // Start polling for the new CV's analysis
+            if (newResult.history_id) {
+              startAnalysisPolling(newResult.history_id)
+              // Auto-save the improved CV to library
+              saveToLibrary(newResult.history_id, newResult.job_title)
+            }
+          }}
         />
       )}
     </div>

@@ -250,6 +250,17 @@ export const cvService = {
   async getAnalysis(historyId) {
     return fetchAPI(`/api/v1/cv/analysis/${historyId}`)
   },
+
+  // Regenerate CV with improvements from analysis
+  async regenerateWithImprovements(historyId) {
+    const formData = new FormData()
+    formData.append('history_id', historyId)
+
+    return fetchAPI('/api/v1/cv/regenerate-with-improvements', {
+      method: 'POST',
+      body: formData,
+    })
+  },
 }
 
 // History Service - handles CV history management
