@@ -1,0 +1,16 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-config-singleton
+        name: Check Config singleton usage
+        entry: bash -c 'if grep -rn --include="*.py" "Config()" . | grep -v "settings.py" | grep -v "tests/" | grep -v "__pycache__"; then echo "ERROR: Config() should not be called outside of settings.py and tests/"; exit 1; fi'
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format

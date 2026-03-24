@@ -43,6 +43,17 @@ jobs:
           pip install ruff
           ruff check . --output-format=github --select=E,F,W --ignore=E501,E402 || true
 
+      - name: Check Config singleton usage
+        run: |
+          # Fail if Config() is called anywhere except settings.py and test files
+          # Config should be used as a singleton, not instantiated with Config()
+          if grep -rn --include="*.py" "Config()" . | grep -v "settings.py" | grep -v "tests/" | grep -v "__pycache__"; then
+            echo "ERROR: Config() should not be called outside of settings.py and tests/"
+            echo "Use the Config singleton directly instead of calling Config()"
+            exit 1
+          fi
+          echo "Config singleton usage check passed"
+
       - name: Run unit tests
         run: |
           # Run only unit tests that don't require external services
