@@ -12,7 +12,47 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Run tests first - builds only proceed if tests pass
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run unit tests
+        run: |
+          pytest tests/test_utils.py tests/test_settings.py -v --tb=short
+        env:
+          AIRTABLE_PAT: "fake_for_testing"
+          AIRTABLE_BASE_ID: "fake_base"
+          AIRTABLE_TABLE_ID: "fake_table"
+          AIRTABLE_TABLE_ID_HISTORY: "fake_history"
+          AIRTABLE_TABLE_ID_USER_CONFIGS: "fake_configs"
+          AIRTABLE_TABLE_ID_CV_VERSIONS: "fake_versions"
+          AZURE_AI_ENDPOINT: "https://fake.openai.azure.com"
+          AZURE_AI_API_KEY: "fake_key"
+          AZURE_DEPLOYMENT: "fake_deployment"
+
   build-backend:
+    needs: [test]  # Only build if tests pass
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,6 +97,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   build-frontend:
+    needs: [test]  # Only build if tests pass
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -135,7 +176,7 @@ jobs:
             🔗 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a>
 
   notify-failure:
-    needs: [build-backend, build-frontend, deploy]
+    needs: [test, build-backend, build-frontend, deploy]
     runs-on: ubuntu-latest
     if: failure()
     steps:
