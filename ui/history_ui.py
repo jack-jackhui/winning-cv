@@ -47,7 +47,7 @@ def show_history_ui(user_email: str):
     if "history_login_dialog_shown" in st.session_state:
         del st.session_state["history_login_dialog_shown"]
 
-    cfg = Config()
+    cfg = Config
     historyAT = AirtableManager(
         cfg.AIRTABLE_API_KEY,
         cfg.AIRTABLE_BASE_ID,

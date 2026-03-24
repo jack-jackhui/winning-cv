@@ -129,7 +129,7 @@ def show_generate_ui(user_email: str):
         # Modified: Only show save options when logged in
         if user_email:
             # 12) Persist into History table
-            cfg = Config()
+            cfg = Config
             history_at = AirtableManager(
                 cfg.AIRTABLE_API_KEY,
                 cfg.AIRTABLE_BASE_ID,

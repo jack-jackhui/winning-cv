@@ -87,7 +87,7 @@ FIELD_LABELS = {
 }
 
 # Create a Config INSTANCE
-config = Config()
+config = Config
 
 @st.dialog("🚀 Running Job Search", width="large")
 def _run_search_dialog(user_email, config_from_airtable):

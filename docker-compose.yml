@@ -7,7 +7,7 @@ services:
     container_name: winning-cv-frontend
     restart: unless-stopped
     ports:
-      - "13000:80"  # Only frontend exposed externally
+      - "13001:80"  # Only frontend exposed externally
     depends_on:
       api:
         condition: service_healthy
@@ -31,6 +31,7 @@ services:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
       - ./cookies:/winning-cv/cookies  # LinkedIn session cookies
+      - ./api:/winning-cv/api  # Mount local api code for development
     environment:
       - API_PORT=8000
       - API_HOST=0.0.0.0
@@ -67,6 +68,7 @@ services:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
       - ./cookies:/winning-cv/cookies  # LinkedIn session cookies
+      - ./api:/winning-cv/api  # Mount local api code for development
     environment:
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true

@@ -686,7 +686,7 @@ async def create_from_history(
 
     try:
         # Get the history record
-        cfg = Config()
+        cfg = Config
         history_at = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
