@@ -67,7 +67,7 @@ def run_cv_analysis_background(
     logger.info(f"Starting background CV analysis for history_id={history_id}")
 
     try:
-        cfg = Config()
+        cfg = Config
         history_at = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
@@ -89,7 +89,7 @@ def run_cv_analysis_background(
 
         # Update status to failed
         try:
-            cfg = Config()
+            cfg = Config
             history_at = AirtableManager(
                 cfg.AIRTABLE_API_KEY,
                 cfg.AIRTABLE_BASE_ID,
@@ -239,7 +239,7 @@ async def generate_cv(
         # Save to history and get record ID for analysis
         history_id = None
         try:
-            cfg = Config()
+            cfg = Config
             history_at = AirtableManager(
                 cfg.AIRTABLE_API_KEY,
                 cfg.AIRTABLE_BASE_ID,
@@ -378,7 +378,7 @@ async def get_cv_history(
         List of CV history items
     """
     try:
-        cfg = Config()
+        cfg = Config
         history_at = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
@@ -468,7 +468,7 @@ async def get_cv_analysis(
     import json
 
     try:
-        cfg = Config()
+        cfg = Config
         history_at = AirtableManager(
             cfg.AIRTABLE_API_KEY,
             cfg.AIRTABLE_BASE_ID,
