@@ -22,28 +22,60 @@ def canonicalize_url(url):
     clean_url = urlunparse((parts.scheme, parts.netloc, parts.path, '', '', ''))
     return clean_url.rstrip('/')
 
+
+def detect_file_type(file_bytes: bytes) -> str:
+    """
+    Detect file type by magic bytes (header signature).
+    More reliable than relying on file extension or declared MIME type.
+    """
+    if len(file_bytes) < 4:
+        return 'application/octet-stream'
+    
+    # Check magic bytes
+    if file_bytes[:4] == b'%PDF':
+        return 'application/pdf'
+    elif file_bytes[:4] == b'PK\x03\x04':
+        # ZIP-based format - could be DOCX, XLSX, etc.
+        # Check for DOCX-specific content
+        if b'word/' in file_bytes[:2000] or b'[Content_Types].xml' in file_bytes[:500]:
+            return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        return 'application/zip'
+    elif file_bytes[:4] == b'\xd0\xcf\x11\xe0':
+        # Old MS Office format (DOC, XLS, PPT)
+        return 'application/msword'
+    
+    # Try to detect plain text
+    try:
+        file_bytes[:1000].decode('utf-8')
+        return 'text/plain'
+    except UnicodeDecodeError:
+        pass
+    
+    return 'application/octet-stream'
+
+
 def extract_text_from_file(file):
-    """Extract text from PDF, DOCX, or TXT files with error handling"""
+    """Extract text from PDF, DOCX, or TXT files with error handling.
+    
+    Uses magic byte detection to determine actual file type,
+    ignoring potentially incorrect MIME type declarations.
+    """
     try:
         content = []
         file_bytes = file.getvalue()
         
-        # Detect actual file type from magic bytes (not MIME type which may be wrong)
-        magic_bytes = file_bytes[:4] if len(file_bytes) >= 4 else b""
+        # Detect actual file type by magic bytes (more reliable than declared type)
+        actual_type = detect_file_type(file_bytes)
+        declared_type = getattr(file, 'type', None)
         
-        # Determine actual type from magic bytes
-        if magic_bytes[:4] == b"PK\x03\x04":  # DOCX/ZIP
-            actual_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        elif magic_bytes[:4] == b"%PDF":  # PDF
-            actual_type = "application/pdf"
-        elif file_bytes[:3] == b"\xef\xbb\xbf" or file_bytes[:100].decode("utf-8", errors="ignore").isprintable():
-            actual_type = "text/plain"
-        else:
-            actual_type = getattr(file, "type", "application/octet-stream")
+        # Log if there's a mismatch
+        if declared_type and declared_type != actual_type:
+            logging.warning(f"File type mismatch: declared={declared_type}, actual={actual_type}")
         
-        logging.info(f"File magic bytes: {magic_bytes[:4]!r}, detected type: {actual_type}, declared type: {getattr(file, 'type', 'unknown')}")
+        # Use detected type for processing
+        file_type = actual_type
 
-        if actual_type == "application/pdf":
+        if file_type == "application/pdf":
             pdf = PdfReader(io.BytesIO(file_bytes))
             for page in pdf.pages:
                 if text := page.extract_text():
@@ -56,7 +88,7 @@ def extract_text_from_file(file):
                 logging.warning("PDF appears to be image-based - text extraction limited")
                 content = ["[PDF content requires OCR extraction]"]
 
-        elif actual_type == "text/plain":
+        elif file_type == "text/plain":
             # Handle different encodings
             try:
                 text = file_bytes.decode('utf-8')
@@ -64,7 +96,7 @@ def extract_text_from_file(file):
                 text = file_bytes.decode('latin-1')
             content = [text]
 
-        elif actual_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             doc = Document(io.BytesIO(file_bytes))
             doc_content = []
 
@@ -85,10 +117,14 @@ def extract_text_from_file(file):
                         doc_content.append("-" * 50)
 
             content = doc_content  # Assign to main content list
+        
+        else:
+            logging.error(f"Unsupported file type: {file_type}")
+            return ""
 
         full_content = "\n".join(content).strip()
         full_content = re.sub(r'\n{3,}', '\n\n', full_content)
-        logging.info(f"Extracted {len(full_content)} characters")
+        logging.info(f"Extracted {len(full_content)} characters from {file_type}")
         return full_content
 
     except Exception as e:
@@ -632,6 +668,3 @@ def _write_formatted_text(pdf, text, font_name, base_font_size, line_height):
                 pdf.set_font(font_name, '', base_font_size)
 
             pdf.write(line_height, italic_seg)
-
-
-
