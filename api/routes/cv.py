@@ -3,6 +3,7 @@ CV Generation routes for WinningCV API.
 Handles CV generation, upload, and history.
 Uses MinIO for file storage.
 """
+import asyncio
 import logging
 import re
 import uuid
@@ -173,7 +174,7 @@ async def generate_cv(
             )
         else:
             generator = CVGenerator()
-            raw_md = generator.generate_cv(orig_cv, job_description, instructions or "")
+            raw_md = await asyncio.to_thread(generator.generate_cv, orig_cv, job_description, instructions or "")
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
@@ -697,7 +698,7 @@ async def regenerate_cv_with_improvements(
 
         # Regenerate CV using the existing CV as base
         generator = CVGenerator()
-        raw_md = generator.generate_cv(cv_markdown, job_description, combined_instructions)
+        raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
