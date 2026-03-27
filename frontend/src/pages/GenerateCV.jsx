@@ -20,6 +20,8 @@ import {
   Library,
   Database,
   Sparkles,
+  MessageSquare,
+  Send,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
@@ -49,6 +51,11 @@ export default function GenerateCV() {
 
   // Preview state
   const [showPreview, setShowPreview] = useState(true)
+
+  // Refinement state
+  const [showRefinementInput, setShowRefinementInput] = useState(false)
+  const [refinementText, setRefinementText] = useState("")
+  const [refining, setRefining] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const downloadMenuRef = useRef(null)
@@ -366,6 +373,36 @@ export default function GenerateCV() {
     }
   }
 
+
+  // Handle CV refinement with custom user instructions
+  const handleRefineCV = async () => {
+    if (!result?.history_id || !refinementText.trim()) return
+
+    setRefining(true)
+    setError(null)
+
+    if (analysisPollingRef.current) {
+      clearInterval(analysisPollingRef.current)
+    }
+
+    try {
+      const response = await cvService.refineCV(result.history_id, refinementText.trim())
+      setResult(response)
+      setRefinementText("")
+      setShowRefinementInput(false)
+      setAnalysis(null)
+
+      if (response.history_id) {
+        startAnalysisPolling(response.history_id)
+        saveToLibrary(response.history_id, response.job_title)
+      }
+    } catch (err) {
+      setError(err.message || "Failed to refine CV")
+    } finally {
+      setRefining(false)
+    }
+  }
+
   const handleReset = () => {
     // Stop any ongoing analysis polling
     if (analysisPollingRef.current) {
@@ -624,6 +661,69 @@ export default function GenerateCV() {
               </div>
             </div>
           )}
+
+          {/* Refine Further Section */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-accent-400" />
+                <h2 className="font-medium text-text-primary">Refine Further</h2>
+              </div>
+              {!showRefinementInput && (
+                <button
+                  onClick={() => setShowRefinementInput(true)}
+                  className="btn-secondary text-sm"
+                >
+                  Add Custom Instructions
+                </button>
+              )}
+            </div>
+            
+            {showRefinementInput ? (
+              <div className="space-y-3">
+                <textarea
+                  value={refinementText}
+                  onChange={(e) => setRefinementText(e.target.value)}
+                  className="input min-h-[100px] resize-y"
+                  placeholder={"Enter specific improvements you want...\n\nExamples:\n• Focus more on AI and machine learning experience\n• Add more quantified achievements with percentages\n• Emphasize leadership and team management skills"}
+                  disabled={refining}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRefineCV}
+                    disabled={refining || !refinementText.trim()}
+                    className="btn-primary"
+                  >
+                    {refining ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Refining...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Apply Changes
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowRefinementInput(false)
+                      setRefinementText('')
+                    }}
+                    disabled={refining}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">
+                Not satisfied with the result? Add your own specific instructions to further refine the CV.
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         // Input Form

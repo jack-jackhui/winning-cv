@@ -163,8 +163,9 @@ async def generate_cv(
             )
 
         # Generate tailored CV
+        llm_response_id = None
         if use_knowledge_base:
-            # Use knowledge base enhanced generation
+            # Use knowledge base enhanced generation (legacy, no response_id)
             from cv.cv_generator import generate_cv_with_knowledge
             raw_md = await generate_cv_with_knowledge(
                 user_email=user.email,
@@ -173,8 +174,21 @@ async def generate_cv(
                 base_cv_content=orig_cv,
             )
         else:
-            generator = CVGenerator()
-            raw_md = await asyncio.to_thread(generator.generate_cv, orig_cv, job_description, instructions or "")
+            # Use CVGeneratorV2 with Responses API
+            try:
+                from cv.cv_generator_v2 import CVGeneratorV2
+                generator = CVGeneratorV2()
+                raw_md, llm_response_id = generator.generate(
+                    cv_content=orig_cv,
+                    job_desc=job_description,
+                    instructions=instructions or "",
+                )
+            except ImportError:
+                # Fall back to legacy generator
+                logger.warning("CVGeneratorV2 not available, using legacy generator")
+                from cv.cv_generator import CVGenerator
+                generator = CVGenerator()
+                raw_md = await asyncio.to_thread(generator.generate_cv, orig_cv, job_description, instructions or "")
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
@@ -254,6 +268,7 @@ async def generate_cv(
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
                 "analysis_status": "pending",  # Mark as pending analysis
+                "llm_response_id": llm_response_id,  # Store for Responses API chaining
             }
             history_id = history_at.create_history_record(history_data)
 
@@ -696,9 +711,20 @@ async def regenerate_cv_with_improvements(
             else:
                 combined_instructions = improvement_instructions
 
-        # Regenerate CV using the existing CV as base
-        generator = CVGenerator()
-        raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
+        # Regenerate CV using CVGeneratorV2 with Responses API
+        llm_response_id = None
+        try:
+            from cv.cv_generator_v2 import CVGeneratorV2
+            generator = CVGeneratorV2()
+            raw_md, llm_response_id = generator.generate(
+                cv_content=cv_markdown,
+                job_desc=job_description,
+                instructions=combined_instructions,
+            )
+        except ImportError:
+            logger.warning("CVGeneratorV2 not available, using legacy generator")
+            generator = CVGenerator()
+            raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
@@ -768,6 +794,7 @@ async def regenerate_cv_with_improvements(
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
                 "analysis_status": "pending",
+                "llm_response_id": llm_response_id,  # Store for Responses API chaining
             }
             new_history_id = history_at.create_history_record(history_data)
 
@@ -799,4 +826,233 @@ async def regenerate_cv_with_improvements(
         raise HTTPException(
             status_code=500,
             detail=f"CV regeneration failed: {str(e)}"
+        )
+
+
+# ──────────────────────────────────────────────────────────
+# USER-GUIDED CV REFINEMENT ENDPOINT
+# ──────────────────────────────────────────────────────────
+
+@router.post("/refine", response_model=CVGenerateResponse)
+async def refine_cv_with_instructions(
+    background_tasks: BackgroundTasks,
+    history_id: str = Form(...),
+    refinement_instructions: str = Form(...),
+    user: UserInfo = Depends(get_current_user)
+) -> CVGenerateResponse:
+    """
+    Refine a previously generated CV based on specific user instructions.
+    
+    This endpoint uses the Responses API to chain with previous generation,
+    maintaining full context while applying user-specified improvements.
+    
+    Args:
+        background_tasks: FastAPI background tasks handler
+        history_id: Airtable record ID of the CV to refine
+        refinement_instructions: User's specific improvement requests
+        user: Authenticated user
+        
+    Returns:
+        Refined CV with user's requested changes applied
+        
+    Example refinement instructions:
+        - "Focus more on AI and machine learning experience"
+        - "Add more quantified achievements with percentages"
+        - "Emphasize leadership and team management skills"
+        - "Make the executive profile more concise"
+    """
+    import json
+
+    try:
+        cfg = Config
+        history_at = AirtableManager(
+            cfg.AIRTABLE_API_KEY,
+            cfg.AIRTABLE_BASE_ID,
+            cfg.AIRTABLE_TABLE_ID_HISTORY
+        )
+
+        # Fetch the original history record
+        record = history_at.get_history_record(history_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="History record not found")
+
+        fields = record.get("fields", {})
+
+        # Verify ownership
+        if fields.get("user_email") != user.email:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get required fields
+        cv_markdown = fields.get("cv_markdown")
+        job_description = fields.get("job_description")
+        original_instructions = fields.get("instructions", "")
+        llm_response_id = fields.get("llm_response_id")  # For Responses API chaining
+
+        if not cv_markdown or not job_description:
+            raise HTTPException(
+                status_code=400,
+                detail="Original CV or job description not found in history"
+            )
+
+        if not refinement_instructions.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Refinement instructions cannot be empty"
+            )
+
+        # Get original CV content for context (needed for refinement)
+        # Try to get from parent history if this is already a refined version
+        original_cv_content = cv_markdown
+        parent_id = fields.get("parent_history_id")
+        if parent_id:
+            try:
+                parent_record = history_at.get_history_record(parent_id)
+                if parent_record and parent_record.get("fields", {}).get("cv_markdown"):
+                    # Get the original source CV, not the generated one
+                    original_cv_content = parent_record["fields"].get("original_cv_content", cv_markdown)
+            except Exception as e:
+                logger.warning(f"Could not fetch parent record: {e}")
+
+        # Use CV generator v2 with Responses API chaining
+        try:
+            from cv.cv_generator_v2 import CVGeneratorV2
+            
+            generator = CVGeneratorV2()
+            
+            if llm_response_id:
+                # Chain with previous response for full context
+                raw_md, new_response_id = generator.refine(
+                    job_desc=job_description,
+                    refinement_instructions=refinement_instructions,
+                    previous_response_id=llm_response_id,
+                )
+            else:
+                # No previous response ID - do fresh generation with refinement as instructions
+                combined = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
+                raw_md, new_response_id = generator.generate(
+                    cv_content=cv_markdown,
+                    job_desc=job_description,
+                    instructions=combined,
+                )
+                
+        except ImportError:
+            # Fall back to legacy generator if v2 not available
+            logger.warning("CVGeneratorV2 not available, using legacy generator")
+            new_response_id = None
+            
+            combined_instructions = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
+            generator = CVGenerator()
+            raw_md = await asyncio.to_thread(
+                generator.generate_cv, 
+                cv_markdown, 
+                job_description, 
+                combined_instructions
+            )
+
+        # Generate file names
+        job_title = extract_title_from_jd(job_description)
+        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        today = datetime.now().strftime("%Y-%m-%d")
+        unique_id = uuid.uuid4().hex[:8]
+
+        # Create temp directory for files
+        output_dir = Path("customised_cv")
+        output_dir.mkdir(exist_ok=True)
+
+        base_filename = f"{today}_{safe_title}_{unique_id}_refined_cv"
+        pdf_filename = f"{base_filename}.pdf"
+        docx_filename = f"{base_filename}.docx"
+        pdf_path = output_dir / pdf_filename
+        docx_path = output_dir / docx_filename
+
+        # Generate PDF
+        pdf_result = create_pdf(raw_md, str(pdf_path))
+        if not pdf_result:
+            raise HTTPException(status_code=500, detail="Failed to generate PDF")
+
+        # Generate DOCX
+        docx_result = create_docx(raw_md, str(docx_path))
+        if not docx_result:
+            logger.warning("Failed to generate DOCX, continuing with PDF only")
+
+        # Upload to MinIO storage
+        minio = get_minio_storage()
+        cv_pdf_url = ""
+        cv_docx_url = ""
+
+        # Upload PDF to MinIO
+        try:
+            pdf_object_path = minio.upload_cv(
+                file_path=str(pdf_path),
+                user_id=user.email,
+                filename=pdf_filename
+            )
+            cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
+            logger.info(f"Uploaded refined PDF to MinIO: {pdf_object_path}")
+        except Exception as e:
+            logger.error(f"Failed to upload PDF to MinIO: {e}")
+
+        # Upload DOCX to MinIO
+        if docx_result:
+            try:
+                docx_object_path = minio.upload_cv(
+                    file_path=str(docx_path),
+                    user_id=user.email,
+                    filename=docx_filename,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
+                logger.info(f"Uploaded refined DOCX to MinIO: {docx_object_path}")
+            except Exception as e:
+                logger.error(f"Failed to upload DOCX to MinIO: {e}")
+
+        # Save to history as a new record
+        new_history_id = None
+        try:
+            # Track refinement chain
+            refinement_count = fields.get("refinement_count", 0) + 1
+            parent_history_id = fields.get("parent_history_id") or history_id
+            
+            history_data = {
+                "user_email": user.email,
+                "job_title": f"{job_title} (Refined v{refinement_count})",
+                "job_description": job_description,
+                "instructions": f"{original_instructions}\n\n[Refinement v{refinement_count}]\n{refinement_instructions}",
+                "cv_markdown": raw_md,
+                "cv_pdf_url": cv_pdf_url,
+                "analysis_status": "pending",
+                "llm_response_id": new_response_id,  # Store for future chaining
+                "parent_history_id": parent_history_id,
+                "refinement_count": refinement_count,
+            }
+            new_history_id = history_at.create_history_record(history_data)
+
+            # Trigger background analysis for the refined CV
+            if new_history_id:
+                background_tasks.add_task(
+                    run_cv_analysis_background,
+                    history_id=new_history_id,
+                    cv_markdown=raw_md,
+                    job_description=job_description
+                )
+                logger.info(f"Queued background analysis for refined CV, history_id={new_history_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save refined CV history: {e}")
+
+        return CVGenerateResponse(
+            cv_markdown=raw_md,
+            cv_pdf_url=cv_pdf_url,
+            cv_docx_url=cv_docx_url if cv_docx_url else None,
+            job_title=f"{job_title} (Refined)",
+            history_id=new_history_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CV refinement failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"CV refinement failed: {str(e)}"
         )

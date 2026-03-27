@@ -261,6 +261,18 @@ export const cvService = {
       body: formData,
     })
   },
+
+  // Refine CV with user-provided instructions
+  async refineCV(historyId, instructions) {
+    const formData = new FormData()
+    formData.append("history_id", historyId)
+    formData.append("refinement_instructions", instructions)
+
+    return fetchAPI("/api/v1/cv/refine", {
+      method: "POST",
+      body: formData,
+    })
+  },
 }
 
 // History Service - handles CV history management
