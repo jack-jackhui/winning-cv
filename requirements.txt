@@ -592,3 +592,4 @@ wsproto==1.2.0
     # via trio-websocket
 zipp==3.21.0
     # via importlib-metadata
+openai>=1.30.0
