@@ -98,7 +98,7 @@ class AirtableManager:
                     update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions, list) else suggestions
                 # Store score breakdown (new fields - Airtable will create them if they don't exist)
                 if ats_score is not None:
-                    update_fields['ATS Score'] = ats_score
+                    update_fields['Matching Score'] = ats_score
                 if hr_score is not None:
                     update_fields['HR Score'] = hr_score
                 if llm_score is not None:

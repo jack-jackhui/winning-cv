@@ -591,7 +591,7 @@ async def get_job_results(
 
             # Build score breakdown (may be None for older records)
             score_breakdown = None
-            ats_score = fields.get("ATS Score")
+            ats_score = fields.get("Matching Score")
             hr_score = fields.get("HR Score")
             if ats_score is not None or hr_score is not None:
                 # Parse matched/missing keywords from comma-separated strings
