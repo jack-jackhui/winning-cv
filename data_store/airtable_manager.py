@@ -93,22 +93,15 @@ class AirtableManager:
                     'CV Link': cv_url
                 }
                 if reasons is not None:
-                    update_fields['Match Reasons'] = "\n".join(reasons) if isinstance(reasons, list) else reasons
                 if suggestions is not None:
-                    update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions, list) else suggestions
                 # Store score breakdown (new fields - Airtable will create them if they don't exist)
                 if ats_score is not None:
                     update_fields['Matching Score'] = ats_score
                 if hr_score is not None:
-                    update_fields['HR Score'] = hr_score
                 if llm_score is not None:
-                    update_fields['LLM Score'] = llm_score
                 if recommendation is not None:
-                    update_fields['HR Recommendation'] = recommendation
                 if matched_keywords is not None:
-                    update_fields['Matched Keywords'] = ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords
                 if missing_keywords is not None:
-                    update_fields['Missing Keywords'] = ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords
                 return self.table.update(
                     record['id'],
                     update_fields
