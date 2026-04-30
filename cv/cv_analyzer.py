@@ -18,9 +18,7 @@ import os
 import re
 from dataclasses import asdict, dataclass
 
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
+from utils.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -263,18 +261,10 @@ def _parse_analysis_response(response_text: str) -> CVAnalysis:
 
 
 class CVAnalyzer:
-    """Analyzes CV-JD fit using Azure OpenAI."""
+    """Analyzes CV-JD fit using Azure OpenAI Responses API."""
 
     def __init__(self):
-        self.endpoint = os.getenv("AZURE_AI_ENDPOINT")
-        self.key = os.getenv("AZURE_AI_API_KEY")
-        self.model_name = os.getenv("AZURE_DEPLOYMENT")
-
-    def _get_client(self) -> ChatCompletionsClient:
-        return ChatCompletionsClient(
-            endpoint=self.endpoint,
-            credential=AzureKeyCredential(self.key)
-        )
+        self.llm_client = get_llm_client()
 
     def analyze(self, cv_markdown: str, job_description: str) -> CVAnalysis:
         """
@@ -297,8 +287,6 @@ class CVAnalyzer:
             raise ValueError("Empty job description")
 
         try:
-            client = self._get_client()
-
             user_message = f"""Analyze the following CV against the job description and provide a comprehensive fit analysis.
 
 ## Job Description
@@ -312,16 +300,13 @@ class CVAnalyzer:
 Provide your analysis as a JSON object following the exact structure specified in the system prompt.
 """
 
-            response = client.complete(
-                messages=[
-                    SystemMessage(content=CV_ANALYSIS_SYSTEM_PROMPT),
-                    UserMessage(content=user_message)
-                ],
-                model=self.model_name,
-                model_extras={"max_completion_tokens": 8192}
+            response = self.llm_client.generate(
+                system_prompt=CV_ANALYSIS_SYSTEM_PROMPT,
+                user_prompt=user_message,
+                max_tokens=8192
             )
 
-            response_text = response.choices[0].message.content
+            response_text = response.content
             logger.debug(f"Analysis response: {response_text[:500]}...")
 
             analysis = _parse_analysis_response(response_text)

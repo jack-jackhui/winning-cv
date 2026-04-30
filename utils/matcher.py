@@ -4,16 +4,13 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 import spacy
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from config.settings import Config
 from utils.ats_scorer import score_resume_ats
 from utils.hr_scorer import score_resume_hr
+from utils.llm_client import get_llm_client
 
 
 class JobMatcher:
@@ -21,18 +18,11 @@ class JobMatcher:
     def __init__(self):
         self.nlp = spacy.load("en_core_web_sm")
         self.vectorizer = TfidfVectorizer(stop_words="english")
-        self.llm_client = self._init_azure_llm()
+        self.llm_client = get_llm_client()
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def _init_azure_llm(self):
-        """Initialize Azure LLM client using centralized config"""
-        return ChatCompletionsClient(
-            endpoint=Config.AZURE_AI_ENDPOINT,
-            credential=AzureKeyCredential(Config.AZURE_AI_API_KEY),
-        )
-
     def _llm_evaluation(self, job_desc, cv_text):
-        """Use Azure LLM for advanced matching evaluation"""
+        """Use Azure LLM (Responses API) for advanced matching evaluation"""
         if not job_desc.strip() or not cv_text.strip():
             self.logger.warning("Empty input for LLM evaluation")
             return None
@@ -61,30 +51,17 @@ class JobMatcher:
         """
 
         try:
-            response = self.llm_client.complete(
-                messages=[
-                    SystemMessage(content=system_prompt),
-                    UserMessage(content=user_prompt)
-                ],
-                model=Config.AZURE_DEPLOYMENT,
-                # Note: temperature not supported by reasoning models (o1, o3-mini)
-                model_extras={"max_completion_tokens": 2000}
+            response = self.llm_client.generate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=2000
             )
 
-            # Add response validation
-            if not response.choices:
-                self.logger.error("Empty response from LLM API")
-                return None
-
-            if not response.choices[0].message.content:
+            if not response.content:
                 self.logger.error("Empty content in LLM response")
                 return None
 
-            # Add raw response logging
-            # raw_response = response.choices[0].message.content
-            # self.logger.debug(f"Raw LLM response: {raw_response}")
-
-            return self._parse_llm_response(response.choices[0].message.content)
+            return self._parse_llm_response(response.content)
 
         except Exception as e:
             self.logger.error(f"LLM evaluation failed: {str(e)}")
@@ -100,20 +77,22 @@ class JobMatcher:
             self.logger.warning("Initial JSON parse failed, attempting extraction")
             try:
                 # Try to extract JSON from markdown code blocks
-                clean_text = re.search(r'```json\s*({.*?})\s*```', response_text, re.DOTALL)
+                pattern_codeblock = r'```json\s*(\{.*?\})\s*```'
+                clean_text = re.search(pattern_codeblock, response_text, re.DOTALL)
                 if clean_text:
                     response = json.loads(clean_text.group(1))
                     self.logger.debug("Extracted JSON from code block")
                 else:
                     # Try to find any JSON structure
-                    clean_text = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    pattern_json = r'\{.*\}'
+                    clean_text = re.search(pattern_json, response_text, re.DOTALL)
                     if not clean_text:
                         raise ValueError("No JSON structure found")
                     response = json.loads(clean_text.group())
                     self.logger.debug("Extracted JSON from text")
             except Exception as e:
                 self.logger.error(f"JSON extraction failed: {str(e)}")
-                self.logger.debug(f"Problematic response text: {response_text[:500]}")  # Log first 500 chars
+                self.logger.debug(f"Problematic response text: {response_text[:500]}")
                 return None
 
         try:
@@ -273,4 +252,3 @@ class JobMatcher:
         except Exception as e:
             self.logger.error(f"TF-IDF scoring failed: {str(e)}")
             return 0
-

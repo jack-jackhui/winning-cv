@@ -3,24 +3,22 @@ import logging
 import os
 import re
 
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
+from utils.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
 
 def remove_think_blocks(text):
     # Remove any <think>...</think> blocks (including multiline)
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 def remove_markdown_wrappers(text):
     """Remove markdown code block wrappers (```markdown ... ```) from LLM output"""
     # Remove opening ```markdown or ``` at the start
-    text = re.sub(r'^```(?:markdown)?\s*\n?', '', text.strip())
+    text = re.sub(r"^```(?:markdown)?\s*\n?", "", text.strip())
     # Remove closing ``` at the end
-    text = re.sub(r'\n?```\s*$', '', text.strip())
+    text = re.sub(r"\n?```\s*$", "", text.strip())
     return text.strip()
 
 
@@ -132,10 +130,10 @@ Section headers must use ## with UPPERCASE text:
 [paragraph content - NOT bullet points for profile summary]
 
 ## CORE STRENGTHS
-[bullet points with • character]
+[bullet points with bullet character]
 
 ## CAREER HIGHLIGHTS
-[bullet points with • character]
+[bullet points with bullet character]
 
 ## PROFESSIONAL EXPERIENCE
 **Company Name** | Role Title | Location | Dates
@@ -149,40 +147,12 @@ Section headers must use ## with UPPERCASE text:
 ```
 
 ### Formatting Rules
-- Use • (bullet character) for all bullet points, NOT - (dash)
+- Use bullet character for all bullet points, NOT - (dash)
 - Profile/Summary sections should be flowing paragraphs, NOT bullet points
 - Keep content COMPACT - minimize whitespace
 - Employment entries: **Company** | Role | Location | Dates (all on one line)
 - Bullet points should be concise, achievement-focused
 - Use pipe | as separator in contact line and employment headers
-
-### Example of Correct Formatting
-```
-# JOHN SMITH
-+61 400 123 456 | john@email.com | Melbourne, VIC, AU | linkedin.com/in/johnsmith
-
-## EXECUTIVE PROFILE
-Strategic technology leader with 15+ years delivering enterprise-scale digital transformation. Proven track record driving AI adoption and platform modernisation across financial services and telecommunications.
-
-## CORE STRENGTHS
-• Enterprise AI strategy and roadmap ownership
-• Executive engagement and stakeholder alignment
-• Governance and compliance frameworks
-
-## PROFESSIONAL EXPERIENCE
-**Company Name** | Chief Technology Officer | Melbourne, VIC | 2020–Present
-• Led digital transformation program delivering $50M annual savings
-• Established AI governance framework adopted across organisation
-
-## EDUCATION & CERTIFICATIONS
-• **MBA** | Melbourne Business School | 2015
-• AWS Solutions Architect Professional
-
-## TECHNOLOGY SKILLS
-• **Cloud Platforms:** AWS, Azure, GCP
-• **AI/ML:** TensorFlow, PyTorch, LangChain
-• **Languages:** Python, Go, TypeScript
-```
 
 ### Content Guidelines
 - Strictly avoid personal pronouns (I, my, we)
@@ -200,15 +170,7 @@ Do NOT include the job description in the output.
 
 class CVGenerator:
     def __init__(self):
-        self.endpoint = os.getenv("AZURE_AI_ENDPOINT")
-        self.key = os.getenv("AZURE_AI_API_KEY")
-        self.model_name = os.getenv("AZURE_DEPLOYMENT")
-
-    def _get_client(self):
-        return ChatCompletionsClient(
-            endpoint=self.endpoint,
-            credential=AzureKeyCredential(self.key)
-        )
+        self.llm_client = get_llm_client()
 
     def _build_system_prompt(self, job_desc: str, instructions: str) -> str:
         """Build the complete system prompt with job description and user instructions."""
@@ -248,143 +210,75 @@ class CVGenerator:
             raise ValueError("Empty CV content - please provide valid input")
 
         try:
-            client = self._get_client()
-
             system_prompt = self._build_system_prompt(job_desc, instructions)
+            user_message = f"Please optimize this CV:\n\n{cv_content}"
 
-            user_message = f"""Please optimize the following CV for the job description provided in the system prompt.
-
-## Original CV Content
-
-{cv_content}
-
----
-
-Remember:
-- Only use content from the original CV above
-- Do not add any new skills, experiences, or qualifications
-- Output ONLY the optimized CV in Markdown format
-- No explanations or commentary"""
-
-            response = client.complete(
-                messages=[
-                    SystemMessage(content=system_prompt),
-                    UserMessage(content=user_message)
-                ],
-                model=self.model_name,
-                # Note: temperature not supported by reasoning models (o1, o3-mini)
-                model_extras={"max_completion_tokens": 16384}
+            response = self.llm_client.generate(
+                system_prompt=system_prompt,
+                user_prompt=user_message,
+                max_tokens=16384
             )
 
-            raw_cv = response.choices[0].message.content
+            raw_cv = response.content
             cleaned_cv = remove_think_blocks(raw_cv)
             cleaned_cv = remove_markdown_wrappers(cleaned_cv)
             return cleaned_cv
 
         except Exception as e:
+            logger.error(f"CV generation failed: {str(e)}")
             raise Exception(f"CV generation failed: {str(e)}")
 
 
-async def generate_cv_with_knowledge(
-    user_email: str,
+def generate_cv_with_knowledge_base(
+    cv_content: str,
     job_desc: str,
-    instructions: str = "",
-    base_cv_content: str = None,
+    instructions: str,
+    unified_experience: dict
 ) -> str:
     """
-    Generate an optimal CV using content from ALL previous CV versions.
-
-    This function retrieves all indexed CV content from the knowledge base
-    and uses it to create the best possible CV for the given job description.
+    Generate CV using knowledge base of previous CV versions.
 
     Args:
-        user_email: User's email for retrieving their CV history
-        job_desc: The job description to tailor the CV for
-        instructions: Optional additional instructions from the user
-        base_cv_content: Optional base CV to use as primary structure
+        cv_content: Current/base CV content
+        job_desc: Target job description
+        instructions: User instructions
+        unified_experience: Dict with summaries, experience_bullets, skills_sections
 
     Returns:
-        Optimized CV content in Markdown format
-
-    Raises:
-        ValueError: If no CV content is available
-        Exception: If CV generation fails
+        Optimized CV content
     """
-    from cv.cv_knowledge_base import get_knowledge_base
-
-    kb = get_knowledge_base()
-
-    # Get unified experience from all CV versions
-    unified = await kb.build_unified_experience(user_email)
-
-    if not unified['experience_bullets'] and not base_cv_content:
-        raise ValueError(
-            "No CV content available. Please index at least one CV version first."
-        )
-
-    # Build comprehensive CV content from knowledge base
-    knowledge_context = _build_knowledge_context(unified)
-
-    logger.info(
-        f"Building CV with knowledge base: {unified['total_bullets']} bullets, "
-        f"{unified['total_summaries']} summaries"
-    )
-
-    # Generate CV with enhanced context
-    generator = CVGenerator()
-
-    # Build enhanced system prompt
-    enhanced_prompt = _build_enhanced_system_prompt(
-        job_desc, instructions, knowledge_context
-    )
-
-    # Prepare user message
-    if base_cv_content:
-        user_message = f"""Please create an optimized CV for the job description provided.
-
-## Base CV Structure (use as template)
-{base_cv_content}
-
-## Available Content from CV Knowledge Base
-{knowledge_context}
-
----
-
-Instructions:
-- Use the Base CV Structure as your template
-- Draw the BEST content from the Knowledge Base that matches the job requirements
-- Combine and optimize content to create the strongest possible CV
-- Do not add any new skills, experiences, or qualifications not present in the sources
-- Output ONLY the optimized CV in Markdown format
-- No explanations or commentary"""
-    else:
-        user_message = f"""Please create an optimized CV for the job description provided.
-
-## Available Content from CV Knowledge Base
-{knowledge_context}
-
----
-
-Instructions:
-- Create a well-structured CV using the best content from the Knowledge Base
-- Select content that best matches the job requirements
-- Do not add any new skills, experiences, or qualifications not present in the sources
-- Output ONLY the optimized CV in Markdown format
-- No explanations or commentary"""
-
     try:
-        client = generator._get_client()
+        generator = CVGenerator()
 
-        response = client.complete(
-            messages=[
-                SystemMessage(content=enhanced_prompt),
-                UserMessage(content=user_message)
-            ],
-            model=generator.model_name,
-            model_extras={"max_completion_tokens": 16384}
+        # Build knowledge context
+        knowledge_context = _build_knowledge_context(unified_experience)
+
+        # Build enhanced system prompt
+        enhanced_prompt = _build_enhanced_system_prompt(
+            job_desc,
+            instructions,
+            knowledge_context
         )
 
-        raw_cv = response.choices[0].message.content
+        user_message = f"""## Current CV (Base Version)
+{cv_content}
+
+## Knowledge Base Content (Previous CV Versions)
+{knowledge_context}
+
+---
+
+Create an optimized CV by selecting the best content from both the current CV
+and the knowledge base that matches the target job description.
+"""
+
+        response = generator.llm_client.generate(
+            system_prompt=enhanced_prompt,
+            user_prompt=user_message,
+            max_tokens=16384
+        )
+
+        raw_cv = response.content
         cleaned_cv = remove_think_blocks(raw_cv)
         cleaned_cv = remove_markdown_wrappers(cleaned_cv)
         return cleaned_cv
@@ -423,7 +317,7 @@ def _build_knowledge_context(unified: dict) -> str:
             sections.append(f"\n**{title}**")
             for b in bullets[:10]:  # Limit bullets per title
                 company = f" ({b['company_name']})" if b['company_name'] else ""
-                sections.append(f"• {b['bullet_text']}{company}")
+                sections.append(f"* {b['bullet_text']}{company}")
 
     # Add skills sections
     if unified['skills_sections']:
