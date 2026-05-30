@@ -8,7 +8,7 @@ from urllib.parse import quote, urlencode
 import streamlit as st
 
 from config.settings import Config
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_data_manager
 from job_processing.core import JobProcessor
 
 # from utils.logger import setup_logger
@@ -112,11 +112,7 @@ def _run_search_dialog(user_email, config_from_airtable):
 
     # Step 2: init Airtable manager
     status.text("🔗 Initializing Airtable manager...")
-    joblist_mgr = AirtableManager(
-        Config.AIRTABLE_API_KEY,
-        Config.AIRTABLE_BASE_ID,
-        Config.AIRTABLE_TABLE_ID
-    )
+    joblist_mgr = get_data_manager()
     progress.progress(30)
 
     # Step 3: build JobProcessor
@@ -158,7 +154,7 @@ def show_readonly_config(config: dict, field_labels: dict = None):
             cols[i].text_input(label, value=str(config[k]), disabled=True)
 
 
-def show_job_search_ui(user_email: str, airtable: AirtableManager):
+def show_job_search_ui(user_email: str, airtable):
     """UI for configuring and triggering job searches"""
     st.title("🔍 Configure Job Search")
     if user_email:
@@ -444,11 +440,7 @@ def run_job_search(user_email, config_from_airtable):
     config_lower = {k.lower(): v for k, v in config_from_airtable.items()}
     merged_config = {**defaults, **config_lower}
     # Create AirtableManager for "Job List" table
-    joblist_manager = AirtableManager(
-        Config.AIRTABLE_API_KEY,
-        Config.AIRTABLE_BASE_ID,
-        Config.AIRTABLE_TABLE_ID
-    )
+    joblist_manager = get_data_manager()
     processor = JobProcessor(
         config=Struct(**merged_config),
         airtable=joblist_manager
@@ -467,11 +459,7 @@ def display_search_results(user_email):
 
     from ui.helpers import format_job_description
 
-    joblist_manager = AirtableManager(
-        Config.AIRTABLE_API_KEY,
-        Config.AIRTABLE_BASE_ID,
-        Config.AIRTABLE_TABLE_ID
-    )
+    joblist_manager = get_data_manager()
 
     st.subheader("🔎 Search Results")
 

@@ -443,22 +443,18 @@ def notify_all_users(
         job_count: Number of matching jobs
         job_titles: List of job dictionaries with job details
         airtable_link: Link to Airtable view
-        airtable_manager: Optional AirtableManager instance. If not provided,
+        airtable_manager: Optional storage manager instance. If not provided,
                          will create one using default config.
 
     Returns:
         Dictionary mapping user emails to their notification results
     """
     from config.settings import Config
-    from data_store.airtable_manager import AirtableManager
+    from data_store.storage_factory import get_data_manager
 
     # Create manager if not provided
     if airtable_manager is None:
-        airtable_manager = AirtableManager(
-            api_key=Config.AIRTABLE_API_KEY,
-            base_id=Config.AIRTABLE_BASE_ID,
-            table_id=Config.AIRTABLE_TABLE_ID
-        )
+        airtable_manager = get_data_manager()
 
     # Get all users with notifications enabled
     users = airtable_manager.get_users_with_notifications_enabled()
@@ -512,21 +508,17 @@ def notify_specific_user(
         job_count: Number of matching jobs
         job_titles: List of job dictionaries with job details
         airtable_link: Link to Airtable view
-        airtable_manager: Optional AirtableManager instance
+        airtable_manager: Optional storage manager instance
 
     Returns:
         Dictionary with status of each notification channel
     """
     from config.settings import Config
-    from data_store.airtable_manager import AirtableManager
+    from data_store.storage_factory import get_data_manager
 
     # Create manager if not provided
     if airtable_manager is None:
-        airtable_manager = AirtableManager(
-            api_key=Config.AIRTABLE_API_KEY,
-            base_id=Config.AIRTABLE_BASE_ID,
-            table_id=Config.AIRTABLE_TABLE_ID
-        )
+        airtable_manager = get_data_manager()
 
     # Get user's notification preferences
     prefs_data = airtable_manager.get_notification_preferences(user_email)

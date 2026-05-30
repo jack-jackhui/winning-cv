@@ -28,9 +28,8 @@ from api.schemas.jobs import (
 )
 from config.settings import Config
 
-# Import existing functionality
-from data_store.airtable_manager import AirtableManager
-from data_store.cv_version_manager import get_cv_version_manager
+# Import storage factory for backend-agnostic access
+from data_store.storage_factory import get_data_manager, get_history_manager, get_cv_version_manager
 from job_processing.core import JobProcessor
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 from ui.helpers import upload_pdf_to_wordpress
@@ -180,13 +179,9 @@ async def get_job_config(
     """
     try:
         cfg = Config
-        airtable = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID
-        )
+        manager = get_data_manager()
 
-        user_config = airtable.get_user_config(user.email)
+        user_config = manager.get_user_config(user.email)
 
         if not user_config:
             # Return defaults
@@ -254,11 +249,7 @@ async def save_job_config(
     """
     try:
         cfg = Config
-        airtable = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID
-        )
+        manager = get_data_manager()
 
         # Handle CV: either upload new file or select from library
         cv_path = ""
@@ -335,7 +326,7 @@ async def save_job_config(
                 raise HTTPException(status_code=500, detail=f"Failed to load CV from library: {str(e)}")
 
         # Get existing config to preserve CV path if not uploading/selecting new one
-        existing_config = airtable.get_user_config(user.email)
+        existing_config = manager.get_user_config(user.email)
         if not cv_path and existing_config:
             cv_path = existing_config.get("base_cv_path", "")
             cv_url = existing_config.get("base_cv_link", "")
@@ -356,7 +347,7 @@ async def save_job_config(
             salarytype=seek_salarytype
         )
 
-        # Build config dict for Airtable
+        # Build config dict for storage
         config_data = {
             "user_email": user.email,
             "base_cv_path": cv_path,
@@ -372,7 +363,7 @@ async def save_job_config(
             "country": country
         }
 
-        if not airtable.save_user_config(config_data):
+        if not manager.save_user_config(config_data):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to save configuration"
@@ -406,12 +397,8 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
 
         update_progress(20, "Connecting to job boards...")
 
-        # Initialize Airtable manager
-        joblist_mgr = AirtableManager(
-            Config.AIRTABLE_API_KEY,
-            Config.AIRTABLE_BASE_ID,
-            Config.AIRTABLE_TABLE_ID
-        )
+        # Get storage manager (backend-aware)
+        joblist_mgr = get_data_manager()
 
         # Create processor with progress callback
         processor = JobProcessor(
@@ -451,15 +438,10 @@ async def start_job_search(
         Task ID to poll for status
     """
     try:
-        cfg = Config
-        airtable = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID
-        )
+        manager = get_data_manager()
 
         # Get user's config
-        user_config = airtable.get_user_config(user.email)
+        user_config = manager.get_user_config(user.email)
         if not user_config:
             raise HTTPException(
                 status_code=400,
@@ -544,19 +526,10 @@ async def get_job_results(
         List of job results with CV generation status
     """
     try:
-        cfg = Config
-        joblist_manager = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID
-        )
+        joblist_manager = get_data_manager()
+        history_manager = get_history_manager()
 
-        # Also get CV history to map cv_link -> cv_generated_at
-        history_manager = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        # Get CV history to map cv_link -> cv_generated_at
         history_records = history_manager.get_history_by_user(user.email)
 
         # Build a map of cv_pdf_url -> created_at

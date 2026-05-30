@@ -6,7 +6,7 @@ import streamlit as st
 
 from config.settings import Config
 from cv.cv_generator import CVGenerator
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_history_manager
 from ui.helpers import extract_title_from_jd, upload_pdf_to_wordpress
 from utils.utils import create_pdf, extract_text_from_file
 
@@ -130,11 +130,7 @@ def show_generate_ui(user_email: str):
         if user_email:
             # 12) Persist into History table
             cfg = Config
-            history_at = AirtableManager(
-                cfg.AIRTABLE_API_KEY,
-                cfg.AIRTABLE_BASE_ID,
-                cfg.AIRTABLE_TABLE_ID_HISTORY
-            )
+            history_at = get_history_manager()
             history_data = {
                 "user_email": user_email,
                 "job_title": job_title,

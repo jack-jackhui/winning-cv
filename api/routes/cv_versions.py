@@ -30,7 +30,7 @@ from api.schemas.cv import (
     CVVersionResponse,
     CVVersionUpdate,
 )
-from data_store.cv_version_manager import get_cv_version_manager
+from data_store.storage_factory import get_cv_version_manager, get_history_manager
 
 logger = logging.getLogger(__name__)
 
@@ -682,16 +682,11 @@ async def create_from_history(
     The PDF is downloaded from the history record and stored as a new version.
     """
     from config.settings import Config
-    from data_store.airtable_manager import AirtableManager
 
     try:
         # Get the history record
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         history_record = history_at.get_history_record(request.history_id)
 

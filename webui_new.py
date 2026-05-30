@@ -3,7 +3,7 @@ import logging
 import streamlit as st
 
 from config.settings import Config
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_data_manager
 from ui.generate_ui import show_generate_ui
 from ui.history_ui import show_history_ui
 from ui.job_search_ui import display_search_results, show_job_search_ui
@@ -71,11 +71,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # Initialize Airtable manager
-    airtable = AirtableManager(
-        Config.AIRTABLE_API_KEY,
-        Config.AIRTABLE_BASE_ID,
-        Config.AIRTABLE_TABLE_ID
-    )
+    airtable = get_data_manager()
 
     # Check for protected actions
     if not st.user.is_logged_in:

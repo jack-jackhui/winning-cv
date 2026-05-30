@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     postgres_pool_min: int = 2
     postgres_pool_max: int = 10
 
+    # Storage Backend Selection (for data layer: airtable, postgres, dual)
+    storage_backend: Literal["airtable", "postgres", "dual"] = Field(
+        default="airtable",
+        description="Data storage backend: airtable (default), postgres (direct), dual (write both, read airtable)"
+    )
+
     @property
     def postgres_dsn(self) -> str:
         """Get PostgreSQL connection DSN."""

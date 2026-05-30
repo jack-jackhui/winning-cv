@@ -36,7 +36,7 @@ from cv.cv_analyzer import CVAnalyzer
 
 # Import existing functionality
 from cv.cv_generator import CVGenerator
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_history_manager
 from ui.helpers import extract_title_from_jd
 from utils.minio_storage import get_minio_storage
 from utils.utils import create_docx, create_pdf, extract_text_from_file
@@ -69,11 +69,7 @@ def run_cv_analysis_background(
 
     try:
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         # Run the analysis
         analyzer = CVAnalyzer()
@@ -91,11 +87,7 @@ def run_cv_analysis_background(
         # Update status to failed
         try:
             cfg = Config
-            history_at = AirtableManager(
-                cfg.AIRTABLE_API_KEY,
-                cfg.AIRTABLE_BASE_ID,
-                cfg.AIRTABLE_TABLE_ID_HISTORY
-            )
+            history_at = get_history_manager()
             history_at.update_history_analysis(history_id, json.dumps({"error": str(e)}), status="failed")
         except Exception as update_error:
             logger.error(f"Failed to update analysis status: {update_error}")
@@ -255,11 +247,7 @@ async def generate_cv(
         history_id = None
         try:
             cfg = Config
-            history_at = AirtableManager(
-                cfg.AIRTABLE_API_KEY,
-                cfg.AIRTABLE_BASE_ID,
-                cfg.AIRTABLE_TABLE_ID_HISTORY
-            )
+            history_at = get_history_manager()
             history_data = {
                 "user_email": user.email,
                 "job_title": job_title,
@@ -395,11 +383,7 @@ async def get_cv_history(
     """
     try:
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         records = history_at.get_history_by_user(user.email)
 
@@ -485,11 +469,7 @@ async def get_cv_analysis(
 
     try:
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         # Get the history record
         record = history_at.get_history_record(history_id)
@@ -665,11 +645,7 @@ async def regenerate_cv_with_improvements(
 
     try:
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         # Fetch the original history record
         record = history_at.get_history_record(history_id)
@@ -865,11 +841,7 @@ async def refine_cv_with_instructions(
 
     try:
         cfg = Config
-        history_at = AirtableManager(
-            cfg.AIRTABLE_API_KEY,
-            cfg.AIRTABLE_BASE_ID,
-            cfg.AIRTABLE_TABLE_ID_HISTORY
-        )
+        history_at = get_history_manager()
 
         # Fetch the original history record
         record = history_at.get_history_record(history_id)

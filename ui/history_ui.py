@@ -6,7 +6,7 @@ from great_tables import GT, loc, style
 from streamlit_extras.great_tables import great_tables
 
 from config.settings import Config
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_history_manager
 
 
 # --- DIALOG FOR LOGIN ---
@@ -48,11 +48,7 @@ def show_history_ui(user_email: str):
         del st.session_state["history_login_dialog_shown"]
 
     cfg = Config
-    historyAT = AirtableManager(
-        cfg.AIRTABLE_API_KEY,
-        cfg.AIRTABLE_BASE_ID,
-        cfg.AIRTABLE_TABLE_ID_HISTORY
-    )
+    historyAT = get_history_manager()
 
     with st.spinner("Loading your history..."):
         records = historyAT.get_history_by_user(user_email)

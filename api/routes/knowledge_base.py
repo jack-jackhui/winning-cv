@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from cv.cv_knowledge_base import get_knowledge_base
-from data_store.cv_version_manager import get_cv_version_manager
+from data_store.storage_factory import get_cv_version_manager
 from utils.cv_loader import load_cv_content
 
 logger = logging.getLogger(__name__)

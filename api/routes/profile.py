@@ -13,8 +13,7 @@ from api.schemas.notifications import (
     TestNotificationRequest,
     TestNotificationResponse,
 )
-from config.settings import Config
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_data_manager
 from utils.notifications import send_email_notification, send_telegram_to_user, send_wechat_message
 
 logger = logging.getLogger(__name__)
@@ -22,13 +21,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
 
-def get_airtable_manager() -> AirtableManager:
-    """Get Airtable manager instance"""
-    return AirtableManager(
-        api_key=Config.AIRTABLE_API_KEY,
-        base_id=Config.AIRTABLE_BASE_ID,
-        table_id=Config.AIRTABLE_TABLE_ID
-    )
+def get_storage_manager():
+    """Get storage manager instance (backend-aware)."""
+    return get_data_manager()
 
 
 @router.get("/notifications", response_model=NotificationPreferencesResponse)
@@ -40,7 +35,7 @@ async def get_notification_preferences(
     Returns default preferences if none are set.
     """
     try:
-        manager = get_airtable_manager()
+        manager = get_storage_manager()
         prefs = manager.get_notification_preferences(user.email)
 
         wechat_id = prefs.get("wechat_id") or prefs.get("wechat_openid")
@@ -78,7 +73,7 @@ async def update_notification_preferences(
     Only updates fields that are provided (non-null).
     """
     try:
-        manager = get_airtable_manager()
+        manager = get_storage_manager()
 
         # Get existing preferences
         existing = manager.get_notification_preferences(user.email)
@@ -144,7 +139,7 @@ async def test_notification(
     Returns:
         Success status and message
     """
-    manager = get_airtable_manager()
+    manager = get_storage_manager()
     prefs = manager.get_notification_preferences(user.email)
 
     test_message = f"This is a test notification from WinningCV for {user.email}"

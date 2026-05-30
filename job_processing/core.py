@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
 from cv.cv_generator import CVGenerator
-from data_store.airtable_manager import AirtableManager
+from data_store.storage_factory import get_data_manager
 from job_sources.additional_job_search import AdditionalJobProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from job_sources.seek_job_scraper import SeekJobScraper
@@ -22,15 +22,11 @@ class JobProcessor:
     def __init__(
         self,
         config,
-        airtable: AirtableManager = None,
+        airtable = None,  # Storage manager (backend-aware)
         progress_callback: Optional[Callable[[int, str], None]] = None
     ):
         self.config = config
-        self.airtable = airtable or AirtableManager(
-            config.airtable_api_key,
-            config.airtable_base_id,
-            config.airtable_table_id
-        )
+        self.airtable = airtable or get_data_manager()
         self.linkedin_scraper = LinkedInJobScraper(config.linkedin_job_url)
         self.seek_scraper = SeekJobScraper(config.seek_job_url)
         self.content_cleaner = ContentCleaner(config.max_description_length)
