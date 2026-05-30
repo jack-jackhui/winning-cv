@@ -184,10 +184,14 @@ class PostgresManager:
                       AND job_description IS NOT NULL AND job_description != ''
                     ORDER BY created_at DESC
                 """)
-                return [
-                    {"id": str(row["id"]), "fields": dict(row)}
-                    for row in cursor.fetchall()
-                ]
+                results = []
+                for row in cursor.fetchall():
+                    fields = dict(row)
+                    # Convert None to empty string for required fields
+                    if fields.get("cv_pdf_url") is None:
+                        fields["cv_pdf_url"] = ""
+                    results.append({"id": str(row["id"]), "fields": fields})
+                return results
         except Exception as e:
             self.logger.error(f"Fetch unprocessed failed: {e}")
             return []
@@ -268,10 +272,14 @@ class PostgresManager:
                     WHERE user_email = %s
                     ORDER BY created_at DESC
                 """, (user_email,))
-                return [
-                    {"id": str(row["id"]), "fields": dict(row)}
-                    for row in cursor.fetchall()
-                ]
+                results = []
+                for row in cursor.fetchall():
+                    fields = dict(row)
+                    # Convert None to empty string for required fields
+                    if fields.get("cv_pdf_url") is None:
+                        fields["cv_pdf_url"] = ""
+                    results.append({"id": str(row["id"]), "fields": fields})
+                return results
         except Exception as e:
             self.logger.error(f"get_history_by_user error: {e}")
             return []
@@ -431,6 +439,97 @@ class PostgresManager:
             self.logger.error(f"Failed to get users with notifications: {e}")
             return []
     
+
+    # =========================================================================
+    # AIRTABLE API COMPATIBILITY LAYER
+    # =========================================================================
+    
+    def get_records_by_filter(self, formula: str) -> List[Dict]:
+        """
+        Airtable API compatibility layer.
+        Translates simple Airtable formulas to SQL queries.
+        
+        Supports:
+            {User Email} = 'value'
+            {field} = 'value'
+        
+        Returns records in Airtable format: {"id": ..., "fields": {...}}
+        """
+        import re
+        
+        # Parse simple Airtable formula: {Field Name} = 'value'
+        match = re.match(r"\{([^}]+)\}\s*=\s*'([^']*)'", formula.strip())
+        if not match:
+            self.logger.warning(f"Unsupported formula: {formula}")
+            return []
+        
+        field_name = match.group(1)
+        field_value = match.group(2)
+        
+        # Map Airtable field names to Postgres columns
+        field_map = {
+            "User Email": "user_email",
+            "Job Title": "job_title",
+            "Job Link": "job_link",
+            "Company": "company",
+            "Location": "location",
+        }
+        
+        column_name = field_map.get(field_name)
+        if not column_name:
+            self.logger.warning(f"Unsupported filter field: {field_name}")
+            return []
+        
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT id, airtable_id, user_email, job_title, job_description,
+                           job_date, job_link, company, location, matching_score,
+                           cv_link, match_reasons, match_suggestions,
+                           ats_score, hr_score, llm_score, hr_recommendation,
+                           matched_keywords, missing_keywords, created_at, updated_at
+                    FROM jobs
+                    WHERE {column_name} = %s
+                    ORDER BY created_at DESC
+                """, (field_value,))
+                
+                rows = cursor.fetchall()
+                
+                # Convert to Airtable format
+                records = []
+                for row in rows:
+                    record = {
+                        "id": str(row["id"]) if row["id"] else (row["airtable_id"] or ""),
+                        "fields": {
+                            "User Email": row["user_email"],
+                            "Job Title": row["job_title"],
+                            "Job Description": row["job_description"],
+                            "Job Date": str(row["job_date"]) if row["job_date"] else None,
+                            "Job Link": row["job_link"],
+                            "Company": row["company"],
+                            "Location": row["location"],
+                            "Matching Score": row["matching_score"],
+                            "CV Link": row["cv_link"],
+                            "Match Reasons": row["match_reasons"],
+                            "Match Suggestions": row["match_suggestions"],
+                            "ATS Score": row["ats_score"],
+                            "HR Score": row["hr_score"],
+                            "LLM Score": row["llm_score"],
+                            "HR Recommendation": row["hr_recommendation"],
+                            "Matched Keywords": row["matched_keywords"],
+                            "Missing Keywords": row["missing_keywords"],
+                            "Created At": row["created_at"].isoformat() if row["created_at"] else None,
+                            "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
+                        }
+                    }
+                    records.append(record)
+                
+                return records
+                
+        except Exception as e:
+            self.logger.error(f"get_records_by_filter failed: {e}")
+            return []
+
     # =========================================================================
     # UTILITIES
     # =========================================================================
