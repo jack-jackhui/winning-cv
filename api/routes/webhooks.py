@@ -25,6 +25,7 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 # Configuration
 WEBHOOK_SECRET = os.getenv("AUTH_WEBHOOK_SECRET", "")
 ADMIN_TELEGRAM_CHAT_ID = os.getenv("ADMIN_TELEGRAM_CHAT_ID", "2055631678")
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "airtable").lower()
 
 
 # ──────────────────────────────────────────────────────────
@@ -129,14 +130,18 @@ async def send_telegram_alert(message: str, chat_id: str = None) -> bool:
 async def ensure_user_in_airtable(user: WebhookUser) -> dict:
     """
     Ensure user exists in Airtable user_configs table.
-    Creates a new record if user doesn't exist.
-    
-    Args:
-        user: User data from webhook
-        
-    Returns:
-        Airtable record dict
+
+    Skipped when WinningCV is running on PostgreSQL. This prevents any
+    accidental Airtable writes/costs after the production Postgres cutover.
     """
+    if STORAGE_BACKEND == "postgres":
+        logger.info("Skipping Airtable user sync because STORAGE_BACKEND=postgres")
+        return {"id": None, "fields": {"user_email": user.email}}
+
+    if not Config.AIRTABLE_API_KEY:
+        logger.warning("Skipping Airtable user sync because AIRTABLE_API_KEY is not configured")
+        return {"id": None, "fields": {"user_email": user.email}}
+
     from pyairtable import Api
     from pyairtable.formulas import EQ, Field
     
