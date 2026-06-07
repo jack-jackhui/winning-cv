@@ -10,7 +10,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -40,58 +40,118 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["Job Search"])
 
-# File-based task storage for cross-process sharing
-# Works reliably across Uvicorn workers unlike in-memory dicts
-_TASKS_FILE = Path("/tmp/winningcv_search_tasks.json")
-
 # Thread pool for background tasks
 _executor = ThreadPoolExecutor(max_workers=3)
 
 
-def _read_tasks() -> Dict[str, dict]:
-    """Read tasks from shared file with locking."""
-    if not _TASKS_FILE.exists():
-        return {}
-    try:
-        with open(_TASKS_FILE, 'r') as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock for reading
+# =============================================================================
+# File-based task manager (fallback when Postgres unavailable)
+# =============================================================================
+
+class FileBasedTaskManager:
+    """
+    File-based task storage for development/fallback.
+    Uses /tmp storage with file locking for cross-process sharing.
+    """
+    _TASKS_FILE = Path("/tmp/winningcv_search_tasks.json")
+
+    def _read_tasks(self) -> Dict[str, dict]:
+        """Read tasks from shared file with locking."""
+        if not self._TASKS_FILE.exists():
+            return {}
+        try:
+            with open(self._TASKS_FILE, 'r') as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                try:
+                    return json.load(f)
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def _write_tasks(self, tasks: Dict[str, dict]):
+        """Write tasks to shared file with locking."""
+        with open(self._TASKS_FILE, 'w') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                return json.load(f)
+                json.dump(tasks, f)
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-    except (json.JSONDecodeError, IOError):
-        return {}
+
+    def create_task(
+        self,
+        task_id: str,
+        user_email: str,
+        status: str = "pending",
+        message: str = "Task created"
+    ) -> Dict[str, Any]:
+        """Create a new task."""
+        tasks = self._read_tasks()
+        task_data = {
+            "task_id": task_id,
+            "user_email": user_email,
+            "status": status,
+            "progress": 0,
+            "message": message,
+            "results_count": None,
+            "created_at": datetime.now().isoformat(),
+        }
+        tasks[task_id] = task_data
+        self._write_tasks(tasks)
+        return task_data
+
+    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get task by ID."""
+        tasks = self._read_tasks()
+        return tasks.get(task_id)
+
+    def update_task(
+        self,
+        task_id: str,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        message: Optional[str] = None,
+        results_count: Optional[int] = None,
+        error_details: Optional[str] = None
+    ) -> bool:
+        """Update task fields."""
+        tasks = self._read_tasks()
+        if task_id not in tasks:
+            return False
+
+        if status is not None:
+            tasks[task_id]["status"] = status
+        if progress is not None:
+            tasks[task_id]["progress"] = progress
+        if message is not None:
+            tasks[task_id]["message"] = message
+        if results_count is not None:
+            tasks[task_id]["results_count"] = results_count
+        if error_details is not None:
+            tasks[task_id]["error_details"] = error_details
+
+        self._write_tasks(tasks)
+        return True
 
 
-def _write_tasks(tasks: Dict[str, dict]):
-    """Write tasks to shared file with locking."""
-    with open(_TASKS_FILE, 'w') as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock for writing
-        try:
-            json.dump(tasks, f)
-        finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+# Cached task manager instance
+_task_manager = None
 
 
-def _get_task(task_id: str) -> Optional[dict]:
-    """Get a single task by ID."""
-    tasks = _read_tasks()
-    return tasks.get(task_id)
+def _get_task_manager():
+    """Get the task manager, preferring Postgres for durability."""
+    global _task_manager
+    if _task_manager is not None:
+        return _task_manager
 
+    try:
+        from data_store.storage_factory import get_task_manager
+        _task_manager = get_task_manager()
+    except Exception as e:
+        logger.warning(f"Using file-based task manager: {e}")
+        _task_manager = FileBasedTaskManager()
 
-def _set_task(task_id: str, task_data: dict):
-    """Set/create a task."""
-    tasks = _read_tasks()
-    tasks[task_id] = task_data
-    _write_tasks(tasks)
-
-
-def _update_task(task_id: str, **updates):
-    """Update specific fields of a task."""
-    tasks = _read_tasks()
-    if task_id in tasks:
-        tasks[task_id].update(updates)
-        _write_tasks(tasks)
+    return _task_manager
 
 # LinkedIn GeoID mapping
 LINKEDIN_GEOID_MAP = {
@@ -383,12 +443,13 @@ async def save_job_config(
 
 def _run_job_search(task_id: str, user_email: str, config_data: dict):
     """Background task to run job search"""
+    task_mgr = _get_task_manager()
     try:
-        _update_task(task_id, status=SearchStatus.RUNNING, progress=10, message="Initializing search...")
+        task_mgr.update_task(task_id, status=SearchStatus.RUNNING.value, progress=10, message="Initializing search...")
 
         # Progress callback to update task status in real-time
         def update_progress(progress: int, message: str):
-            _update_task(task_id, progress=progress, message=message)
+            task_mgr.update_task(task_id, progress=progress, message=message)
 
         # Merge with defaults
         defaults = {k.lower(): v for k, v in Config.__dict__.items() if not k.startswith("_")}
@@ -410,17 +471,17 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
         # process_jobs() will now call update_progress internally
         results = processor.process_jobs()
 
-        _update_task(
+        task_mgr.update_task(
             task_id,
             progress=100,
-            status=SearchStatus.COMPLETED,
+            status=SearchStatus.COMPLETED.value,
             message=f"Complete! Generated {len(results)} tailored CVs",
             results_count=len(results)
         )
 
     except Exception as e:
         logger.error(f"Job search failed: {e}")
-        _update_task(task_id, status=SearchStatus.FAILED, message=str(e))
+        task_mgr.update_task(task_id, status=SearchStatus.FAILED.value, message=str(e), error_details=str(e))
 
 
 @router.post("/search", response_model=SearchTaskResponse)
@@ -448,15 +509,15 @@ async def start_job_search(
                 detail="No job search configuration found. Please configure search settings first."
             )
 
-        # Create task using file-based storage for cross-worker sharing
+        # Create task using durable storage (Postgres preferred, file fallback)
         task_id = str(uuid.uuid4())
-        _set_task(task_id, {
-            "status": SearchStatus.PENDING,
-            "progress": 0,
-            "message": "Task created",
-            "results_count": None,
-            "created_at": datetime.now().isoformat()
-        })
+        task_mgr = _get_task_manager()
+        task_mgr.create_task(
+            task_id=task_id,
+            user_email=user.email,
+            status=SearchStatus.PENDING.value,
+            message="Task created"
+        )
 
         # Run in background thread (job processing uses blocking I/O)
         _executor.submit(_run_job_search, task_id, user.email, user_config)
@@ -492,7 +553,8 @@ async def get_search_status(
     Returns:
         Current status of the search task
     """
-    task = _get_task(task_id)
+    task_mgr = _get_task_manager()
+    task = task_mgr.get_task(task_id)
     if not task:
         raise HTTPException(
             status_code=404,

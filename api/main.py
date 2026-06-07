@@ -159,15 +159,44 @@ app.include_router(profile_router, prefix="/api/v1")
 app.include_router(webhooks_router, prefix="/api/v1")
 
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/api/health")
-async def health_check():
-    """Health check endpoint for monitoring"""
+async def health_check(detailed: bool = False):
+    """
+    Health check endpoint for monitoring.
+
+    Args:
+        detailed: If true, returns comprehensive health status of all components
+                  (Postgres, MinIO, Azure OpenAI, LinkedIn, Auth)
+
+    Returns:
+        Simple or detailed health status
+    """
+    if detailed:
+        from api.health import get_comprehensive_health
+        return get_comprehensive_health()
+
     return {
         "status": "healthy",
         "service": "winningcv-api",
         "version": "1.0.0"
     }
+
+
+@app.get("/api/health/detailed")
+async def health_check_detailed():
+    """
+    Comprehensive health check of all service dependencies.
+
+    Returns detailed status of:
+    - PostgreSQL database
+    - MinIO object storage
+    - Azure OpenAI configuration
+    - LinkedIn cookie status
+    - Auth service configuration
+    """
+    from api.health import get_comprehensive_health
+    return get_comprehensive_health()
 
 
 @app.get("/api/v1")

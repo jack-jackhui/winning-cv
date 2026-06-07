@@ -379,14 +379,50 @@ def get_history_manager():
 
 
 # =============================================================================
+# TASK MANAGER (always uses Postgres for durability)
+# =============================================================================
+
+_task_manager = None
+
+
+def get_task_manager():
+    """
+    Get the task manager for durable job task tracking.
+
+    Always uses PostgreSQL for durability, regardless of STORAGE_BACKEND.
+    Tasks need to survive API restarts and be queryable after page refresh.
+
+    Falls back to file-based storage if Postgres is unavailable.
+    """
+    global _task_manager
+
+    if _task_manager is not None:
+        return _task_manager
+
+    try:
+        from data_store.postgres_manager import get_postgres_task_manager
+        _task_manager = get_postgres_task_manager()
+        logger.info("Task manager: PostgreSQL (durable)")
+    except Exception as e:
+        logger.warning(f"PostgreSQL task manager unavailable: {e}")
+        # Fallback to file-based (for development without Postgres)
+        from api.routes.jobs import FileBasedTaskManager
+        _task_manager = FileBasedTaskManager()
+        logger.info("Task manager: File-based (fallback)")
+
+    return _task_manager
+
+
+# =============================================================================
 # CONVENIENCE EXPORTS
 # =============================================================================
 
 __all__ = [
     'STORAGE_BACKEND',
     'get_data_manager',
-    'get_cv_version_manager', 
+    'get_cv_version_manager',
     'get_history_manager',
+    'get_task_manager',
     'DualWriteDataManager',
     'DualWriteCVVersionManager',
 ]

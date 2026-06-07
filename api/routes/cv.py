@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+
+# Security constants for file uploads
+MAX_CV_FILE_SIZE = 10 * 1024 * 1024  # 10MB max
+ALLOWED_CV_EXTENSIONS = {'.pdf', '.docx', '.txt'}
+PDF_MAGIC_BYTES = b'%PDF'
+DOCX_MAGIC_BYTES = b'PK'  # DOCX is a ZIP file
 from fastapi.responses import FileResponse
 
 from api.middleware.auth_middleware import get_current_user
@@ -108,6 +114,71 @@ def run_cv_analysis_background(
             logger.error(f"Failed to update analysis status: {update_error}")
 
 
+def validate_cv_file(
+    filename: str,
+    content_type: str,
+    content: bytes,
+    allowed_extensions: set = ALLOWED_CV_EXTENSIONS
+) -> None:
+    """
+    Validate CV file for security and compatibility.
+
+    Args:
+        filename: Original filename
+        content_type: MIME content type
+        content: File content bytes
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    # Check file size
+    if len(content) > MAX_CV_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_CV_FILE_SIZE // (1024*1024)}MB"
+        )
+
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Empty file uploaded"
+        )
+
+    # Check extension
+    ext = Path(filename).suffix.lower() if filename else ''
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file extension. Allowed: {', '.join(sorted(allowed_extensions))}"
+        )
+
+    # Check content type matches extension
+    valid_types = {
+        '.pdf': ['application/pdf'],
+        '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        '.txt': ['text/plain', 'text/x-python', 'application/octet-stream'],
+    }
+
+    expected_types = valid_types.get(ext, [])
+    if expected_types and content_type not in expected_types:
+        # Allow some flexibility but log the mismatch
+        logger.warning(f"Content-type mismatch: {content_type} for extension {ext}")
+
+    # Check magic bytes for binary formats
+    if ext == '.pdf':
+        if not content[:4].startswith(PDF_MAGIC_BYTES):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid PDF file (corrupted or not a real PDF)"
+            )
+    elif ext == '.docx':
+        if not content[:2].startswith(DOCX_MAGIC_BYTES):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid DOCX file (corrupted or not a real DOCX)"
+            )
+
+
 class FileWrapper:
     """Wrapper to make UploadFile compatible with extract_text_from_file"""
     def __init__(self, upload_file: UploadFile, content: bytes):
@@ -143,25 +214,28 @@ async def generate_cv(
     Returns:
         Generated CV in markdown format, PDF URL, and history_id for analysis lookup
     """
-    # Validate file type
-    allowed_types = [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "text/plain"
-    ]
-    if cv_file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Allowed: PDF, DOCX, TXT"
-        )
-
     try:
         # Read file content
         file_content = await cv_file.read()
 
+        # Comprehensive file validation (size, extension, magic bytes)
+        validate_cv_file(
+            filename=cv_file.filename,
+            content_type=cv_file.content_type,
+            content=file_content,
+            allowed_extensions={'.pdf', '.docx', '.txt'}
+        )
+
         # Extract text from CV
         file_wrapper = FileWrapper(cv_file, file_content)
-        orig_cv = extract_text_from_file(file_wrapper)
+        try:
+            orig_cv = extract_text_from_file(file_wrapper)
+        except Exception as parse_error:
+            logger.error(f"CV parsing failed: {parse_error}")
+            raise HTTPException(
+                status_code=400,
+                detail="Could not parse CV file. Ensure it's a valid PDF, DOCX, or TXT file."
+            )
 
         if len(orig_cv.strip()) < 30:
             raise HTTPException(
@@ -322,17 +396,18 @@ async def upload_cv(
     Returns:
         Path and URL of uploaded CV
     """
-    allowed_types = [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ]
-    if cv_file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Allowed: PDF, DOCX"
+    try:
+        # Read and validate file
+        content = await cv_file.read()
+
+        # Comprehensive file validation (size, extension, magic bytes)
+        validate_cv_file(
+            filename=cv_file.filename,
+            content_type=cv_file.content_type,
+            content=content,
+            allowed_extensions={'.pdf', '.docx'}  # No TXT for base CV
         )
 
-    try:
         # Create user-specific directory
         cv_dir = Path(f"user_cv/{user.email}")
         cv_dir.mkdir(parents=True, exist_ok=True)
@@ -342,8 +417,7 @@ async def upload_cv(
         unique_filename = f"base_cv_{uuid.uuid4().hex[:8]}{suffix}"
         cv_path = cv_dir / unique_filename
 
-        # Save file locally
-        content = await cv_file.read()
+        # Save file locally (content already read during validation)
         with open(cv_path, "wb") as f:
             f.write(content)
 

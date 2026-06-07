@@ -41,7 +41,9 @@ jobs:
       - name: Lint with Ruff
         run: |
           pip install ruff
-          ruff check . --output-format=github --select=E,F,W --ignore=E501,E402 || true
+          # Focus on critical errors: undefined names, assertion issues, syntax errors
+          # Skip style warnings to avoid blocking on pre-existing issues
+          ruff check . --output-format=github --select=F63,F7,F82
 
       - name: Check Config singleton usage
         run: |
@@ -56,8 +58,8 @@ jobs:
 
       - name: Run unit tests
         run: |
-          # Run only unit tests that don't require external services
-          pytest tests/test_utils.py tests/test_settings.py -v --tb=short
+          # Run unit tests that don't require external services
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py -v --tb=short
         env:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"

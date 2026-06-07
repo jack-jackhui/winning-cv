@@ -483,7 +483,7 @@ class PostgresManager:
         try:
             with self.get_cursor() as cursor:
                 cursor.execute(f"""
-                    SELECT id, airtable_id, user_email, job_title, job_description,
+                    SELECT id, user_email, job_title, job_description,
                            job_date, job_link, company, location, matching_score,
                            cv_link, match_reasons, match_suggestions,
                            ats_score, hr_score, llm_score, hr_recommendation,
@@ -492,14 +492,14 @@ class PostgresManager:
                     WHERE {column_name} = %s
                     ORDER BY created_at DESC
                 """, (field_value,))
-                
+
                 rows = cursor.fetchall()
-                
+
                 # Convert to Airtable format
                 records = []
                 for row in rows:
                     record = {
-                        "id": str(row["id"]) if row["id"] else (row["airtable_id"] or ""),
+                        "id": str(row["id"]),
                         "fields": {
                             "User Email": row["user_email"],
                             "Job Title": row["job_title"],
@@ -1033,6 +1033,209 @@ class PostgresCVVersionManager:
                     os.unlink(temp_path)
                 except Exception:
                     pass
+
+
+# ============================================================================
+# SEARCH TASK MANAGER (PostgreSQL version)
+# ============================================================================
+
+class PostgresTaskManager:
+    """
+    Durable task tracking using PostgreSQL.
+    Replaces file-based /tmp/winningcv_search_tasks.json storage.
+    Tasks survive API restarts and can be queried after refresh.
+    """
+
+    def __init__(self, database_url: str = None):
+        self.database_url = database_url or DATABASE_URL
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @contextmanager
+    def get_cursor(self, dict_cursor: bool = True):
+        """Context manager for database cursor."""
+        conn = psycopg2.connect(self.database_url)
+        cursor_factory = RealDictCursor if dict_cursor else None
+        cursor = conn.cursor(cursor_factory=cursor_factory)
+        try:
+            yield cursor
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def create_task(
+        self,
+        task_id: str,
+        user_email: str,
+        status: str = "pending",
+        message: str = "Task created"
+    ) -> Dict[str, Any]:
+        """Create a new search task."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO search_tasks (task_id, user_email, status, progress, message)
+                    VALUES (%s, %s, %s, 0, %s)
+                    RETURNING id, created_at
+                """, (task_id, user_email, status, message))
+                result = cursor.fetchone()
+                self.logger.info(f"Created task: {task_id} for {user_email}")
+                return {
+                    "task_id": task_id,
+                    "status": status,
+                    "progress": 0,
+                    "message": message,
+                    "results_count": None,
+                    "created_at": result["created_at"].isoformat(),
+                }
+        except Exception as e:
+            self.logger.error(f"Failed to create task {task_id}: {e}")
+            raise
+
+    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get task by ID."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT task_id, user_email, status, progress, message,
+                           results_count, error_details, created_at, updated_at, completed_at
+                    FROM search_tasks WHERE task_id = %s
+                """, (task_id,))
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        "task_id": row["task_id"],
+                        "user_email": row["user_email"],
+                        "status": row["status"],
+                        "progress": row["progress"],
+                        "message": row["message"],
+                        "results_count": row["results_count"],
+                        "error_details": row["error_details"],
+                        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                        "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
+                    }
+                return None
+        except Exception as e:
+            self.logger.error(f"Failed to get task {task_id}: {e}")
+            return None
+
+    def update_task(
+        self,
+        task_id: str,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        message: Optional[str] = None,
+        results_count: Optional[int] = None,
+        error_details: Optional[str] = None
+    ) -> bool:
+        """Update task fields."""
+        updates = []
+        params = []
+
+        if status is not None:
+            updates.append("status = %s")
+            params.append(status)
+            if status in ("completed", "failed"):
+                updates.append("completed_at = NOW()")
+
+        if progress is not None:
+            updates.append("progress = %s")
+            params.append(progress)
+
+        if message is not None:
+            updates.append("message = %s")
+            params.append(message)
+
+        if results_count is not None:
+            updates.append("results_count = %s")
+            params.append(results_count)
+
+        if error_details is not None:
+            updates.append("error_details = %s")
+            params.append(error_details)
+
+        if not updates:
+            return True
+
+        params.append(task_id)
+
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(f"""
+                    UPDATE search_tasks SET {", ".join(updates)}
+                    WHERE task_id = %s
+                """, params)
+                return True
+        except Exception as e:
+            self.logger.error(f"Failed to update task {task_id}: {e}")
+            return False
+
+    def get_user_tasks(
+        self,
+        user_email: str,
+        limit: int = 10,
+        include_completed: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get recent tasks for a user."""
+        try:
+            with self.get_cursor() as cursor:
+                query = """
+                    SELECT task_id, status, progress, message, results_count, created_at
+                    FROM search_tasks
+                    WHERE user_email = %s
+                """
+                if not include_completed:
+                    query += " AND status NOT IN ('completed', 'failed')"
+                query += " ORDER BY created_at DESC LIMIT %s"
+
+                cursor.execute(query, (user_email, limit))
+                return [
+                    {
+                        "task_id": row["task_id"],
+                        "status": row["status"],
+                        "progress": row["progress"],
+                        "message": row["message"],
+                        "results_count": row["results_count"],
+                        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    }
+                    for row in cursor.fetchall()
+                ]
+        except Exception as e:
+            self.logger.error(f"Failed to get tasks for {user_email}: {e}")
+            return []
+
+    def cleanup_old_tasks(self, max_age_hours: int = 24) -> int:
+        """Remove completed/failed tasks older than max_age_hours."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    DELETE FROM search_tasks
+                    WHERE status IN ('completed', 'failed')
+                      AND created_at < NOW() - INTERVAL '%s hours'
+                """, (max_age_hours,))
+                deleted = cursor.rowcount
+                if deleted > 0:
+                    self.logger.info(f"Cleaned up {deleted} old tasks")
+                return deleted
+        except Exception as e:
+            self.logger.error(f"Failed to cleanup old tasks: {e}")
+            return 0
+
+
+# Global singleton for task manager
+_postgres_task_manager: Optional[PostgresTaskManager] = None
+
+
+def get_postgres_task_manager() -> PostgresTaskManager:
+    """Get or create global PostgreSQL task manager instance."""
+    global _postgres_task_manager
+    if _postgres_task_manager is None:
+        _postgres_task_manager = PostgresTaskManager()
+    return _postgres_task_manager
 
 
 # Global singletons
