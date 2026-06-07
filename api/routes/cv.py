@@ -46,6 +46,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cv", tags=["CV Generation"])
 
 
+def _coerce_json_field(value, default=None):
+    """Airtable/data-store JSON fields may come back as str, bytes, or already-decoded dict/list."""
+    import json
+
+    if value is None or value == "":
+        return {} if default is None else default
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode("utf-8")
+    if isinstance(value, str):
+        return json.loads(value)
+    raise TypeError(f"Unsupported JSON field type: {type(value).__name__}")
+
+
 # ──────────────────────────────────────────────────────────
 # BACKGROUND TASK FOR CV ANALYSIS
 # ──────────────────────────────────────────────────────────
@@ -491,7 +506,7 @@ async def get_cv_analysis(
             return CVAnalysisResponse(status="pending")
 
         if status == "failed":
-            error_data = json.loads(analysis_json) if analysis_json else {}
+            error_data = _coerce_json_field(analysis_json) if analysis_json else {}
             return CVAnalysisResponse(
                 status="failed",
                 error=error_data.get("error", "Analysis failed")
@@ -499,7 +514,7 @@ async def get_cv_analysis(
 
         # Parse the analysis JSON
         try:
-            analysis_data = json.loads(analysis_json)
+            analysis_data = _coerce_json_field(analysis_json)
         except json.JSONDecodeError:
             return CVAnalysisResponse(status="failed", error="Invalid analysis data")
 
@@ -674,7 +689,7 @@ async def regenerate_cv_with_improvements(
         improvement_instructions = ""
         if analysis_json:
             try:
-                analysis_data = json.loads(analysis_json)
+                analysis_data = _coerce_json_field(analysis_json)
                 improvement_instructions = _build_improvement_instructions(analysis_data)
             except json.JSONDecodeError:
                 logger.warning(f"Could not parse analysis JSON for history_id={history_id}")
