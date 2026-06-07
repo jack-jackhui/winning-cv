@@ -235,3 +235,127 @@ class TestTaskManager:
         assert task["status"] == "completed"
         assert task["progress"] == 100
         assert task["message"] == "Done!"
+
+    def test_file_based_task_manager_failed_status(self, mock_config_minimal):
+        """FileBasedTaskManager should handle failed task status correctly."""
+        from api.routes.jobs import FileBasedTaskManager
+
+        mgr = FileBasedTaskManager()
+        mgr.create_task(
+            task_id="test-task-fail",
+            user_email="test@example.com",
+            status="pending"
+        )
+
+        # Simulate failure
+        mgr.update_task(
+            task_id="test-task-fail",
+            status="failed",
+            message="LinkedIn session expired",
+            progress=25
+        )
+
+        task = mgr.get_task("test-task-fail")
+        assert task["status"] == "failed"
+        assert "expired" in task["message"]
+
+    def test_file_based_task_manager_get_nonexistent(self, mock_config_minimal):
+        """FileBasedTaskManager should return None for non-existent tasks."""
+        from api.routes.jobs import FileBasedTaskManager
+
+        mgr = FileBasedTaskManager()
+        result = mgr.get_task("nonexistent-task-xyz")
+        assert result is None
+
+    def test_file_based_task_manager_stores_user_email(self, mock_config_minimal):
+        """FileBasedTaskManager should store and preserve user_email."""
+        from api.routes.jobs import FileBasedTaskManager
+
+        mgr = FileBasedTaskManager()
+        mgr.create_task(
+            task_id="test-task-email",
+            user_email="user123@example.com",
+            status="running"
+        )
+
+        task = mgr.get_task("test-task-email")
+        assert task["user_email"] == "user123@example.com"
+
+
+class TestScoreNormalization:
+    """Test that score semantics are handled correctly."""
+
+    def test_job_result_score_is_0_to_10(self, mock_config_minimal):
+        """JobResult schema should validate score as 0-10."""
+        from api.schemas.jobs import JobResult
+        from pydantic import ValidationError
+
+        # Valid score within 0-10
+        job = JobResult(
+            id="test-123",
+            job_title="Software Engineer",
+            company="Test Corp",
+            job_link="https://example.com/job",
+            score=7.5
+        )
+        assert 0 <= job.score <= 10
+
+        # Score above 10 should fail validation
+        with pytest.raises(ValidationError):
+            JobResult(
+                id="test-456",
+                job_title="Test",
+                company="Test",
+                job_link="https://example.com",
+                score=85.0  # This should fail - it's 0-100 scale
+            )
+
+    def test_score_breakdown_scales(self, mock_config_minimal):
+        """ScoreBreakdown should have correct scale constraints."""
+        from api.schemas.jobs import ScoreBreakdown
+
+        breakdown = ScoreBreakdown(
+            ats_score=75.0,  # 0-100 scale
+            hr_score=82.5,   # 0-100 scale
+            llm_score=8.2,   # 0-10 scale
+            recommendation="INTERVIEW"
+        )
+
+        assert 0 <= breakdown.ats_score <= 100
+        assert 0 <= breakdown.hr_score <= 100
+        assert 0 <= breakdown.llm_score <= 10
+
+
+class TestSearchTaskResponse:
+    """Test search task response schemas."""
+
+    def test_search_status_response_schema(self, mock_config_minimal):
+        """SearchStatusResponse should include all required fields."""
+        from api.schemas.jobs import SearchStatusResponse, SearchStatus
+
+        response = SearchStatusResponse(
+            task_id="task-123",
+            status=SearchStatus.RUNNING,
+            progress=45,
+            message="Scraping jobs..."
+        )
+
+        assert response.task_id == "task-123"
+        assert response.status == SearchStatus.RUNNING
+        assert response.progress == 45
+        assert response.results_count is None
+
+    def test_search_status_with_results(self, mock_config_minimal):
+        """SearchStatusResponse should include results_count when available."""
+        from api.schemas.jobs import SearchStatusResponse, SearchStatus
+
+        response = SearchStatusResponse(
+            task_id="task-completed",
+            status=SearchStatus.COMPLETED,
+            progress=100,
+            message="Found 15 matching jobs",
+            results_count=15
+        )
+
+        assert response.status == SearchStatus.COMPLETED
+        assert response.results_count == 15

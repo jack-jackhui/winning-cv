@@ -1,6 +1,57 @@
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Error codes for categorized error handling
+export const ErrorCodes = {
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  AUTH_EXPIRED: 'AUTH_EXPIRED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  SERVER_ERROR: 'SERVER_ERROR',
+  DOWNLOAD_EXPIRED: 'DOWNLOAD_EXPIRED',
+  COOKIE_EXPIRED: 'COOKIE_EXPIRED',
+  SCRAPER_FAILED: 'SCRAPER_FAILED',
+  UNKNOWN: 'UNKNOWN',
+}
+
+// Custom API error with code and user-friendly message
+export class ApiError extends Error {
+  constructor(message, code = ErrorCodes.UNKNOWN, status = 0, details = null) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.status = status
+    this.details = details
+  }
+
+  // Get user-friendly error message
+  get userMessage() {
+    switch (this.code) {
+      case ErrorCodes.NETWORK_ERROR:
+        return 'Unable to connect. Please check your internet connection.'
+      case ErrorCodes.AUTH_EXPIRED:
+        return 'Your session has expired. Please log in again.'
+      case ErrorCodes.FORBIDDEN:
+        return 'You do not have permission to perform this action.'
+      case ErrorCodes.NOT_FOUND:
+        return 'The requested resource was not found.'
+      case ErrorCodes.DOWNLOAD_EXPIRED:
+        return 'The download link has expired. Please generate a new one.'
+      case ErrorCodes.COOKIE_EXPIRED:
+        return 'LinkedIn session expired. Please update your cookies in settings.'
+      case ErrorCodes.SCRAPER_FAILED:
+        return 'Job search failed. LinkedIn may be blocking requests. Try again later.'
+      case ErrorCodes.VALIDATION_ERROR:
+        return this.message
+      case ErrorCodes.SERVER_ERROR:
+        return 'Something went wrong on our end. Please try again.'
+      default:
+        return this.message || 'An unexpected error occurred.'
+    }
+  }
+}
+
 // Get auth headers (token-based auth like sel-exam)
 function getAuthHeaders() {
   const token = localStorage.getItem('winningcv_auth_token')
@@ -10,7 +61,48 @@ function getAuthHeaders() {
   return {}
 }
 
-// Generic fetch wrapper with error handling
+// Detect specific error types from response
+function categorizeError(status, errorBody) {
+  const detail = (errorBody?.detail || errorBody?.message || '').toLowerCase()
+
+  // Auth errors
+  if (status === 401) {
+    return { code: ErrorCodes.AUTH_EXPIRED, message: 'Session expired' }
+  }
+  if (status === 403) {
+    return { code: ErrorCodes.FORBIDDEN, message: 'Access denied' }
+  }
+
+  // Not found
+  if (status === 404) {
+    // Check for expired presigned URLs
+    if (detail.includes('expired') || detail.includes('presigned')) {
+      return { code: ErrorCodes.DOWNLOAD_EXPIRED, message: 'Download link expired' }
+    }
+    return { code: ErrorCodes.NOT_FOUND, message: 'Resource not found' }
+  }
+
+  // Validation errors
+  if (status === 422 || status === 400) {
+    return { code: ErrorCodes.VALIDATION_ERROR, message: errorBody?.detail || 'Invalid input' }
+  }
+
+  // Server errors
+  if (status >= 500) {
+    // Check for LinkedIn/scraper specific errors
+    if (detail.includes('linkedin') || detail.includes('cookie')) {
+      if (detail.includes('expired') || detail.includes('invalid')) {
+        return { code: ErrorCodes.COOKIE_EXPIRED, message: 'LinkedIn session expired' }
+      }
+      return { code: ErrorCodes.SCRAPER_FAILED, message: 'Job search failed' }
+    }
+    return { code: ErrorCodes.SERVER_ERROR, message: 'Server error' }
+  }
+
+  return { code: ErrorCodes.UNKNOWN, message: errorBody?.detail || `Error: ${status}` }
+}
+
+// Generic fetch wrapper with improved error handling
 async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`
 
@@ -40,17 +132,36 @@ async function fetchAPI(endpoint, options = {}) {
     const response = await fetch(url, config)
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      const errorMessage = error.detail || error.message || `HTTP error! status: ${response.status}`
-      throw new Error(errorMessage)
+      const errorBody = await response.json().catch(() => ({}))
+      const { code, message } = categorizeError(response.status, errorBody)
+
+      // Dispatch event for auth expiry so AuthContext can handle it
+      if (code === ErrorCodes.AUTH_EXPIRED) {
+        window.dispatchEvent(new CustomEvent('authExpired', { detail: { endpoint } }))
+      }
+
+      throw new ApiError(message, code, response.status, errorBody)
     }
 
     // Handle empty responses
     const text = await response.text()
     return text ? JSON.parse(text) : null
   } catch (error) {
+    // Handle network errors (no response at all)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error(`Network Error [${endpoint}]:`, error)
+      throw new ApiError('Network error', ErrorCodes.NETWORK_ERROR, 0)
+    }
+
+    // Re-throw ApiError as-is
+    if (error instanceof ApiError) {
+      console.error(`API Error [${endpoint}]:`, error.code, error.message)
+      throw error
+    }
+
+    // Wrap unknown errors
     console.error(`API Error [${endpoint}]:`, error)
-    throw error
+    throw new ApiError(error.message || 'Unknown error', ErrorCodes.UNKNOWN, 0)
   }
 }
 
@@ -123,6 +234,13 @@ export const jobService = {
     return fetchAPI(`/api/v1/jobs/search/${taskId}/status`)
   },
 
+  // Get user's recent/active search tasks (for resumption after page refresh)
+  async getActiveTasks(includeCompleted = false) {
+    const params = new URLSearchParams()
+    if (includeCompleted) params.append('include_completed', 'true')
+    return fetchAPI(`/api/v1/jobs/search/tasks?${params.toString()}`)
+  },
+
   // Poll search until complete
   async pollSearchUntilComplete(taskId, onProgress, pollInterval = 2000) {
     return new Promise((resolve, reject) => {
@@ -171,7 +289,7 @@ export const jobService = {
       totalMatches: items.length,
       cvsGenerated: items.filter((j) => j.cv_link).length,
       avgMatchScore: items.length
-        ? Math.round(items.reduce((acc, j) => acc + j.score, 0) / items.length)
+        ? Math.round((items.reduce((acc, j) => acc + j.score, 0) / items.length) * 10)
         : 0,
       thisWeek: items.filter((j) => {
         if (!j.posted_date) return false

@@ -89,8 +89,56 @@ export default function Preferences() {
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [seekUrl, setSeekUrl] = useState('')
 
+  // Check for active tasks on mount (resume after page refresh)
   useEffect(() => {
+    const checkActiveTasks = async () => {
+      try {
+        const tasks = await jobService.getActiveTasks()
+        if (tasks && tasks.length > 0) {
+          const activeTask = tasks.find(t => t.status === 'running' || t.status === 'pending')
+          if (activeTask) {
+            // Resume polling for the active task
+            setSearching(true)
+            setSearchStatus({
+              status: activeTask.status,
+              message: activeTask.message || 'Resuming search...',
+              progress: activeTask.progress || 0,
+              resultsCount: activeTask.results_count
+            })
+
+            // Continue polling
+            jobService.pollSearchUntilComplete(activeTask.task_id, (status) => {
+              setSearchStatus({
+                status: status.status,
+                message: status.message,
+                progress: status.progress,
+                resultsCount: status.results_count,
+              })
+            }).then(() => {
+              setSearchStatus((prev) => ({
+                ...prev,
+                status: 'completed',
+                message: `Search completed! Found ${prev?.resultsCount || 0} matching jobs.`,
+              }))
+            }).catch((err) => {
+              setSearchStatus({
+                status: 'failed',
+                message: err.message || 'Search failed',
+              })
+              setError(err.message || 'Job search failed')
+            }).finally(() => {
+              setSearching(false)
+            })
+          }
+        }
+      } catch (err) {
+        // Silently ignore - user may not have any active tasks
+        console.debug('No active tasks to resume:', err.message)
+      }
+    }
+
     loadConfig()
+    checkActiveTasks()
   }, [])
 
   const loadConfig = async () => {

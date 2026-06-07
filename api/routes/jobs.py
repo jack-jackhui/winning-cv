@@ -10,7 +10,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -568,6 +568,64 @@ async def get_search_status(
         message=task["message"],
         results_count=task.get("results_count")
     )
+
+
+@router.get("/search/tasks", response_model=List[SearchStatusResponse])
+async def get_user_search_tasks(
+    user: UserInfo = Depends(get_current_user),
+    include_completed: bool = False,
+    limit: int = 5
+) -> List[SearchStatusResponse]:
+    """
+    Get the user's recent search tasks.
+
+    Enables task resumption after page refresh.
+
+    Args:
+        user: Authenticated user
+        include_completed: Whether to include completed/failed tasks
+        limit: Maximum number of tasks to return
+
+    Returns:
+        List of recent search tasks
+    """
+    task_mgr = _get_task_manager()
+
+    # Check if task manager supports user tasks (Postgres-backed)
+    if hasattr(task_mgr, 'get_user_tasks'):
+        tasks = task_mgr.get_user_tasks(
+            user_email=user.email,
+            limit=limit,
+            include_completed=include_completed
+        )
+    else:
+        # File-based fallback: scan all tasks for user's tasks
+        # This is less efficient but maintains compatibility
+        tasks = []
+        if hasattr(task_mgr, '_read_tasks'):
+            all_tasks = task_mgr._read_tasks()
+            for task_id, task in all_tasks.items():
+                if task.get('user_email') == user.email:
+                    if include_completed or task.get('status') not in ('completed', 'failed'):
+                        tasks.append({
+                            'task_id': task_id,
+                            'status': task.get('status', 'pending'),
+                            'progress': task.get('progress', 0),
+                            'message': task.get('message', ''),
+                            'results_count': task.get('results_count')
+                        })
+            tasks = tasks[:limit]
+
+    return [
+        SearchStatusResponse(
+            task_id=t.get('task_id', ''),
+            status=t.get('status', 'pending'),
+            progress=t.get('progress', 0),
+            message=t.get('message', ''),
+            results_count=t.get('results_count')
+        )
+        for t in tasks
+    ]
 
 
 @router.get("/results", response_model=JobResultsResponse)
