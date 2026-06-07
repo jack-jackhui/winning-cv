@@ -597,11 +597,18 @@ export default function GenerateCV() {
             </button>
             {/* View Analysis Button */}
             <button
-              onClick={() => setShowAnalysisModal(true)}
+              onClick={() => {
+                if (analysisStatus === 'failed' && result?.history_id) {
+                  // Retry analysis
+                  startAnalysisPolling(result.history_id)
+                } else if (analysisStatus === 'ready') {
+                  setShowAnalysisModal(true)
+                }
+              }}
               disabled={analysisStatus === 'pending' || analysisStatus === 'idle'}
               className={`btn-secondary ${
                 analysisStatus === 'ready' ? 'ring-2 ring-accent-500/50' : ''
-              }`}
+              } ${analysisStatus === 'failed' ? 'text-amber-400 hover:text-amber-300' : ''}`}
             >
               {analysisStatus === 'pending' ? (
                 <>
@@ -620,8 +627,8 @@ export default function GenerateCV() {
                 </>
               ) : analysisStatus === 'failed' ? (
                 <>
-                  <AlertCircle className="w-5 h-5" />
-                  Analysis Failed
+                  <RefreshCw className="w-5 h-5" />
+                  Retry Analysis
                 </>
               ) : (
                 <>

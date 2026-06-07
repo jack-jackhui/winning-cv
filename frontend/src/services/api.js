@@ -640,10 +640,14 @@ export const profileService = {
     return { success: true }
   },
 
-  // Delete user account (placeholder)
+  // Export user data (GDPR data portability)
+  async exportData() {
+    return fetchAPI('/api/v1/profile/export')
+  },
+
+  // Delete user account (GDPR right to erasure)
   async deleteAccount() {
-    console.log('Delete account requested')
-    return { success: true }
+    return fetchAPI('/api/v1/profile/account', { method: 'DELETE' })
   },
 }
 

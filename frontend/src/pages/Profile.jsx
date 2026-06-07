@@ -151,7 +151,13 @@ export default function Profile() {
       logout()
     } catch (err) {
       console.error('Failed to delete account:', err)
-      setError('Failed to delete account')
+      // Handle "not implemented" 503 response
+      if (err.status === 503) {
+        const info = err.details?.info || 'Contact support to request account deletion.'
+        setError(info)
+      } else {
+        setError(err.userMessage || 'Failed to delete account')
+      }
     }
   }
 

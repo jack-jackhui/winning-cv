@@ -200,3 +200,56 @@ async def test_notification(
             status_code=400,
             detail=f"Invalid channel '{request.channel}'. Supported: email, telegram, wechat"
         )
+
+
+@router.get("/export")
+async def export_user_data(
+    user: UserInfo = Depends(get_current_user)
+):
+    """
+    Export all user data (GDPR data portability).
+
+    This endpoint is a placeholder for future implementation.
+    Full implementation requires:
+    - Gathering data from all tables (user_configs, cv_history, cv_versions, etc.)
+    - Packaging into a portable format (JSON/ZIP)
+    - Generating a secure download link
+
+    Returns:
+        503 Service Unavailable with feature status message
+    """
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "message": "Data export is not yet implemented",
+            "feature_status": "planned",
+            "info": "This feature will allow you to download all your data in a portable format."
+        }
+    )
+
+
+@router.delete("/account")
+async def delete_account(
+    user: UserInfo = Depends(get_current_user)
+):
+    """
+    Delete user account and all associated data (GDPR right to erasure).
+
+    This endpoint is a placeholder for future implementation.
+    Full implementation requires:
+    - Cascade delete across all user data tables
+    - Remove uploaded files from storage
+    - Revoke auth tokens
+    - Send confirmation email
+
+    Returns:
+        503 Service Unavailable with feature status message
+    """
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "message": "Account deletion is not yet implemented",
+            "feature_status": "planned",
+            "info": "Contact support at support@winningcv.com to request account deletion."
+        }
+    )

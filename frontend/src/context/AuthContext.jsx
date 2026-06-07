@@ -168,9 +168,19 @@ export function AuthProvider({ children }) {
       }
     }
 
+    // Listen for auth expiry events from API calls (401 responses)
+    const handleAuthExpired = () => {
+      console.log('Session expired, logging out...')
+      localStorage.removeItem('winningcv_auth_token')
+      setUser(null)
+      setError('Your session has expired. Please log in again.')
+    }
+
     window.addEventListener('oauthSuccess', handleOAuthSuccess)
+    window.addEventListener('authExpired', handleAuthExpired)
     return () => {
       window.removeEventListener('oauthSuccess', handleOAuthSuccess)
+      window.removeEventListener('authExpired', handleAuthExpired)
     }
   }, [checkAuth])
 
