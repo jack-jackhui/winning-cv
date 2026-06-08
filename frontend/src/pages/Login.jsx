@@ -47,7 +47,7 @@ const GitHubIcon = () => (
 export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState('')
-  const { loginWithOAuth, authServiceUrl } = useAuth()
+  const { loginWithOAuth } = useAuth()
 
   const handleOAuthLogin = async (provider) => {
     setError('')

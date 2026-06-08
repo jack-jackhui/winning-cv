@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import psycopg2
-from psycopg2.extras import DictCursor, RealDictCursor
+from psycopg2.extras import DictCursor, Json, RealDictCursor
 
 logger = logging.getLogger(__name__)
 
@@ -1226,6 +1226,334 @@ class PostgresTaskManager:
             return 0
 
 
+class PostgresTaskQueue:
+    """
+    Postgres-backed distributed task queue.
+
+    Uses FOR UPDATE SKIP LOCKED for safe concurrent task claiming.
+    Supports priority-based processing, retries with backoff, and worker locking.
+
+    This complements PostgresTaskManager (which tracks search_tasks for frontend display)
+    by providing a proper worker queue with atomic operations.
+    """
+
+    def __init__(self, database_url: str = None):
+        self.database_url = database_url or DATABASE_URL
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @contextmanager
+    def get_cursor(self, dict_cursor: bool = True):
+        """Context manager for database cursor."""
+        conn = psycopg2.connect(self.database_url)
+        cursor_factory = RealDictCursor if dict_cursor else None
+        cursor = conn.cursor(cursor_factory=cursor_factory)
+        try:
+            yield cursor
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def enqueue(
+        self,
+        task_id: str,
+        task_type: str,
+        payload: Dict[str, Any] = None,
+        priority: int = 0,
+        max_attempts: int = 3,
+        run_after: datetime = None,
+        user_email: str = None,
+        correlation_id: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Add a new task to the queue.
+
+        Args:
+            task_id: Unique task identifier
+            task_type: Type of task (e.g., 'job_search', 'cv_analysis')
+            payload: Task-specific data (stored as JSONB)
+            priority: Higher values = processed first (default 0)
+            max_attempts: Maximum retry attempts (default 3)
+            run_after: Delay execution until this time
+            user_email: Associated user
+            correlation_id: Links to external tracking (e.g., search_tasks.task_id)
+
+        Returns:
+            Created task record
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO task_queue
+                        (task_id, task_type, payload, priority, max_attempts,
+                         run_after, user_email, correlation_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, task_id, task_type, state, priority,
+                              attempts, max_attempts, created_at
+                """, (
+                    task_id,
+                    task_type,
+                    Json(payload or {}),
+                    priority,
+                    max_attempts,
+                    run_after,
+                    user_email,
+                    correlation_id,
+                ))
+                row = cursor.fetchone()
+                self.logger.info(f"Enqueued task {task_id} (type={task_type}, priority={priority})")
+                return dict(row)
+        except Exception as e:
+            self.logger.error(f"Failed to enqueue task {task_id}: {e}")
+            raise
+
+    def claim_task(
+        self,
+        worker_id: str,
+        task_types: List[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Atomically claim the next available task.
+
+        Uses FOR UPDATE SKIP LOCKED for safe concurrent access.
+
+        Args:
+            worker_id: Identifier of the claiming worker
+            task_types: Optional list of task types to claim (None = any)
+
+        Returns:
+            Claimed task data or None if no tasks available
+        """
+        try:
+            with self.get_cursor() as cursor:
+                # Use the database function for atomic claim
+                cursor.execute("""
+                    SELECT * FROM claim_next_task(%s, %s)
+                """, (worker_id, task_types))
+                row = cursor.fetchone()
+
+                if row and row.get("task_id"):
+                    self.logger.debug(f"Worker {worker_id} claimed task {row['task_id']}")
+                    return dict(row)
+                return None
+        except Exception as e:
+            self.logger.error(f"Failed to claim task for worker {worker_id}: {e}")
+            return None
+
+    def complete_task(
+        self,
+        task_id: str,
+        worker_id: str,
+        result: Dict[str, Any] = None
+    ) -> bool:
+        """
+        Mark a task as completed.
+
+        Args:
+            task_id: Task identifier
+            worker_id: Worker that processed the task
+            result: Task result data
+
+        Returns:
+            True if task was completed, False otherwise
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT complete_task(%s, %s, %s)
+                """, (task_id, worker_id, Json(result) if result else None))
+                success = cursor.fetchone()[0]
+                if success:
+                    self.logger.info(f"Task {task_id} completed by {worker_id}")
+                return success
+        except Exception as e:
+            self.logger.error(f"Failed to complete task {task_id}: {e}")
+            return False
+
+    def fail_task(
+        self,
+        task_id: str,
+        worker_id: str,
+        error: str,
+        retry_after: datetime = None
+    ) -> bool:
+        """
+        Mark a task as failed, optionally scheduling retry.
+
+        Args:
+            task_id: Task identifier
+            worker_id: Worker that processed the task
+            error: Error message
+            retry_after: Schedule retry at this time (None = no retry)
+
+        Returns:
+            True if task was updated, False otherwise
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT fail_task(%s, %s, %s, %s)
+                """, (task_id, worker_id, error, retry_after))
+                success = cursor.fetchone()[0]
+                if success:
+                    if retry_after:
+                        self.logger.warning(f"Task {task_id} failed, retry at {retry_after}: {error}")
+                    else:
+                        self.logger.error(f"Task {task_id} permanently failed: {error}")
+                return success
+        except Exception as e:
+            self.logger.error(f"Failed to fail task {task_id}: {e}")
+            return False
+
+    def heartbeat(self, task_id: str, worker_id: str) -> bool:
+        """
+        Refresh the lock on a running task.
+
+        Call periodically during long-running tasks to prevent timeout.
+
+        Args:
+            task_id: Task identifier
+            worker_id: Worker holding the lock
+
+        Returns:
+            True if heartbeat was successful
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT heartbeat_task(%s, %s)
+                """, (task_id, worker_id))
+                return cursor.fetchone()[0]
+        except Exception as e:
+            self.logger.error(f"Failed to heartbeat task {task_id}: {e}")
+            return False
+
+    def cancel_task(self, task_id: str) -> bool:
+        """
+        Cancel a pending task.
+
+        Can only cancel tasks that are not yet running.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            True if task was cancelled
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    UPDATE task_queue
+                    SET state = 'cancelled', completed_at = NOW(), updated_at = NOW()
+                    WHERE task_id = %s AND state = 'pending'
+                """, (task_id,))
+                cancelled = cursor.rowcount > 0
+                if cancelled:
+                    self.logger.info(f"Task {task_id} cancelled")
+                return cancelled
+        except Exception as e:
+            self.logger.error(f"Failed to cancel task {task_id}: {e}")
+            return False
+
+    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get task details by ID.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Task data or None if not found
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT task_id, task_type, state, priority, payload, result, error,
+                           attempts, max_attempts, run_after, locked_by, locked_at,
+                           user_email, correlation_id, created_at, updated_at, completed_at
+                    FROM task_queue
+                    WHERE task_id = %s
+                """, (task_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            self.logger.error(f"Failed to get task {task_id}: {e}")
+            return None
+
+    def get_queue_stats(self) -> Dict[str, Any]:
+        """
+        Get queue statistics.
+
+        Returns:
+            Dict with pending, running, completed, failed counts
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE state = 'pending') as pending,
+                        COUNT(*) FILTER (WHERE state = 'running') as running,
+                        COUNT(*) FILTER (WHERE state = 'completed') as completed,
+                        COUNT(*) FILTER (WHERE state = 'failed') as failed,
+                        COUNT(*) FILTER (WHERE state = 'cancelled') as cancelled
+                    FROM task_queue
+                """)
+                row = cursor.fetchone()
+                return dict(row)
+        except Exception as e:
+            self.logger.error(f"Failed to get queue stats: {e}")
+            return {"pending": 0, "running": 0, "completed": 0, "failed": 0, "cancelled": 0}
+
+    def release_stale_locks(self, timeout_minutes: int = 30) -> int:
+        """
+        Release locks held by crashed/hung workers.
+
+        Args:
+            timeout_minutes: Consider locks stale after this many minutes
+
+        Returns:
+            Number of tasks released
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT release_stale_locks(%s)
+                """, (timeout_minutes,))
+                released = cursor.fetchone()[0]
+                if released > 0:
+                    self.logger.warning(f"Released {released} stale task locks")
+                return released
+        except Exception as e:
+            self.logger.error(f"Failed to release stale locks: {e}")
+            return 0
+
+    def cleanup_old_tasks(self, max_age_hours: int = 168) -> int:
+        """
+        Remove old completed/failed/cancelled tasks.
+
+        Args:
+            max_age_hours: Remove tasks completed more than this many hours ago
+
+        Returns:
+            Number of tasks deleted
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT cleanup_old_queue_tasks(%s)
+                """, (max_age_hours,))
+                deleted = cursor.fetchone()[0]
+                if deleted > 0:
+                    self.logger.info(f"Cleaned up {deleted} old queue tasks")
+                return deleted
+        except Exception as e:
+            self.logger.error(f"Failed to cleanup old queue tasks: {e}")
+            return 0
+
+
 # Global singleton for task manager
 _postgres_task_manager: Optional[PostgresTaskManager] = None
 
@@ -1241,6 +1569,7 @@ def get_postgres_task_manager() -> PostgresTaskManager:
 # Global singletons
 _postgres_manager: Optional[PostgresManager] = None
 _postgres_cv_version_manager: Optional[PostgresCVVersionManager] = None
+_postgres_task_queue: Optional[PostgresTaskQueue] = None
 
 
 def get_postgres_manager() -> PostgresManager:
@@ -1257,3 +1586,11 @@ def get_postgres_cv_version_manager() -> PostgresCVVersionManager:
     if _postgres_cv_version_manager is None:
         _postgres_cv_version_manager = PostgresCVVersionManager()
     return _postgres_cv_version_manager
+
+
+def get_postgres_task_queue() -> PostgresTaskQueue:
+    """Get or create global PostgreSQL task queue instance."""
+    global _postgres_task_queue
+    if _postgres_task_queue is None:
+        _postgres_task_queue = PostgresTaskQueue()
+    return _postgres_task_queue

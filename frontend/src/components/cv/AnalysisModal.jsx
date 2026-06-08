@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   XCircle,
   Minus,
-  RefreshCw,
   Loader2,
   Sparkles,
 } from 'lucide-react'

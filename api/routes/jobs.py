@@ -442,7 +442,13 @@ async def save_job_config(
 
 
 def _run_job_search(task_id: str, user_email: str, config_data: dict):
-    """Background task to run job search"""
+    """
+    Background task to run job search.
+
+    Currently runs via ThreadPoolExecutor from the API process.
+    Future: Can be migrated to PostgresTaskQueue for distributed worker processing.
+    The task_id can be used as correlation_id to link search_tasks to task_queue.
+    """
     task_mgr = _get_task_manager()
     try:
         task_mgr.update_task(task_id, status=SearchStatus.RUNNING.value, progress=10, message="Initializing search...")

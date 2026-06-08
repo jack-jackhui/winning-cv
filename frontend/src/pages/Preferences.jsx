@@ -12,11 +12,10 @@ import {
   FileText,
   X,
   Globe,
-  DollarSign,
   ExternalLink,
   FolderOpen,
 } from 'lucide-react'
-import { jobService, cvService } from '../services/api'
+import { jobService } from '../services/api'
 import CVLibraryPicker from '../components/cv/CVLibraryPicker'
 
 const countries = [

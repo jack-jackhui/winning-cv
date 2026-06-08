@@ -292,3 +292,202 @@ class TestWorkerUnit:
 
         worker = TaskWorker()
         assert len(worker.task_types) == len(TaskType)
+
+
+class TestPostgresTaskQueue:
+    """Tests for PostgresTaskQueue class."""
+
+    @pytest.fixture
+    def mock_cursor(self):
+        """Create a mock cursor."""
+        from datetime import datetime, timezone
+
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {
+            "id": 1,
+            "task_id": "test-task-123",
+            "task_type": "job_search",
+            "state": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "max_attempts": 3,
+            "created_at": datetime.now(timezone.utc),
+        }
+        cursor.rowcount = 1
+        return cursor
+
+    @pytest.fixture
+    def queue(self, mock_cursor):
+        """Create a PostgresTaskQueue with mocked database."""
+        from contextlib import contextmanager
+
+        with patch("data_store.postgres_manager.psycopg2.connect"):
+            from data_store.postgres_manager import PostgresTaskQueue
+            queue = PostgresTaskQueue("postgresql://test:test@localhost/test")
+
+            @contextmanager
+            def mock_get_cursor(dict_cursor=True):
+                yield mock_cursor
+
+            queue.get_cursor = mock_get_cursor
+            return queue
+
+    def test_enqueue_creates_task(self, queue, mock_cursor):
+        """Test that enqueue inserts a task correctly."""
+        result = queue.enqueue(
+            task_id="test-123",
+            task_type="job_search",
+            payload={"user_email": "test@example.com"},
+            priority=5,
+        )
+
+        mock_cursor.execute.assert_called()
+        call_args = mock_cursor.execute.call_args
+        assert "INSERT INTO task_queue" in call_args[0][0]
+
+    def test_claim_task_uses_skip_locked(self, queue, mock_cursor):
+        """Test that claim_task uses the atomic claiming function."""
+        mock_cursor.fetchone.return_value = {
+            "task_id": "claimed-task",
+            "task_type": "job_search",
+            "payload": {},
+            "attempts": 1,
+            "max_attempts": 3,
+            "user_email": None,
+            "correlation_id": None,
+        }
+
+        result = queue.claim_task("worker-1")
+
+        assert "claim_next_task" in mock_cursor.execute.call_args[0][0]
+        assert result["task_id"] == "claimed-task"
+
+    def test_claim_returns_none_when_empty(self, queue, mock_cursor):
+        """Test claim returns None when queue is empty."""
+        mock_cursor.fetchone.return_value = {"task_id": None}
+
+        result = queue.claim_task("worker-1")
+        assert result is None
+
+    def test_complete_task(self, queue, mock_cursor):
+        """Test completing a task."""
+        mock_cursor.fetchone.return_value = [True]
+
+        result = queue.complete_task("task-123", "worker-1", {"jobs": 10})
+        assert result is True
+
+    def test_fail_task_with_retry(self, queue, mock_cursor):
+        """Test failing a task with retry."""
+        from datetime import datetime, timezone, timedelta
+
+        mock_cursor.fetchone.return_value = [True]
+        retry_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+        result = queue.fail_task("task-123", "worker-1", "error", retry_after=retry_at)
+        assert result is True
+
+    def test_heartbeat(self, queue, mock_cursor):
+        """Test heartbeat refresh."""
+        mock_cursor.fetchone.return_value = [True]
+
+        result = queue.heartbeat("task-123", "worker-1")
+        assert result is True
+
+    def test_cancel_task(self, queue, mock_cursor):
+        """Test cancelling a task."""
+        result = queue.cancel_task("task-123")
+        assert result is True
+        assert "cancelled" in mock_cursor.execute.call_args[0][0]
+
+    def test_get_queue_stats(self, queue, mock_cursor):
+        """Test getting queue statistics."""
+        mock_cursor.fetchone.return_value = {
+            "pending": 5,
+            "running": 2,
+            "completed": 100,
+            "failed": 3,
+            "cancelled": 1,
+        }
+
+        stats = queue.get_queue_stats()
+        assert stats["pending"] == 5
+        assert stats["running"] == 2
+
+
+class TestTaskQueueMigration:
+    """Tests for task queue migration SQL."""
+
+    def test_migration_file_exists(self):
+        """Verify migration file exists."""
+        import os
+        migration_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "init-db",
+            "04-task-queue.sql"
+        )
+        assert os.path.exists(migration_path)
+
+    def test_migration_has_required_elements(self):
+        """Verify migration has all required SQL elements."""
+        import os
+        migration_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "init-db",
+            "04-task-queue.sql"
+        )
+
+        with open(migration_path, "r") as f:
+            content = f.read()
+
+        # Table creation
+        assert "CREATE TABLE IF NOT EXISTS task_queue" in content
+
+        # Required columns
+        assert "task_id" in content
+        assert "task_type" in content
+        assert "state" in content
+        assert "priority" in content
+        assert "payload JSONB" in content
+        assert "locked_by" in content
+        assert "run_after" in content
+
+        # Atomic claiming
+        assert "FOR UPDATE SKIP LOCKED" in content
+        assert "claim_next_task" in content
+
+        # Helper functions
+        assert "complete_task" in content
+        assert "fail_task" in content
+        assert "heartbeat_task" in content
+        assert "release_stale_locks" in content
+
+
+class TestRunWorkerScript:
+    """Tests for run_worker.py entrypoint."""
+
+    def test_worker_script_syntax(self):
+        """Verify worker script has valid syntax."""
+        import py_compile
+        import os
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "run_worker.py"
+        )
+        py_compile.compile(script_path, doraise=True)
+
+    def test_worker_script_imports(self):
+        """Verify worker script can be imported."""
+        with patch("data_store.postgres_manager.psycopg2.connect"):
+            import run_worker
+            assert hasattr(run_worker, "Worker")
+            assert hasattr(run_worker, "TaskHandlerRegistry")
+
+    def test_handlers_registered(self):
+        """Verify task handlers are registered."""
+        with patch("data_store.postgres_manager.psycopg2.connect"):
+            import run_worker
+            registry = run_worker._registry
+
+            assert "job_search" in registry.list_types()
+            assert "cv_analysis" in registry.list_types()
+            assert "notification" in registry.list_types()

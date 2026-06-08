@@ -153,7 +153,7 @@ export function AnimatedSection({ children, className = '', delay = 0 }) {
 }
 
 // Animated text reveal (word by word)
-export function AnimatedText({ text, className = '', as: Component = 'span' }) {
+export function AnimatedText({ text, className = '', as: _Component = 'span' }) {
   const words = text.split(' ')
   
   return (
@@ -178,7 +178,7 @@ export function AnimatedText({ text, className = '', as: Component = 'span' }) {
 }
 
 // Counter animation for stats
-export function AnimatedCounter({ value, suffix = '', duration = 2 }) {
+export function AnimatedCounter({ value, suffix = '', duration: _duration = 2 }) {
   return (
     <motion.span
       initial={{ opacity: 0 }}

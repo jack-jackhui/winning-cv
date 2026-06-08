@@ -4,8 +4,6 @@ import {
   Download,
   Search,
   Calendar,
-  Tag,
-  Filter,
   Loader2,
   Plus,
   Archive,
@@ -16,7 +14,6 @@ import {
   Grid3X3,
   List,
   TrendingUp,
-  Eye,
   Check,
   X,
   Edit3,
@@ -695,7 +692,7 @@ export default function CVLibrary() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [typeFilter, setTypeFilter] = useState('all') // all | base | generated
   const [categories, setCategories] = useState([])
-  const [allTags, setAllTags] = useState([])
+  const [_allTags, setAllTags] = useState([])
   const [analytics, setAnalytics] = useState(null)
 
   // Modals
