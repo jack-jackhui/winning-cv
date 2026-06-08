@@ -113,8 +113,11 @@ function VersionsList({ versions, selected, onSelect, loading }) {
   if (versions.length === 0) {
     return (
       <div className="text-center py-8">
-        <FileText className="w-10 h-10 text-text-muted mx-auto mb-2" />
-        <p className="text-text-secondary">No CV versions found</p>
+        <FileText className="w-10 h-10 text-text-muted mx-auto mb-3" />
+        <p className="text-text-secondary font-medium mb-1">No CV versions found</p>
+        <p className="text-text-muted text-sm">
+          Upload your first CV in the CV Library to get started
+        </p>
       </div>
     )
   }

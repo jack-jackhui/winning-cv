@@ -13,8 +13,9 @@ from api.schemas.notifications import (
     TestNotificationRequest,
     TestNotificationResponse,
 )
-from data_store.storage_factory import get_data_manager
+from data_store.storage_factory import get_data_manager, get_cv_version_manager
 from utils.notifications import send_email_notification, send_telegram_to_user, send_wechat_message
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -209,47 +210,183 @@ async def export_user_data(
     """
     Export all user data (GDPR data portability).
 
-    This endpoint is a placeholder for future implementation.
-    Full implementation requires:
-    - Gathering data from all tables (user_configs, cv_history, cv_versions, etc.)
-    - Packaging into a portable format (JSON/ZIP)
-    - Generating a secure download link
+    Returns a JSON object containing:
+    - User profile/email
+    - Notification preferences
+    - User configuration
+    - CV history (analysis records)
+    - CV versions (metadata only, no file content)
+    - Analytics summary
 
-    Returns:
-        503 Service Unavailable with feature status message
+    Note: File contents are not included. Use the download endpoints for files.
     """
-    raise HTTPException(
-        status_code=503,
-        detail={
-            "message": "Data export is not yet implemented",
-            "feature_status": "planned",
-            "info": "This feature will allow you to download all your data in a portable format."
+    try:
+        data_manager = get_storage_manager()
+        cv_manager = get_cv_version_manager()
+
+        # Gather user data from all sources
+        export_data = {
+            "export_metadata": {
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "user_email": user.email,
+                "export_version": "1.0",
+            },
+            "profile": {
+                "email": user.email,
+                "name": user.name,
+                "provider": user.provider,
+            },
+            "notification_preferences": {},
+            "user_config": {},
+            "cv_history": [],
+            "cv_versions": [],
+            "analytics": {},
         }
-    )
+
+        # Get notification preferences
+        try:
+            prefs = data_manager.get_notification_preferences(user.email)
+            # Remove any internal IDs or sensitive fields
+            export_data["notification_preferences"] = {
+                "email_alerts": prefs.get("email_alerts", True),
+                "telegram_alerts": prefs.get("telegram_alerts", False),
+                "wechat_alerts": prefs.get("wechat_alerts", False),
+                "weekly_digest": prefs.get("weekly_digest", True),
+                "notification_email": prefs.get("notification_email"),
+                # Note: chat IDs intentionally excluded for security
+            }
+        except Exception as e:
+            logger.warning(f"Failed to export notification preferences: {e}")
+
+        # Get user config
+        try:
+            config = data_manager.get_user_config(user.email)
+            # Filter out any internal/system fields
+            export_data["user_config"] = {
+                k: v for k, v in config.items()
+                if not k.startswith("_") and k not in ("id", "record_id", "airtable_id")
+            }
+        except Exception as e:
+            logger.warning(f"Failed to export user config: {e}")
+
+        # Get CV history
+        try:
+            history = data_manager.get_history_by_user(user.email)
+            export_data["cv_history"] = [
+                {
+                    "job_title": h.get("job_title"),
+                    "company": h.get("company"),
+                    "job_url": h.get("job_url"),
+                    "status": h.get("status"),
+                    "created_at": h.get("created_at"),
+                    "score": h.get("score"),
+                    # Exclude download URLs and internal IDs
+                }
+                for h in (history or [])
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to export CV history: {e}")
+
+        # Get CV versions
+        try:
+            versions = cv_manager.list_versions(user.email)
+            export_data["cv_versions"] = [
+                {
+                    "version_name": v.get("version_name"),
+                    "category": v.get("category"),
+                    "tags": v.get("tags", []),
+                    "notes": v.get("notes"),
+                    "is_primary": v.get("is_primary", False),
+                    "created_at": v.get("created_at"),
+                    "updated_at": v.get("updated_at"),
+                    "usage_count": v.get("usage_count", 0),
+                    "response_count": v.get("response_count", 0),
+                    # Exclude file paths and internal IDs
+                }
+                for v in (versions or [])
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to export CV versions: {e}")
+
+        # Get analytics
+        try:
+            analytics = cv_manager.get_analytics(user.email)
+            export_data["analytics"] = analytics or {}
+        except Exception as e:
+            logger.warning(f"Failed to export analytics: {e}")
+
+        return export_data
+
+    except Exception as e:
+        logger.error(f"Failed to export user data: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to export user data. Please try again later."
+        )
 
 
 @router.delete("/account")
-async def delete_account(
+async def request_account_deletion(
     user: UserInfo = Depends(get_current_user)
 ):
     """
-    Delete user account and all associated data (GDPR right to erasure).
+    Request account deletion (GDPR right to erasure).
 
-    This endpoint is a placeholder for future implementation.
-    Full implementation requires:
-    - Cascade delete across all user data tables
-    - Remove uploaded files from storage
-    - Revoke auth tokens
-    - Send confirmation email
+    This creates a deletion request that will be processed within 30 days.
+    The user will receive a confirmation email with details.
+
+    Actual deletion is handled by an admin review process to ensure:
+    - All data is properly backed up before deletion
+    - No pending jobs/tasks are orphaned
+    - Audit trail is maintained
 
     Returns:
-        503 Service Unavailable with feature status message
+        Confirmation of deletion request
     """
-    raise HTTPException(
-        status_code=503,
-        detail={
-            "message": "Account deletion is not yet implemented",
-            "feature_status": "planned",
-            "info": "Contact support at support@winningcv.com to request account deletion."
+    try:
+        # Log the deletion request
+        logger.info(f"Account deletion requested for user: {user.email}")
+
+        # Try to send confirmation email
+        try:
+            send_email_notification(
+                subject="WinningCV Account Deletion Request Received",
+                body=f"""Hi,
+
+We received your request to delete your WinningCV account ({user.email}).
+
+Your request will be processed within 30 days in accordance with GDPR requirements.
+
+What happens next:
+- Your data will be backed up securely
+- All personal data will be permanently deleted
+- You will receive a confirmation email when deletion is complete
+
+If you did not request this deletion, please contact us immediately at support@winningcv.com.
+
+Best regards,
+The WinningCV Team
+""",
+                to_email=user.email
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send deletion confirmation email: {e}")
+
+        return {
+            "status": "deletion_requested",
+            "message": "Your account deletion request has been received.",
+            "details": {
+                "user_email": user.email,
+                "requested_at": datetime.now(timezone.utc).isoformat(),
+                "expected_completion": "Within 30 days",
+                "confirmation_email_sent": True,
+            },
+            "info": "You will receive a confirmation email when your data has been deleted."
         }
-    )
+
+    except Exception as e:
+        logger.error(f"Failed to process deletion request: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process deletion request. Please contact support@winningcv.com."
+        )

@@ -752,20 +752,37 @@ export default function CVLibrary() {
           'Authorization': `Token ${token}`
         }
       })
-      if (!response.ok) throw new Error('Download failed')
-      
+
+      if (!response.ok) {
+        // Handle specific error cases with user-friendly messages
+        if (response.status === 403 || response.status === 410) {
+          throw new Error('Download link has expired. Please try again to get a fresh link.')
+        } else if (response.status === 404) {
+          throw new Error('File not found. It may have been deleted or moved.')
+        } else if (response.status >= 500) {
+          throw new Error('Server error. Please try again in a few moments.')
+        }
+        throw new Error('Download failed. Please try again.')
+      }
+
       const blob = await response.blob()
       const contentDisposition = response.headers.get('content-disposition')
       const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `${version.version_name || version.version_id}.pdf`
-      
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = filename
       a.click()
       URL.revokeObjectURL(url)
+
+      // Clear any previous download errors on success
+      setError(null)
     } catch (err) {
       console.error('Download failed:', err)
+      setError(err.message || 'Download failed. Please try again.')
+      // Auto-clear error after 5 seconds
+      setTimeout(() => setError(null), 5000)
     }
   }
 

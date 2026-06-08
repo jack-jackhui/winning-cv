@@ -22,6 +22,7 @@ import {
   Sparkles,
   MessageSquare,
   Send,
+  RefreshCw,
 } from 'lucide-react'
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
