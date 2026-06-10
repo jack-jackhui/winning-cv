@@ -1361,7 +1361,7 @@ class PostgresTaskQueue:
             True if task was completed, False otherwise
         """
         try:
-            with self.get_cursor() as cursor:
+            with self.get_cursor(dict_cursor=False) as cursor:
                 cursor.execute("""
                     SELECT complete_task(%s, %s, %s)
                 """, (task_id, worker_id, Json(result) if result else None))
@@ -1393,7 +1393,7 @@ class PostgresTaskQueue:
             True if task was updated, False otherwise
         """
         try:
-            with self.get_cursor() as cursor:
+            with self.get_cursor(dict_cursor=False) as cursor:
                 cursor.execute("""
                     SELECT fail_task(%s, %s, %s, %s)
                 """, (task_id, worker_id, error, retry_after))
@@ -1422,7 +1422,7 @@ class PostgresTaskQueue:
             True if heartbeat was successful
         """
         try:
-            with self.get_cursor() as cursor:
+            with self.get_cursor(dict_cursor=False) as cursor:
                 cursor.execute("""
                     SELECT heartbeat_task(%s, %s)
                 """, (task_id, worker_id))
@@ -1518,7 +1518,7 @@ class PostgresTaskQueue:
             Number of tasks released
         """
         try:
-            with self.get_cursor() as cursor:
+            with self.get_cursor(dict_cursor=False) as cursor:
                 cursor.execute("""
                     SELECT release_stale_locks(%s)
                 """, (timeout_minutes,))
@@ -1541,7 +1541,7 @@ class PostgresTaskQueue:
             Number of tasks deleted
         """
         try:
-            with self.get_cursor() as cursor:
+            with self.get_cursor(dict_cursor=False) as cursor:
                 cursor.execute("""
                     SELECT cleanup_old_queue_tasks(%s)
                 """, (max_age_hours,))
