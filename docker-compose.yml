@@ -85,6 +85,34 @@ services:
       - cli  # Only run when explicitly requested: docker compose --profile cli run job-runner
 
   # =============================================================================
+  # Background Worker - Processes queued async tasks
+  # =============================================================================
+  worker:
+    image: ghcr.io/jack-jackhui/winning-cv:latest
+    container_name: winning-cv-worker
+    restart: unless-stopped
+    volumes:
+      - ./user_cv:/winning-cv/user_cv
+      - cv_data:/winning-cv/customised_cv
+      - ./cookies:/winning-cv/cookies  # LinkedIn session cookies
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - CHROMIUM_PATH=/usr/bin/chromium
+      - HEADLESS=true
+      - MINIO_ENDPOINT=minio:9000
+    env_file:
+      - .env
+    command: ["python", "run_worker.py", "--worker-id", "prod-worker-1", "--poll-interval", "5"]
+    depends_on:
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - winningcv-net
+
+  # =============================================================================
   # MinIO Object Storage - Internal only
   # =============================================================================
   minio:
