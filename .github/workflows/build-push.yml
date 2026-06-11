@@ -157,10 +157,17 @@ jobs:
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
           script: |
             cd ~/winning-cv
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
             docker compose pull
             docker compose up -d --remove-orphans
             sleep 15
             curl -f http://localhost:13001/health || exit 1
+            curl -f http://localhost:13001/api/health || exit 1
+            test "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-frontend)" = "healthy" || exit 1
+            test "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-api)" = "healthy" || exit 1
+            ./scripts/prod_smoke_check.sh
             docker image prune -af --filter "until=168h"
             echo "Deployment successful at $(date)"
 
