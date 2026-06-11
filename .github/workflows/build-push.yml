@@ -181,11 +181,21 @@ jobs:
             docker compose pull
             ./scripts/prod_migrate_db.sh
             docker compose up -d --remove-orphans
-            sleep 15
-            curl -f http://localhost:13001/health || exit 1
-            curl -f http://localhost:13001/api/health || exit 1
-            test "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-frontend)" = "healthy" || exit 1
-            test "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-api)" = "healthy" || exit 1
+            for i in $(seq 1 60); do
+              frontend_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-frontend 2>/dev/null || echo missing)"
+              api_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-api 2>/dev/null || echo missing)"
+              if curl -fsS http://localhost:13001/health >/dev/null                 && curl -fsS http://localhost:13001/api/health >/dev/null                 && [ "$frontend_health" = "healthy" ]                 && [ "$api_health" = "healthy" ]; then
+                echo "Deployment health checks passed after ${i}s"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "Deployment health checks did not pass: frontend=$frontend_health api=$api_health" >&2
+                docker compose ps
+                docker compose logs --tail=80 frontend api
+                exit 1
+              fi
+              sleep 2
+            done
             ./scripts/prod_smoke_check.sh
             docker image prune -af --filter "until=168h"
             echo "Deployment successful at $(date)"

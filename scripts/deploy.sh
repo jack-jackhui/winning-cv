@@ -36,17 +36,19 @@ log "🗄️ Applying database migrations..."
 log "🔄 Restarting services..."
 docker compose up -d --remove-orphans
 
-# Wait for health check
-log "⏳ Waiting for health check (max ${HEALTH_TIMEOUT}s)..."
+# Wait for endpoint and container health checks
+log "⏳ Waiting for health checks (max ${HEALTH_TIMEOUT}s)..."
 for i in $(seq 1 $HEALTH_TIMEOUT); do
-    if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
-        log "✅ Health check passed!"
+    frontend_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-frontend 2>/dev/null || echo missing)"
+    api_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-api 2>/dev/null || echo missing)"
+    if curl -sf "$HEALTH_URL" > /dev/null 2>&1         && curl -sf "${HEALTH_URL%/health}/api/health" > /dev/null 2>&1         && [ "$frontend_health" = "healthy" ]         && [ "$api_health" = "healthy" ]; then
+        log "✅ Health checks passed!"
         break
     fi
     if [ $i -eq $HEALTH_TIMEOUT ]; then
-        log "❌ Health check failed after ${HEALTH_TIMEOUT}s"
+        log "❌ Health checks failed after ${HEALTH_TIMEOUT}s (frontend=$frontend_health api=$api_health)"
         log "📋 Container logs:"
-        docker compose logs --tail=50
+        docker compose logs --tail=50 frontend api
         exit 1
     fi
     sleep 1
