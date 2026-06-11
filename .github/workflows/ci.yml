@@ -43,6 +43,7 @@ jobs:
       - name: Validate Docker Compose config
         run: |
           touch .env
+          UID=1000 GID=1000 JOB_USER_EMAIL=ci@example.com touch .env
           UID=1000 GID=1000 JOB_USER_EMAIL=ci@example.com docker compose -f docker-compose.yml config >/tmp/winningcv-compose.yml
 
       - name: Validate production scripts
