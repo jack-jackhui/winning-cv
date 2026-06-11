@@ -40,15 +40,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate Docker Compose config
+      - name: Validate production Docker and deployment config
         run: |
-          printf '%s\n' 'UID=1000' 'GID=1000' 'JOB_USER_EMAIL=ci@example.com' > .env
-          docker compose -f docker-compose.yml config >/tmp/winningcv-compose.yml
+          {
+            echo UID=1000
+            echo GID=1000
+            echo JOB_USER_EMAIL=ci@example.com
+          } > .env
+          ./scripts/validate_prod_config.sh
 
       - name: Validate production scripts
         run: |
           bash -n scripts/prod_smoke_check.sh
           bash -n scripts/prod_monitor.sh
+          bash -n scripts/prod_monitor_cron.sh
+          bash -n scripts/install_prod_monitor_cron.sh
+          bash -n scripts/validate_prod_config.sh
 
   test:
     runs-on: ubuntu-latest

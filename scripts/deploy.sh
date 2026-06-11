@@ -20,6 +20,10 @@ log() {
 log "🚀 Starting WinningCV deployment..."
 cd "$DEPLOY_DIR"
 
+# Validate production config before touching running services
+log "🔎 Validating production config..."
+./scripts/validate_prod_config.sh
+
 # Pull latest images
 log "📥 Pulling latest images..."
 docker compose pull
