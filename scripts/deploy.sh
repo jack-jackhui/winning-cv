@@ -24,6 +24,10 @@ cd "$DEPLOY_DIR"
 log "📥 Pulling latest images..."
 docker compose pull
 
+# Apply idempotent database migrations for existing deployments
+log "🗄️ Applying database migrations..."
+./scripts/prod_migrate_db.sh
+
 # Start/restart services
 log "🔄 Restarting services..."
 docker compose up -d --remove-orphans
