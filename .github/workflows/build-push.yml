@@ -150,6 +150,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync deployment files to Azure VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          source: "docker-compose.yml,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql"
+          target: "~/winning-cv"
+          overwrite: true
+
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -158,9 +170,6 @@ jobs:
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
           script: |
             cd ~/winning-cv
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
             docker compose pull
             ./scripts/prod_migrate_db.sh
             docker compose up -d --remove-orphans
