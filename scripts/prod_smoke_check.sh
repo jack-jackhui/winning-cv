@@ -27,11 +27,9 @@ echo "Queue stats: ${queue_stats:-no task_queue rows}"
 failed_recent="$(docker exec "$POSTGRES_CONTAINER" psql -U winningcv -d winningcv -Atc "select count(*) from task_queue where state='failed' and updated_at > now() - interval '24 hours';" 2>/dev/null || echo 0)"
 [ "${failed_recent:-0}" -eq 0 ] || fail "recent failed queue tasks: $failed_recent"
 pass "no failed queue tasks in last 24h"
-smoke_id="smoke-$(date +%s)"
-docker exec "$POSTGRES_CONTAINER" psql -U winningcv -d winningcv -v smoke_id="$smoke_id" -qAt <<'SQL' >/dev/null
-INSERT INTO task_queue(task_id, task_type, payload, user_email, correlation_id)
-VALUES (:'smoke_id', 'notification', '{"smoke":true}', 'smoke@winningcv.local', :'smoke_id');
-SQL
+smoke_id="smoke-$(date +%s)-$$"
+docker exec "$POSTGRES_CONTAINER" psql -U winningcv -d winningcv -qAt \
+  -c "INSERT INTO task_queue(task_id, task_type, payload, user_email, correlation_id) VALUES ('$smoke_id', 'notification', '{\"smoke\":true}'::jsonb, 'smoke@winningcv.local', '$smoke_id');" >/dev/null
 for _ in $(seq 1 20); do
   state="$(docker exec "$POSTGRES_CONTAINER" psql -U winningcv -d winningcv -Atc "select state from task_queue where task_id='$smoke_id';" 2>/dev/null || true)"
   [ "$state" = "completed" ] && break
