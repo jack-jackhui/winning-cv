@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     hr_recommendation TEXT,
     matched_keywords VARCHAR(500),
     missing_keywords VARCHAR(500),
+    application_status VARCHAR(40) DEFAULT 'saved',
+    application_notes TEXT,
+    applied_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -30,6 +33,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_job_link ON jobs(job_link);
 CREATE INDEX IF NOT EXISTS idx_jobs_user_email ON jobs(user_email);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(application_status);
 
 -- =============================================================================
 -- cv_history: CV generation history
@@ -207,3 +211,10 @@ BEGIN
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     END IF;
 END $$;
+
+
+-- Idempotent migration for existing databases
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_status VARCHAR(50) DEFAULT 'saved';
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_notes TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP WITH TIME ZONE;
+CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(application_status);

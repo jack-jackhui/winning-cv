@@ -191,3 +191,10 @@ DO $$
 BEGIN
     RAISE NOTICE 'Migration V2 completed successfully';
 END $$;
+
+
+-- Application tracking state (safe for existing deployments)
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_status VARCHAR(40) DEFAULT 'saved';
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_notes TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP WITH TIME ZONE;
+CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(application_status);

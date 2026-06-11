@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  CheckCircle2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { jobService } from '../services/api'
@@ -127,6 +128,32 @@ export default function Dashboard() {
           {error}
         </div>
       )}
+
+
+      {/* Guided Flow */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">Application Command Centre</h2>
+            <p className="text-sm text-text-muted mt-1">Follow the flow: choose CV → find jobs → score → tailor → apply.</p>
+          </div>
+          <Link to="/preferences" className="btn-primary text-sm">Start search</Link>
+        </div>
+        <div className="grid md:grid-cols-4 gap-3">
+          {[
+            { label: '1. Choose CV', text: 'Pick the strongest base CV from your library.', to: '/cv-library', icon: FileText },
+            { label: '2. Find jobs', text: 'Run LinkedIn/SEEK searches with saved preferences.', to: '/preferences', icon: Search },
+            { label: '3. Score fit', text: 'Review ATS, HR, AI scores and missing keywords.', to: '/history', icon: TrendingUp },
+            { label: '4. Tailor & apply', text: 'Generate, download and track the application state.', to: '/generate', icon: CheckCircle2 },
+          ].map((step) => (
+            <Link key={step.label} to={step.to} className="rounded-xl border border-border bg-surface-elevated p-4 hover:border-accent-500/50 transition-colors group">
+              <step.icon className="w-5 h-5 text-accent-400 mb-3" />
+              <p className="font-medium text-text-primary group-hover:text-accent-400">{step.label}</p>
+              <p className="text-xs text-text-muted mt-1">{step.text}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
 
       {/* Stats Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

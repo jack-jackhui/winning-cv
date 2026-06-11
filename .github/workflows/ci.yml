@@ -35,6 +35,19 @@ jobs:
       - name: Build
         run: npm run build
 
+  deployment-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        run: docker compose -f docker-compose.yml config >/tmp/winningcv-compose.yml
+
+      - name: Validate production scripts
+        run: |
+          bash -n scripts/prod_smoke_check.sh
+          bash -n scripts/prod_monitor.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -84,7 +97,7 @@ jobs:
       - name: Run unit tests
         run: |
           # Run unit tests that don't require external services
-          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py -v --tb=short
         env:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"

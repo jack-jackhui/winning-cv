@@ -39,7 +39,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/test_utils.py tests/test_settings.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py -v --tb=short
         env:
           AIRTABLE_PAT: "fake_for_testing"
           AIRTABLE_BASE_ID: "fake_base"
@@ -50,6 +50,12 @@ jobs:
           AZURE_AI_ENDPOINT: "https://fake.openai.azure.com"
           AZURE_AI_API_KEY: "fake_key"
           AZURE_DEPLOYMENT: "fake_deployment"
+
+      - name: Validate deployment checks
+        run: |
+          docker compose -f docker-compose.yml config >/tmp/winningcv-compose.yml
+          bash -n scripts/prod_smoke_check.sh
+          bash -n scripts/prod_monitor.sh
 
   build-backend:
     needs: [test]  # Only build if tests pass

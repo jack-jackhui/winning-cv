@@ -14,10 +14,11 @@ services:
     networks:
       - winningcv-net
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   # =============================================================================
   # FastAPI Backend - Internal only (accessed via nginx proxy)

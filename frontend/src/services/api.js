@@ -280,6 +280,17 @@ export const jobService = {
     return response.items || []
   },
 
+  // Update application tracking status
+  async updateApplicationStatus(jobId, applicationStatus, notes = null) {
+    return fetchAPI(`/api/v1/jobs/results/${jobId}/application`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        application_status: applicationStatus,
+        application_notes: notes,
+      }),
+    })
+  },
+
   // Get job statistics
   async getStats() {
     const results = await this.getResults()

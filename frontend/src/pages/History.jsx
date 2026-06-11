@@ -19,6 +19,7 @@ import {
   Target,
   Users,
   Bot,
+  ClipboardCheck,
 } from 'lucide-react'
 import { jobService } from '../services/api'
 
@@ -30,6 +31,17 @@ export default function History() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('date') // 'date' or 'score'
   const [expandedJob, setExpandedJob] = useState(null) // Track which job's details are expanded
+  const [updatingStatus, setUpdatingStatus] = useState(null)
+
+  const applicationStatusOptions = [
+    { value: 'saved', label: 'Saved' },
+    { value: 'cv_generated', label: 'CV generated' },
+    { value: 'applied', label: 'Applied' },
+    { value: 'interviewing', label: 'Interviewing' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'offer', label: 'Offer' },
+    { value: 'archived', label: 'Archived' },
+  ]
 
   useEffect(() => {
     loadJobs()
@@ -60,6 +72,22 @@ export default function History() {
         jobId: job.id,
       },
     })
+  }
+
+  const handleStatusChange = async (job, applicationStatus) => {
+    setUpdatingStatus(job.id)
+    setJobs((prev) => prev.map((item) =>
+      item.id === job.id ? { ...item, application_status: applicationStatus } : item
+    ))
+    try {
+      await jobService.updateApplicationStatus(job.id, applicationStatus)
+    } catch (err) {
+      console.error('Failed to update application status:', err)
+      setError(err.message || 'Failed to update application status')
+      loadJobs()
+    } finally {
+      setUpdatingStatus(null)
+    }
   }
 
   const handleDownload = async (cvLink, jobTitle) => {
@@ -119,7 +147,7 @@ export default function History() {
   const stats = {
     totalMatches: jobs.length,
     withCV: jobs.filter((j) => j.cv_link).length,
-    pendingCV: jobs.filter((j) => !j.cv_link).length,
+    applied: jobs.filter((j) => ['applied', 'interviewing', 'offer'].includes(j.application_status)).length,
     avgScore: jobs.length
       ? Math.round(jobs.reduce((acc, j) => acc + (j.score || 0), 0) / jobs.length)
       : 0,
@@ -201,8 +229,8 @@ export default function History() {
             <p className="text-xs text-text-muted">CV Generated</p>
           </div>
           <div className="card-elevated text-center py-3">
-            <p className="text-xl font-bold text-amber-400">{stats.pendingCV}</p>
-            <p className="text-xs text-text-muted">Pending CV</p>
+            <p className="text-xl font-bold text-amber-400">{stats.applied}</p>
+            <p className="text-xs text-text-muted">Applied+</p>
           </div>
           <div className="card-elevated text-center py-3">
             <p className="text-xl font-bold text-accent-400">{stats.avgScore}%</p>
@@ -303,6 +331,24 @@ export default function History() {
                           No CV generated yet
                         </span>
                       )}
+                    </div>
+
+                    {/* Application Tracking */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                        <ClipboardCheck className="w-3.5 h-3.5" />
+                        Application state
+                      </span>
+                      <select
+                        value={job.application_status || 'saved'}
+                        onChange={(e) => handleStatusChange(job, e.target.value)}
+                        disabled={updatingStatus === job.id}
+                        className="input py-1 px-2 text-xs w-auto min-w-[130px]"
+                      >
+                        {applicationStatusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -410,6 +456,27 @@ export default function History() {
                         </div>
                       )}
                     </div>
+
+                    {(job.match_reasons?.length > 0 || job.suggestions?.length > 0) && (
+                      <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                        {job.match_reasons?.length > 0 && (
+                          <div>
+                            <p className="text-xs text-text-muted mb-2">Why this matched</p>
+                            <ul className="space-y-1 text-xs text-text-secondary list-disc list-inside">
+                              {job.match_reasons.slice(0, 4).map((reason, i) => <li key={i}>{reason}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {job.suggestions?.length > 0 && (
+                          <div>
+                            <p className="text-xs text-text-muted mb-2">How to improve fit</p>
+                            <ul className="space-y-1 text-xs text-text-secondary list-disc list-inside">
+                              {job.suggestions.slice(0, 4).map((suggestion, i) => <li key={i}>{suggestion}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Keywords */}
                     <div className="grid sm:grid-cols-2 gap-4">

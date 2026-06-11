@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-$HOME/winning-cv}"
-HEALTH_URL="http://localhost:13000/health"
+HEALTH_URL="${HEALTH_URL:-http://localhost:13001/health}"
 HEALTH_TIMEOUT=30
 PRUNE_AGE="168h"  # 7 days
 

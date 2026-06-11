@@ -798,11 +798,17 @@ export default function Preferences() {
                   {searchStatus.message}
                 </p>
                 {searchStatus.progress > 0 && searchStatus.status !== 'completed' && (
-                  <div className="mt-2 h-2 bg-surface-elevated rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent-500 transition-all duration-300"
-                      style={{ width: `${searchStatus.progress}%` }}
-                    />
+                  <div className="mt-3 space-y-2">
+                    <div className="h-2 bg-surface-elevated rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-accent-500 transition-all duration-300"
+                        style={{ width: `${searchStatus.progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-text-muted">
+                      Worker queue stages: queued → collecting jobs → scoring fit → generating tailored CVs → saving results.
+                      You can refresh this page; active tasks resume automatically.
+                    </p>
                   </div>
                 )}
               </div>

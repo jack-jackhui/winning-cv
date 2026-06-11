@@ -18,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.jobs import (
+    ApplicationStatusUpdate,
     JobConfigResponse,
     JobResult,
     JobResultsResponse,
@@ -445,9 +446,8 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
     """
     Background task to run job search.
 
-    Currently runs via ThreadPoolExecutor from the API process.
-    Future: Can be migrated to PostgresTaskQueue for distributed worker processing.
-    The task_id can be used as correlation_id to link search_tasks to task_queue.
+    Synchronous fallback for environments without the durable worker queue.
+    Production job searches are enqueued into task_queue and processed by run_worker.py.
     """
     task_mgr = _get_task_manager()
     try:
@@ -525,13 +525,33 @@ async def start_job_search(
             message="Task created"
         )
 
-        # Run in background thread (job processing uses blocking I/O)
-        _executor.submit(_run_job_search, task_id, user.email, user_config)
+        # Prefer the durable Postgres queue for long-running scraping/generation jobs.
+        # Fall back to the API thread pool only if the queue is unavailable (e.g. dev).
+        queued = False
+        try:
+            from data_store.postgres_manager import get_postgres_task_queue
+            queue = get_postgres_task_queue()
+            queue.enqueue(
+                task_id=f"job-search-{task_id}",
+                task_type="job_search",
+                payload={"search_task_id": task_id, "user_email": user.email, "config_data": user_config},
+                priority=5,
+                max_attempts=2,
+                user_email=user.email,
+                correlation_id=task_id,
+            )
+            task_mgr.update_task(task_id, message="Queued for worker processing", progress=2)
+            queued = True
+        except Exception as queue_error:
+            logger.warning(f"Durable queue unavailable; falling back to API thread: {queue_error}")
+
+        if not queued:
+            _executor.submit(_run_job_search, task_id, user.email, user_config)
 
         return SearchTaskResponse(
             task_id=task_id,
             status=SearchStatus.PENDING,
-            message="Job search started"
+            message="Job search queued" if queued else "Job search started"
         )
 
     except HTTPException:
@@ -721,7 +741,10 @@ async def get_job_results(
                 posted_date=fields.get("Job Date"),
                 description=fields.get("Job Description"),
                 match_reasons=reasons,
-                suggestions=suggestions
+                suggestions=suggestions,
+                application_status=fields.get("Application Status") or "saved",
+                application_notes=fields.get("Application Notes"),
+                applied_at=fields.get("Applied At")
             ))
 
         # Sort based on user preference
@@ -755,6 +778,39 @@ async def get_job_results(
             status_code=500,
             detail=f"Failed to get results: {str(e)}"
         )
+
+
+@router.patch("/results/{job_id}/application", response_model=JobResult)
+async def update_application_status_result(
+    job_id: str,
+    update: ApplicationStatusUpdate,
+    user: UserInfo = Depends(get_current_user)
+) -> JobResult:
+    """Update application tracking state for a matched job."""
+    try:
+        manager = get_data_manager()
+        if not hasattr(manager, "update_application_status"):
+            raise HTTPException(status_code=501, detail="Application tracking is only available on the Postgres backend")
+
+        updated = manager.update_application_status(
+            job_id=job_id,
+            user_email=user.email,
+            application_status=update.application_status.value,
+            application_notes=update.application_notes,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        results = await get_job_results(user=user, limit=500, sort_by="date")
+        for item in results.items:
+            if item.id == job_id:
+                return item
+        raise HTTPException(status_code=404, detail="Job not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update application status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update application status: {str(e)}")
 
 
 @router.get("/linkedin/status")

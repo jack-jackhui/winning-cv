@@ -100,8 +100,8 @@ class PostgresManager:
                 cursor.execute("""
                     INSERT INTO jobs (
                         user_email, job_title, job_description, job_date, job_link,
-                        company, location, matching_score, cv_link
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        company, location, matching_score, cv_link, application_status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, created_at
                 """, (
                     user_email,
@@ -113,6 +113,7 @@ class PostgresManager:
                     job_data.get("Location"),
                     job_data.get("score", 0),
                     job_data.get("cv_url", ""),
+                    job_data.get("Application Status", "saved"),
                 ))
                 result = cursor.fetchone()
                 self.logger.info(f"Created job: {result['id']}")
@@ -150,6 +151,7 @@ class PostgresManager:
                         hr_recommendation = %s,
                         matched_keywords = %s,
                         missing_keywords = %s,
+                        application_status = CASE WHEN application_status = 'saved' THEN 'cv_generated' ELSE application_status END,
                         updated_at = NOW()
                     WHERE job_link = %s
                     RETURNING id
@@ -487,7 +489,8 @@ class PostgresManager:
                            job_date, job_link, company, location, matching_score,
                            cv_link, match_reasons, match_suggestions,
                            ats_score, hr_score, llm_score, hr_recommendation,
-                           matched_keywords, missing_keywords, created_at, updated_at
+                           matched_keywords, missing_keywords, application_status,
+                           application_notes, applied_at, created_at, updated_at
                     FROM jobs
                     WHERE {column_name} = %s
                     ORDER BY created_at DESC
@@ -518,6 +521,9 @@ class PostgresManager:
                             "HR Recommendation": row["hr_recommendation"],
                             "Matched Keywords": row["matched_keywords"],
                             "Missing Keywords": row["missing_keywords"],
+                            "Application Status": row.get("application_status") or "saved",
+                            "Application Notes": row.get("application_notes"),
+                            "Applied At": row.get("applied_at"),
                             "Created At": row["created_at"].isoformat() if row["created_at"] else None,
                             "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
                         }
@@ -529,6 +535,34 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"get_records_by_filter failed: {e}")
             return []
+
+    def update_application_status(
+        self,
+        job_id: str,
+        user_email: str,
+        application_status: str,
+        application_notes: Optional[str] = None,
+    ) -> Optional[Dict]:
+        """Update the user-facing application tracking state for a job."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    UPDATE jobs SET
+                        application_status = %s,
+                        application_notes = %s,
+                        applied_at = CASE
+                            WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
+                            ELSE applied_at
+                        END,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_email = %s
+                    RETURNING id
+                """, (application_status, application_notes, application_status, job_id, user_email))
+                result = cursor.fetchone()
+                return {"id": str(result["id"])} if result else None
+        except Exception as e:
+            self.logger.error(f"Application status update failed: {e}")
+            return None
 
     # =========================================================================
     # UTILITIES

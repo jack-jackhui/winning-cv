@@ -198,24 +198,11 @@ class TaskWorker:
         Note: This is a stub. Actual implementation requires the Postgres
         task queue with FOR UPDATE SKIP LOCKED for safe concurrent claiming.
         """
-        # TODO: Implement Postgres-based task claiming
-        # The SQL would look like:
-        #
-        # UPDATE task_queue
-        # SET status = 'running',
-        #     worker_id = :worker_id,
-        #     started_at = NOW(),
-        #     attempts = attempts + 1
-        # WHERE id = (
-        #     SELECT id FROM task_queue
-        #     WHERE status = 'pending'
-        #       AND task_type = ANY(:task_types)
-        #       AND (retry_after IS NULL OR retry_after <= NOW())
-        #     ORDER BY priority DESC, created_at
-        #     FOR UPDATE SKIP LOCKED
-        #     LIMIT 1
-        # )
-        # RETURNING *
+        # TODO: Wire this base worker to PostgresTaskQueue.claim_task().
+        # The production run_worker.py implementation already uses the durable
+        # task_queue schema with state, locked_by, locked_at, and run_after.
+        # Keep this scaffold aligned with those columns; do not use legacy
+        # status/worker_id/error_message names for task_queue.
         return None
 
     async def _process_task(self, task: Dict[str, Any]) -> None:
@@ -279,7 +266,7 @@ class TaskWorker:
             Callback function that updates task progress
         """
         def callback(progress: int, message: str) -> None:
-            # TODO: Update task progress in database
+            # TODO: Update task progress via search_tasks for user-visible jobs.
             logger.debug(f"Task {task_id}: {progress}% - {message}")
 
         return callback
@@ -294,7 +281,7 @@ class TaskWorker:
         """
         logger.info(f"Task {task_id} completed successfully")
         # TODO: Update task in database
-        # SET status = 'completed', result = :result, completed_at = NOW()
+        # SET state = 'completed', result = :result, completed_at = NOW()
 
     async def _fail_task(self, task_id: str, error: str) -> None:
         """
@@ -306,7 +293,7 @@ class TaskWorker:
         """
         logger.error(f"Task {task_id} failed permanently: {error}")
         # TODO: Update task in database
-        # SET status = 'failed', result = :error, completed_at = NOW()
+        # SET state = 'failed', error = :error, completed_at = NOW()
 
     async def _schedule_retry(
         self, task_id: str, attempts: int, error: Exception
@@ -326,7 +313,7 @@ class TaskWorker:
             f"Task {task_id} scheduled for retry at {retry_at.isoformat()}: {error}"
         )
         # TODO: Update task in database
-        # SET status = 'pending', retry_after = :retry_at
+        # SET state = 'pending', run_after = :retry_at
 
 
 # Worker instance for module-level access

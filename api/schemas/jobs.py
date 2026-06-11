@@ -12,6 +12,15 @@ class SearchStatus(str, Enum):
     FAILED = "failed"
 
 
+class ApplicationStatus(str, Enum):
+    SAVED = "saved"
+    CV_GENERATED = "cv_generated"
+    APPLIED = "applied"
+    INTERVIEWING = "interviewing"
+    REJECTED = "rejected"
+    OFFER = "offer"
+    ARCHIVED = "archived"
+
 class JobConfigRequest(BaseModel):
     """Job search configuration"""
     search_keywords: str = Field(..., min_length=2, description="Keywords for job search")
@@ -69,6 +78,12 @@ class ScoreBreakdown(BaseModel):
     missing_keywords: Optional[List[str]] = Field(None, description="Important JD keywords missing from resume")
 
 
+class ApplicationStatusUpdate(BaseModel):
+    """Update for a job application's tracking state."""
+    application_status: ApplicationStatus = Field(..., description="Current application tracking state")
+    application_notes: Optional[str] = Field(None, max_length=2000, description="Private notes about the application")
+
+
 class JobResult(BaseModel):
     """Single job search result"""
     id: str
@@ -84,6 +99,9 @@ class JobResult(BaseModel):
     description: Optional[str] = None
     match_reasons: Optional[List[str]] = None
     suggestions: Optional[List[str]] = None
+    application_status: ApplicationStatus = ApplicationStatus.SAVED
+    application_notes: Optional[str] = None
+    applied_at: Optional[datetime] = None
 
 
 class JobResultsResponse(BaseModel):

@@ -96,27 +96,23 @@ async def handle_job_search(
     payload: Dict[str, Any],
     progress_callback: Callable[[int, str], None],
 ) -> Dict[str, Any]:
-    """
-    Handle job search task.
+    """Run a real job search from the durable worker queue."""
+    user_email = payload.get("user_email")
+    config_data = payload.get("config_data") or {}
+    search_task_id = payload.get("search_task_id") or payload.get("correlation_id") or task_id
+    if not user_email:
+        raise PermanentError("job_search payload missing user_email")
 
-    This is a stub - actual implementation would import and run JobProcessor.
-    The existing job search flow runs synchronously in a thread pool from the API.
-    Full integration requires careful testing to ensure compatibility.
-    """
-    logger.info(f"[{task_id}] Job search handler - payload: {payload}")
-    progress_callback(10, "Initializing job search...")
+    logger.info("[%s] Starting queued job search %s for %s", task_id, search_task_id, user_email)
+    progress_callback(5, "Queued worker claimed task")
 
-    # Stub: In production, this would:
-    # 1. Load user config from payload
-    # 2. Initialize JobProcessor
-    # 3. Run processor.process_jobs()
-    # 4. Return results
+    # Import lazily to avoid importing FastAPI routes during worker startup.
+    # _run_job_search updates search_tasks progress/results for the frontend.
+    from api.routes.jobs import _run_job_search
 
-    progress_callback(50, "Processing jobs...")
-    await asyncio.sleep(0.1)  # Simulate work
-
+    await asyncio.to_thread(_run_job_search, search_task_id, user_email, config_data)
     progress_callback(100, "Job search complete")
-    return {"status": "stub", "message": "Job search handler stub - integration pending"}
+    return {"status": "completed", "message": "Job search completed", "search_task_id": search_task_id}
 
 
 @register_handler("cv_analysis")
