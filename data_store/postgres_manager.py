@@ -18,6 +18,7 @@ Usage:
     manager.get_user_config(user_email)
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -69,7 +70,30 @@ class PostgresManager:
         finally:
             cursor.close()
             conn.close()
-    
+
+    # =========================================================================
+    # ASYNC METHODS (for telemetry and other async routes)
+    # =========================================================================
+
+    def _sync_execute(self, query: str, *args) -> None:
+        """Synchronous execute for async wrapper."""
+        with self.get_cursor() as cursor:
+            cursor.execute(query, args)
+
+    def _sync_fetch(self, query: str, *args) -> List[Dict]:
+        """Synchronous fetch for async wrapper."""
+        with self.get_cursor() as cursor:
+            cursor.execute(query, args)
+            return [dict(row) for row in cursor.fetchall()]
+
+    async def execute(self, query: str, *args) -> None:
+        """Async execute using thread pool for telemetry routes."""
+        await asyncio.to_thread(self._sync_execute, query, *args)
+
+    async def fetch(self, query: str, *args) -> List[Dict]:
+        """Async fetch using thread pool for telemetry routes."""
+        return await asyncio.to_thread(self._sync_fetch, query, *args)
+
     # =========================================================================
     # JOBS
     # =========================================================================

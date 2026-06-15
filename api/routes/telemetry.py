@@ -2,6 +2,7 @@
 Telemetry routes for product analytics.
 Records user events for funnel analysis and provides admin dashboards.
 """
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -49,7 +50,7 @@ async def _record_events_async(
                     entity_type, entity_id, metadata, path, referrer,
                     client_timestamp, server_timestamp
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
                 )
             """
             await pg.execute(
@@ -61,7 +62,7 @@ async def _record_events_async(
                 event.funnel_step,
                 event.entity_type,
                 event.entity_id,
-                event.metadata or {},
+                json.dumps(event.metadata or {}),
                 event.path,
                 event.referrer,
                 event.client_timestamp,
@@ -148,7 +149,7 @@ async def get_funnel_analytics(
 
     try:
         rows = await pg.fetch(
-            "SELECT * FROM get_funnel_metrics($1, $2)",
+            "SELECT * FROM get_funnel_metrics(%s, %s)",
             start_date,
             end_date,
         )
@@ -202,7 +203,7 @@ async def get_activity_summary(
 
     try:
         rows = await pg.fetch(
-            "SELECT * FROM get_activity_summary($1, $2)",
+            "SELECT * FROM get_activity_summary(%s, %s)",
             start_date,
             end_date,
         )
@@ -258,7 +259,7 @@ async def get_top_events(
 
     try:
         rows = await pg.fetch(
-            "SELECT * FROM get_top_events($1, $2, $3)",
+            "SELECT * FROM get_top_events(%s, %s, %s)",
             start_date,
             end_date,
             limit,
@@ -296,7 +297,7 @@ async def get_error_events(
 
     try:
         rows = await pg.fetch(
-            "SELECT * FROM get_error_events($1, $2, $3)",
+            "SELECT * FROM get_error_events(%s, %s, %s)",
             start_date,
             end_date,
             limit,
@@ -335,10 +336,10 @@ async def get_analytics_dashboard(
 
     try:
         # Fetch all data in parallel using multiple queries
-        summary_rows = await pg.fetch("SELECT * FROM get_activity_summary($1, $2)", start_date, end_date)
-        funnel_rows = await pg.fetch("SELECT * FROM get_funnel_metrics($1, $2)", start_date, end_date)
-        top_rows = await pg.fetch("SELECT * FROM get_top_events($1, $2, $3)", start_date, end_date, 20)
-        error_rows = await pg.fetch("SELECT * FROM get_error_events($1, $2, $3)", start_date, end_date, 10)
+        summary_rows = await pg.fetch("SELECT * FROM get_activity_summary(%s, %s)", start_date, end_date)
+        funnel_rows = await pg.fetch("SELECT * FROM get_funnel_metrics(%s, %s)", start_date, end_date)
+        top_rows = await pg.fetch("SELECT * FROM get_top_events(%s, %s, %s)", start_date, end_date, 20)
+        error_rows = await pg.fetch("SELECT * FROM get_error_events(%s, %s, %s)", start_date, end_date, 10)
 
         # Build summary
         if summary_rows:
