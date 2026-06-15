@@ -5,6 +5,7 @@ from .cv_versions import router as cv_versions_router
 from .jobs import router as jobs_router
 from .knowledge_base import router as knowledge_base_router
 from .profile import router as profile_router
+from .telemetry import router as telemetry_router
 from .webhooks import router as webhooks_router
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "jobs_router",
     "knowledge_base_router",
     "profile_router",
+    "telemetry_router",
     "webhooks_router",
 ]

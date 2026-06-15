@@ -1,6 +1,19 @@
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Lazy import telemetry to avoid circular dependencies
+let trackAPIError = null
+const getTrackAPIError = () => {
+  if (!trackAPIError) {
+    import('./telemetry.js').then((module) => {
+      trackAPIError = module.trackAPIError
+    }).catch(() => {
+      // Silently ignore if telemetry module not available
+    })
+  }
+  return trackAPIError
+}
+
 // Error codes for categorized error handling
 export const ErrorCodes = {
   NETWORK_ERROR: 'NETWORK_ERROR',
@@ -140,6 +153,14 @@ async function fetchAPI(endpoint, options = {}) {
         window.dispatchEvent(new CustomEvent('authExpired', { detail: { endpoint } }))
       }
 
+      // Track API errors for telemetry (skip telemetry endpoint to avoid recursion)
+      if (!endpoint.includes('/telemetry')) {
+        const track = getTrackAPIError()
+        if (track) {
+          track(endpoint, response.status, message)
+        }
+      }
+
       throw new ApiError(message, code, response.status, errorBody)
     }
 
@@ -150,6 +171,13 @@ async function fetchAPI(endpoint, options = {}) {
     // Handle network errors (no response at all)
     if (error instanceof TypeError && error.message.includes('fetch')) {
       console.error(`Network Error [${endpoint}]:`, error)
+      // Track network error (skip telemetry endpoint)
+      if (!endpoint.includes('/telemetry')) {
+        const track = getTrackAPIError()
+        if (track) {
+          track(endpoint, 0, 'Network error')
+        }
+      }
       throw new ApiError('Network error', ErrorCodes.NETWORK_ERROR, 0)
     }
 

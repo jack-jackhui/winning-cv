@@ -27,6 +27,15 @@ import {
 import { cvService, cvVersionsService } from '../services/api'
 import CVSelector from '../components/cv/CVSelector'
 import AnalysisModal from '../components/cv/AnalysisModal'
+import {
+  trackCVGenerateStart,
+  trackCVGenerateComplete,
+  trackCVGenerateFailed,
+  trackCVDownload,
+  trackCVSaveLibrary,
+  trackFunnel,
+  EventNames,
+} from '../services/telemetry'
 
 export default function GenerateCV() {
   const location = useLocation()
@@ -191,6 +200,8 @@ export default function GenerateCV() {
         version_name: savedVersion.version_name,
       })
       setCustomVersionName(savedVersion.version_name)
+      // Track save to library
+      trackCVSaveLibrary(savedVersion.version_id, historyId)
     } catch (err) {
       console.error('Failed to save to library:', err)
       setSaveError(err.message || 'Failed to save to library')
@@ -314,6 +325,9 @@ export default function GenerateCV() {
     setError(null)
     setResult(null)
 
+    // Track CV generation start
+    trackCVGenerateStart(cvSource, useKnowledgeBase)
+
     try {
       let response
 
@@ -339,6 +353,11 @@ export default function GenerateCV() {
 
       setResult(response)
 
+      // Track CV generation complete
+      if (response.history_id) {
+        trackCVGenerateComplete(response.history_id, response.job_title)
+      }
+
       // Start polling for analysis if history_id is available
       if (response.history_id) {
         startAnalysisPolling(response.history_id)
@@ -347,6 +366,8 @@ export default function GenerateCV() {
         saveToLibrary(response.history_id, response.job_title)
       }
     } catch (err) {
+      // Track CV generation failure
+      trackCVGenerateFailed(err.message || 'Unknown error', cvSource)
       setError(err.message || 'Failed to generate CV. Please try again.')
     } finally {
       setGenerating(false)
@@ -355,6 +376,10 @@ export default function GenerateCV() {
 
   const handleDownload = (format = 'pdf') => {
     setShowDownloadMenu(false)
+    // Track CV download
+    if (result?.history_id) {
+      trackCVDownload(result.history_id, format)
+    }
     if (format === 'pdf' && result?.cv_pdf_url) {
       cvService.downloadFromUrl(result.cv_pdf_url, `${result.job_title}_cv.pdf`)
     } else if (format === 'docx' && result?.cv_docx_url) {
