@@ -33,8 +33,6 @@ import {
   trackCVGenerateFailed,
   trackCVDownload,
   trackCVSaveLibrary,
-  trackFunnel,
-  EventNames,
 } from '../services/telemetry'
 
 export default function GenerateCV() {

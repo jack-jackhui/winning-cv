@@ -11,7 +11,7 @@ Usage:
     # Replace imports
     # from data_store.airtable_manager import AirtableManager
     from data_store.postgres_manager import PostgresManager
-    
+
     # Same API
     manager = PostgresManager()
     manager.create_job_record(job_data, user_email)
@@ -19,7 +19,6 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import os
 import uuid
@@ -28,7 +27,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import psycopg2
-from psycopg2.extras import DictCursor, Json, RealDictCursor
+from psycopg2.extras import Json, RealDictCursor
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +45,15 @@ except ImportError:
 class PostgresManager:
     """
     PostgreSQL-based data manager that mirrors AirtableManager's API.
-    
+
     Designed as a drop-in replacement during migration.
     """
-    
+
     def __init__(self, database_url: str = None):
         self.database_url = database_url or DATABASE_URL
         self.logger = logging.getLogger(self.__class__.__name__)
         self._conn = None
-    
+
     @contextmanager
     def get_cursor(self, dict_cursor: bool = True):
         """Context manager for database cursor with auto-commit/rollback."""
@@ -97,7 +96,7 @@ class PostgresManager:
     # =========================================================================
     # JOBS
     # =========================================================================
-    
+
     def job_exists(self, job_link: str) -> bool:
         """Check if a job with this link already exists."""
         with self.get_cursor() as cursor:
@@ -106,7 +105,7 @@ class PostgresManager:
                 (job_link,)
             )
             return cursor.fetchone() is not None
-    
+
     def get_existing_job_links(self) -> set:
         """Get all existing job links to prevent duplicates."""
         try:
@@ -116,7 +115,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Failed to fetch existing jobs: {e}")
             return set()
-    
+
     def create_job_record(self, job_data: Dict, user_email: str = "system") -> Optional[Dict]:
         """Create new job record."""
         try:
@@ -145,7 +144,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Create failed: {e}")
             return None
-    
+
     def update_cv_info(
         self,
         job_link: str,
@@ -197,7 +196,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Update failed: {e}")
             return None
-    
+
     def get_unprocessed_jobs(self) -> List[Dict]:
         """Get jobs without CV links that have descriptions."""
         try:
@@ -221,11 +220,11 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Fetch unprocessed failed: {e}")
             return []
-    
+
     # =========================================================================
     # HISTORY
     # =========================================================================
-    
+
     def create_history_record(self, data: Dict) -> Optional[str]:
         """Create a history record and return the record ID."""
         try:
@@ -252,7 +251,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"create_history_record error: {e}")
             return None
-    
+
     def update_history_analysis(self, record_id: str, analysis_json: str, status: str = "ready") -> bool:
         """Update history record with CV-JD fit analysis."""
         try:
@@ -269,7 +268,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"update_history_analysis error: {e}")
             return False
-    
+
     def get_history_record(self, record_id: str) -> Optional[Dict]:
         """Get a single history record by ID."""
         try:
@@ -286,7 +285,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"get_history_record error: {e}")
             return None
-    
+
     def get_history_by_user(self, user_email: str) -> List[Dict]:
         """Get all history records for a user."""
         try:
@@ -309,11 +308,11 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"get_history_by_user error: {e}")
             return []
-    
+
     # =========================================================================
     # USER CONFIG
     # =========================================================================
-    
+
     def get_user_config(self, user_email: str) -> Dict:
         """Retrieve user's saved configuration."""
         try:
@@ -326,7 +325,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Config fetch failed: {e}")
             return {}
-    
+
     def save_user_config(self, config_data: Dict) -> bool:
         """Store/update user configuration (upsert)."""
         try:
@@ -368,11 +367,11 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Config save failed: {e}")
             return False
-    
+
     # =========================================================================
     # NOTIFICATIONS
     # =========================================================================
-    
+
     def get_notification_preferences(self, user_email: str) -> Dict:
         """Retrieve user's notification preferences."""
         try:
@@ -398,14 +397,14 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Notification prefs fetch failed: {e}")
             return {}
-    
+
     def save_notification_preferences(self, prefs_data: Dict) -> bool:
         """Store/update notification preferences."""
         user_email = prefs_data.get("user_email")
         if not user_email:
             self.logger.error("No user_email provided for notification prefs")
             return False
-        
+
         try:
             with self.get_cursor() as cursor:
                 cursor.execute("""
@@ -436,7 +435,7 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Notification prefs save failed: {e}")
             return False
-    
+
     def get_users_with_notifications_enabled(self) -> List[Dict]:
         """Get all users with at least one notification channel enabled."""
         try:
@@ -464,34 +463,34 @@ class PostgresManager:
         except Exception as e:
             self.logger.error(f"Failed to get users with notifications: {e}")
             return []
-    
+
 
     # =========================================================================
     # AIRTABLE API COMPATIBILITY LAYER
     # =========================================================================
-    
+
     def get_records_by_filter(self, formula: str) -> List[Dict]:
         """
         Airtable API compatibility layer.
         Translates simple Airtable formulas to SQL queries.
-        
+
         Supports:
             {User Email} = 'value'
             {field} = 'value'
-        
+
         Returns records in Airtable format: {"id": ..., "fields": {...}}
         """
         import re
-        
+
         # Parse simple Airtable formula: {Field Name} = 'value'
         match = re.match(r"\{([^}]+)\}\s*=\s*'([^']*)'", formula.strip())
         if not match:
             self.logger.warning(f"Unsupported formula: {formula}")
             return []
-        
+
         field_name = match.group(1)
         field_value = match.group(2)
-        
+
         # Map Airtable field names to Postgres columns
         field_map = {
             "User Email": "user_email",
@@ -500,12 +499,12 @@ class PostgresManager:
             "Company": "company",
             "Location": "location",
         }
-        
+
         column_name = field_map.get(field_name)
         if not column_name:
             self.logger.warning(f"Unsupported filter field: {field_name}")
             return []
-        
+
         try:
             with self.get_cursor() as cursor:
                 cursor.execute(f"""
@@ -553,9 +552,9 @@ class PostgresManager:
                         }
                     }
                     records.append(record)
-                
+
                 return records
-                
+
         except Exception as e:
             self.logger.error(f"get_records_by_filter failed: {e}")
             return []
@@ -591,7 +590,7 @@ class PostgresManager:
     # =========================================================================
     # UTILITIES
     # =========================================================================
-    
+
     def _format_date(self, date_str: Optional[str]) -> Optional[str]:
         """Ensure PostgreSQL-compatible date format."""
         if not date_str:
@@ -620,12 +619,12 @@ class PostgresCVVersionManager:
     PostgreSQL-based CV version manager.
     Mirrors CVVersionManager API but uses PostgreSQL instead of Airtable.
     """
-    
+
     def __init__(self, database_url: str = None):
         self.database_url = database_url or DATABASE_URL
         self.logger = logging.getLogger(self.__class__.__name__)
         self._minio = None
-    
+
     @property
     def minio(self):
         """Lazy initialization of MinIO storage."""
@@ -633,7 +632,7 @@ class PostgresCVVersionManager:
             from utils.minio_storage import get_minio_storage
             self._minio = get_minio_storage()
         return self._minio
-    
+
     @contextmanager
     def get_cursor(self, dict_cursor: bool = True):
         """Context manager for database cursor."""
@@ -649,7 +648,7 @@ class PostgresCVVersionManager:
         finally:
             cursor.close()
             conn.close()
-    
+
     def create_version(
         self,
         user_email: str,
@@ -664,14 +663,14 @@ class PostgresCVVersionManager:
         """Create a new CV version."""
         import hashlib
         import os
-        
+
         version_id = f"cv_{uuid.uuid4().hex[:12]}"
-        
+
         # Get file info
         file_size = os.path.getsize(file_path)
         with open(file_path, "rb") as f:
             content_hash = hashlib.md5(f.read()).hexdigest()
-        
+
         # Upload to MinIO
         filename = f"{version_id}.pdf"
         storage_path = self.minio.upload_cv(
@@ -680,7 +679,7 @@ class PostgresCVVersionManager:
             filename=filename,
             version_id=version_id
         )
-        
+
         try:
             with self.get_cursor() as cursor:
                 cursor.execute("""
@@ -698,7 +697,7 @@ class PostgresCVVersionManager:
                 ))
                 result = cursor.fetchone()
                 self.logger.info(f"Created CV version: {version_id} for {user_email}")
-                
+
                 return {
                     "id": str(result["id"]),
                     "version_id": version_id,
@@ -719,7 +718,7 @@ class PostgresCVVersionManager:
             except Exception:
                 pass
             raise
-    
+
     def get_version(self, version_id: str, user_email: str) -> Optional[Dict[str, Any]]:
         """Get a specific CV version by ID."""
         try:
@@ -733,7 +732,7 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to get version {version_id}: {e}")
             return None
-    
+
     def list_versions(
         self,
         user_email: str,
@@ -748,27 +747,27 @@ class PostgresCVVersionManager:
             with self.get_cursor() as cursor:
                 query = "SELECT * FROM cv_versions WHERE user_email = %s"
                 params = [user_email]
-                
+
                 if not include_archived:
                     query += " AND NOT is_archived"
-                
+
                 if category:
                     query += " AND auto_category = %s"
                     params.append(category)
-                
+
                 if tags:
                     query += " AND user_tags && %s"
                     params.append(tags)
-                
+
                 query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
                 params.extend([limit, offset])
-                
+
                 cursor.execute(query, params)
                 return [self._row_to_dict(row) for row in cursor.fetchall()]
         except Exception as e:
             self.logger.error(f"Failed to list versions for {user_email}: {e}")
             return []
-    
+
     def update_version(
         self,
         version_id: str,
@@ -778,14 +777,14 @@ class PostgresCVVersionManager:
         """Update CV version metadata."""
         allowed = {"version_name", "user_tags", "auto_category", "is_archived"}
         filtered = {k: v for k, v in updates.items() if k in allowed}
-        
+
         if not filtered:
             return None
-        
+
         if "user_tags" in filtered:
             if isinstance(filtered["user_tags"], str):
                 filtered["user_tags"] = [t.strip() for t in filtered["user_tags"].split(",") if t.strip()]
-        
+
         try:
             with self.get_cursor() as cursor:
                 set_clause = ", ".join(f"{k} = %s" for k in filtered.keys())
@@ -801,15 +800,15 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to update version {version_id}: {e}")
             return None
-    
+
     def archive_version(self, version_id: str, user_email: str) -> bool:
         """Archive a CV version."""
         return self.update_version(version_id, user_email, {"is_archived": True}) is not None
-    
+
     def restore_version(self, version_id: str, user_email: str) -> bool:
         """Restore an archived CV version."""
         return self.update_version(version_id, user_email, {"is_archived": False}) is not None
-    
+
     def delete_version(self, version_id: str, user_email: str) -> bool:
         """Permanently delete a CV version."""
         try:
@@ -820,19 +819,19 @@ class PostgresCVVersionManager:
                     RETURNING storage_path
                 """, (version_id, user_email))
                 row = cursor.fetchone()
-                
+
                 if row and row["storage_path"]:
                     try:
                         filename = f"{version_id}.pdf"
                         self.minio.delete_cv(user_email, filename, version_id)
                     except Exception as e:
                         self.logger.warning(f"Failed to delete MinIO file: {e}")
-                
+
                 return row is not None
         except Exception as e:
             self.logger.error(f"Failed to delete version {version_id}: {e}")
             return False
-    
+
     def increment_usage(self, version_id: str, user_email: str) -> bool:
         """Increment usage count."""
         try:
@@ -845,7 +844,7 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to increment usage: {e}")
             return False
-    
+
     def increment_response(self, version_id: str, user_email: str) -> bool:
         """Increment response count."""
         try:
@@ -858,27 +857,27 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to increment response: {e}")
             return False
-    
+
     def get_analytics(self, user_email: str) -> Dict[str, Any]:
         """Get analytics summary for user's CV versions."""
         try:
             with self.get_cursor() as cursor:
                 cursor.execute("SELECT * FROM get_cv_analytics(%s)", (user_email,))
                 row = cursor.fetchone()
-                
+
                 # Get categories and tags
                 cursor.execute("""
                     SELECT DISTINCT auto_category FROM cv_versions
                     WHERE user_email = %s AND auto_category IS NOT NULL
                 """, (user_email,))
                 categories = [r["auto_category"] for r in cursor.fetchall()]
-                
+
                 cursor.execute("""
                     SELECT DISTINCT unnest(user_tags) as tag FROM cv_versions
                     WHERE user_email = %s
                 """, (user_email,))
                 tags = sorted([r["tag"] for r in cursor.fetchall()])
-                
+
                 return {
                     "total_versions": row["total_versions"],
                     "active_versions": row["active_versions"],
@@ -893,7 +892,7 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to get analytics: {e}")
             return {}
-    
+
     def _row_to_dict(self, row: Dict) -> Dict[str, Any]:
         """Convert database row to API format."""
         return {
@@ -914,7 +913,7 @@ class PostgresCVVersionManager:
             "content_hash": row["content_hash"] or "",
             "created_at": str(row["created_at"]) if row["created_at"] else "",
         }
-    
+
     def _parse_tags(self, tags_value) -> Optional[List[str]]:
         """Parse tags from various formats to list."""
         if not tags_value:
@@ -924,11 +923,11 @@ class PostgresCVVersionManager:
         if isinstance(tags_value, str):
             return [t.strip() for t in tags_value.split(',') if t.strip()]
         return None
-    
+
     # =========================================================================
     # MISSING METHODS (Added for API compatibility)
     # =========================================================================
-    
+
     def get_download_url(
         self,
         version_id: str,
@@ -939,17 +938,17 @@ class PostgresCVVersionManager:
         version = self.get_version(version_id, user_email)
         if not version:
             return None
-        
+
         storage_path = version.get('storage_path')
         if not storage_path:
             return None
-        
+
         try:
             return self.minio.get_download_url_by_path(storage_path, expires_hours)
         except Exception as e:
             self.logger.error(f"Failed to get download URL for {version_id}: {e}")
             return None
-    
+
     def get_categories(self, user_email: str) -> List[str]:
         """Get all unique categories for a user's CVs."""
         try:
@@ -962,7 +961,7 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to get categories for {user_email}: {e}")
             return []
-    
+
     def get_all_tags(self, user_email: str) -> List[str]:
         """Get all unique tags used by a user."""
         try:
@@ -975,7 +974,7 @@ class PostgresCVVersionManager:
         except Exception as e:
             self.logger.error(f"Failed to get tags for {user_email}: {e}")
             return []
-    
+
     def fork_version(
         self,
         source_version_id: str,
@@ -985,32 +984,33 @@ class PostgresCVVersionManager:
     ) -> Optional[Dict[str, Any]]:
         """
         Fork an existing version to create a new one.
-        
+
         If new_file_path is provided, uses that file.
         Otherwise, downloads the source and re-uploads.
         """
         source = self.get_version(source_version_id, user_email)
         if not source:
             return None
-        
+
         # If no new file, we need to copy the existing one
         if not new_file_path:
             import os
             import tempfile
+
             import requests
-            
+
             # Get download URL and fetch file
             download_url = self.get_download_url(source_version_id, user_email)
             if not download_url:
                 return None
-            
+
             # Download to temp file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
                 resp = requests.get(download_url, timeout=30)
                 resp.raise_for_status()
                 tmp.write(resp.content)
                 new_file_path = tmp.name
-        
+
         try:
             # Create new version with parent reference
             new_version = self.create_version(
@@ -1030,7 +1030,7 @@ class PostgresCVVersionManager:
                     os.unlink(new_file_path)
                 except Exception:
                     pass
-    
+
     def create_version_from_history(
         self,
         user_email: str,
@@ -1041,27 +1041,28 @@ class PostgresCVVersionManager:
     ) -> Optional[Dict[str, Any]]:
         """
         Create a CV version from a history record (generated CV).
-        
+
         Downloads the PDF from history and creates a new version in the library.
         """
         import os
         import tempfile
+
         import requests
-        
+
         fields = history_record.get('fields', history_record)
         pdf_url = fields.get('cv_pdf_url')
-        
+
         if not pdf_url:
             self.logger.error("No PDF URL in history record")
             return None
-        
+
         # Generate version name if not provided
         if not version_name:
             job_title = fields.get('job_title', 'Unknown Job')
             from datetime import datetime
             date_str = datetime.now().strftime('%b %Y')
             version_name = f"{job_title} ({date_str})"
-        
+
         # Download PDF to temp file
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
@@ -1069,7 +1070,7 @@ class PostgresCVVersionManager:
                 resp.raise_for_status()
                 tmp.write(resp.content)
                 temp_path = tmp.name
-            
+
             # Create version
             new_version = self.create_version(
                 user_email=user_email,

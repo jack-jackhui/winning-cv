@@ -17,7 +17,6 @@ from fastapi.responses import JSONResponse
 
 from api.middleware.auth_middleware import auth_middleware
 from api.routes import (
-    webhooks_router,
     auth_router,
     cv_router,
     cv_versions_router,
@@ -25,6 +24,7 @@ from api.routes import (
     knowledge_base_router,
     profile_router,
     telemetry_router,
+    webhooks_router,
 )
 from scheduler.job_scheduler import JobScheduler
 from utils.logger import setup_logger
