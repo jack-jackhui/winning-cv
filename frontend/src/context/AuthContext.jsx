@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { trackSessionStart } from '../services/telemetry'
 
 const AuthContext = createContext(null)
 
@@ -161,10 +162,12 @@ export function AuthProvider({ children }) {
 
     // Listen for OAuth success events (like sel-exam)
     const handleOAuthSuccess = async (event) => {
-      const { token } = event.detail
+      const { token, provider } = event.detail
       if (token) {
         localStorage.setItem('winningcv_auth_token', token)
         await checkAuth()
+        // Track session start for telemetry
+        trackSessionStart({ provider: provider || 'unknown' })
       }
     }
 
@@ -219,7 +222,7 @@ export function AuthProvider({ children }) {
 
               // Store token and trigger auth check
               localStorage.setItem('winningcv_auth_token', key)
-              window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key } }))
+              window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key, provider: 'google' } }))
             } else {
               throw new Error('Google authentication failed')
             }
@@ -297,7 +300,7 @@ export function AuthProvider({ children }) {
 
           // Store token and trigger auth check
           localStorage.setItem('winningcv_auth_token', key)
-          window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key } }))
+          window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key, provider: 'microsoft' } }))
           return true
         } else {
           const errorText = await authResponse.text()
@@ -368,7 +371,7 @@ export function AuthProvider({ children }) {
 
             // Store token and trigger auth check
             localStorage.setItem('winningcv_auth_token', key)
-            window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key } }))
+            window.dispatchEvent(new CustomEvent('oauthSuccess', { detail: { token: key, provider: 'github' } }))
           } else {
             throw new Error('GitHub authentication failed')
           }

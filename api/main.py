@@ -17,13 +17,14 @@ from fastapi.responses import JSONResponse
 
 from api.middleware.auth_middleware import auth_middleware
 from api.routes import (
-    webhooks_router,
     auth_router,
     cv_router,
     cv_versions_router,
     jobs_router,
     knowledge_base_router,
     profile_router,
+    telemetry_router,
+    webhooks_router,
 )
 from scheduler.job_scheduler import JobScheduler
 from utils.logger import setup_logger
@@ -156,6 +157,7 @@ app.include_router(cv_versions_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(knowledge_base_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
+app.include_router(telemetry_router, prefix="/api/v1")
 app.include_router(webhooks_router, prefix="/api/v1")
 
 
@@ -212,6 +214,7 @@ async def api_root():
             "jobs": "/api/v1/jobs",
             "knowledge_base": "/api/v1/knowledge-base",
             "profile": "/api/v1/profile",
+            "telemetry": "/api/v1/telemetry",
             "docs": "/api/docs"
         }
     }

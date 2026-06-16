@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { jobService } from '../services/api'
+import { trackFunnel, trackJobDetailsOpen, EventNames } from '../services/telemetry'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -43,6 +44,10 @@ export default function Dashboard() {
       ])
       setJobs(jobsData)
       setStats(statsData)
+      // Track jobs view when data loads successfully
+      if (jobsData.length > 0) {
+        trackFunnel(EventNames.JOBS_VIEW, { metadata: { jobs_count: jobsData.length } })
+      }
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
       setError(err.message || 'Failed to load data')
@@ -251,6 +256,7 @@ export default function Dashboard() {
                   rel="noopener noreferrer"
                   className="btn-icon text-text-muted hover:text-text-primary"
                   aria-label="View job"
+                  onClick={() => trackJobDetailsOpen(job.id?.toString(), job.job_title || job.title)}
                 >
                   <ExternalLink className="w-4 h-4" />
                 </a>
