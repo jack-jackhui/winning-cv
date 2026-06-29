@@ -40,9 +40,11 @@ jobs:
           version: 8
 
       - name: Install dependencies
+        if: ${{ hashFiles('package.json') != '' }}
         run: pnpm install || npm ci
 
       - name: Create Release Pull Request or Publish
+        if: ${{ hashFiles('package.json') != '' }}
         uses: changesets/action@v1
         with:
           title: "chore: version packages"
@@ -51,3 +53,7 @@ jobs:
           # For Python, we just create the PR and tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip unconfigured Changesets release
+        if: ${{ hashFiles('package.json') == '' }}
+        run: echo "No root package.json found; Changesets release is not configured for this repository."
