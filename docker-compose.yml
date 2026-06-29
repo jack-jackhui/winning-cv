@@ -8,6 +8,10 @@ services:
     restart: unless-stopped
     ports:
       - "13001:80"  # Only frontend exposed externally
+    volumes:
+      # Use repo-managed nginx config with Docker DNS resolver + variable proxy_pass
+      # so API/MinIO service IPs are re-resolved after container recreation.
+      - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       api:
         condition: service_healthy
@@ -36,11 +40,16 @@ services:
       - API_PORT=8000
       - API_HOST=0.0.0.0
       - API_RELOAD=false
+      - API_WORKERS=1
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
+      - RUNNING_IN_DOCKER=true
+      - HOME=/tmp/chrome-home
+      - XDG_CONFIG_HOME=/tmp/chrome-config
       - MINIO_ENDPOINT=minio:9000
+      - MINIO_SECURE=false
     env_file:
       - .env
     depends_on:
@@ -63,7 +72,6 @@ services:
   job-runner:
     image: ghcr.io/jack-jackhui/winning-cv:latest
     restart: "no"
-    user: "${UID}:${GID}"
     volumes:
       - ./user_cv:/winning-cv/user_cv
       - cv_data:/winning-cv/customised_cv
@@ -71,7 +79,11 @@ services:
     environment:
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
+      - RUNNING_IN_DOCKER=true
+      - HOME=/tmp/chrome-home
+      - XDG_CONFIG_HOME=/tmp/chrome-config
       - MINIO_ENDPOINT=minio:9000
+      - MINIO_SECURE=false
     env_file:
       - .env
     command: ["python", "main.py", "--user-email", "${JOB_USER_EMAIL}"]
@@ -99,7 +111,11 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - CHROMIUM_PATH=/usr/bin/chromium
       - HEADLESS=true
+      - RUNNING_IN_DOCKER=true
+      - HOME=/tmp/chrome-home
+      - XDG_CONFIG_HOME=/tmp/chrome-config
       - MINIO_ENDPOINT=minio:9000
+      - MINIO_SECURE=false
     env_file:
       - .env
     command: ["python", "run_worker.py", "--worker-id", "prod-worker-1", "--poll-interval", "5"]
