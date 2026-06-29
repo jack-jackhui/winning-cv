@@ -8,6 +8,7 @@
 #   ./user_cv -> /winning-cv/user_cv
 #   ./cookies -> /winning-cv/cookies
 #   ./init-db -> /docker-entrypoint-initdb.d (read-only)
+#   ./nginx/frontend.conf -> /etc/nginx/conf.d/default.conf (read-only)
 # - Source-code bind mounts into packaged app paths are forbidden in production
 #   because they can mask image contents (e.g. ./api -> /winning-cv/api).
 set -euo pipefail
@@ -38,6 +39,7 @@ allowed_bind_sources = {
     "user_cv": "/winning-cv/user_cv",
     "cookies": "/winning-cv/cookies",
     "init-db": "/docker-entrypoint-initdb.d",
+    "nginx/frontend.conf": "/etc/nginx/conf.d/default.conf",
 }
 allowed_named_volumes = {"cv_data", "minio_data", "postgres_data"}
 for required in sorted(allowed_named_volumes):
@@ -64,15 +66,16 @@ for service, svc in sorted(config.get("services", {}).items()):
             errors.append(f"{service}: bind source outside repo is not allowed: {source} -> {target}")
             continue
 
+        rel_str = rel.as_posix()
         rel_key = rel.parts[0] if rel.parts else "."
-        expected_target = allowed_bind_sources.get(rel_key)
+        expected_target = allowed_bind_sources.get(rel_str) or allowed_bind_sources.get(rel_key)
         if expected_target is None:
             errors.append(f"{service}: forbidden production bind mount ./{rel} -> {target}")
             continue
         if target != expected_target:
-            errors.append(f"{service}: ./{rel_key} may only mount to {expected_target}, not {target}")
-        if rel_key == "init-db" and not volume.get("read_only", False):
-            errors.append(f"{service}: ./init-db bind mount must be read-only")
+            errors.append(f"{service}: ./{rel_str} may only mount to {expected_target}, not {target}")
+        if rel_str in {"init-db", "nginx/frontend.conf"} and not volume.get("read_only", False):
+            errors.append(f"{service}: ./{rel_str} bind mount must be read-only")
 
 frontend = config.get("services", {}).get("frontend", {})
 ports = frontend.get("ports") or []
