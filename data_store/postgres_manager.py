@@ -1046,6 +1046,7 @@ class PostgresCVVersionManager:
         """
         import os
         import tempfile
+        from urllib.parse import unquote, urlparse
 
         import requests
 
@@ -1065,11 +1066,33 @@ class PostgresCVVersionManager:
 
         # Download PDF to temp file
         try:
+            def _object_path_from_presigned_url(url: str) -> Optional[str]:
+                parsed = urlparse(url)
+                path = unquote(parsed.path or "").lstrip('/')
+
+                storage_prefix = f"storage/{self.minio.bucket}/"
+                if path.startswith(storage_prefix):
+                    return path[len(storage_prefix):]
+
+                bucket_prefix = f"{self.minio.bucket}/"
+                if path.startswith(bucket_prefix):
+                    return path[len(bucket_prefix):]
+
+                return None
+
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                temp_path = tmp.name
+
+            object_path = _object_path_from_presigned_url(pdf_url)
+            if object_path:
+                self.logger.info(f"Fetching history PDF directly from MinIO: {object_path}")
+                self.minio.client.fget_object(self.minio.bucket, object_path, temp_path)
+            else:
+                self.logger.info("Fetching history PDF from URL fallback")
                 resp = requests.get(pdf_url, timeout=30)
                 resp.raise_for_status()
-                tmp.write(resp.content)
-                temp_path = tmp.name
+                with open(temp_path, 'wb') as f:
+                    f.write(resp.content)
 
             # Create version
             new_version = self.create_version(

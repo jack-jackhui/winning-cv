@@ -715,6 +715,12 @@ async def create_from_history(
             user_tags=request.user_tags,
         )
 
+        if not version:
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to create CV version from generated history PDF"
+            )
+
         return _version_to_response(version)
 
     except HTTPException:

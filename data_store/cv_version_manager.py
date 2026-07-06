@@ -594,6 +594,7 @@ class CVVersionManager:
         """
         import os
         import tempfile
+        from urllib.parse import unquote, urlparse
 
         import requests
 
@@ -610,12 +611,38 @@ class CVVersionManager:
             today = datetime.now().strftime("%b %Y")
             version_name = f"{job_title} ({today})"
 
-        # Download the PDF to a temp file
+        # Download the PDF to a temp file. Prefer direct MinIO access for
+        # generated history URLs because the API container may not be able to
+        # reliably fetch the browser-facing /storage proxy URL.
+        def _object_path_from_presigned_url(url: str) -> Optional[str]:
+            parsed = urlparse(url)
+            path = unquote(parsed.path or "").lstrip('/')
+
+            # External browser URL shape: /storage/<bucket>/<object_path>
+            storage_prefix = f"storage/{self.minio.bucket}/"
+            if path.startswith(storage_prefix):
+                return path[len(storage_prefix):]
+
+            # Internal MinIO URL shape: /<bucket>/<object_path>
+            bucket_prefix = f"{self.minio.bucket}/"
+            if path.startswith(bucket_prefix):
+                return path[len(bucket_prefix):]
+
+            return None
+
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            tmp_path = tmp.name
+
+        object_path = _object_path_from_presigned_url(cv_pdf_url)
+        if object_path:
+            logger.info(f"Fetching history PDF directly from MinIO: {object_path}")
+            self.minio.client.fget_object(self.minio.bucket, object_path, tmp_path)
+        else:
+            logger.info("Fetching history PDF from URL fallback")
             resp = requests.get(cv_pdf_url, timeout=60)
             resp.raise_for_status()
-            tmp.write(resp.content)
-            tmp_path = tmp.name
+            with open(tmp_path, 'wb') as f:
+                f.write(resp.content)
 
         try:
             # Create the version
