@@ -11,6 +11,7 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -516,11 +517,18 @@ async def stream_cv_file(
             media_type = stat.content_type or "application/octet-stream"
             file_ext = ".pdf"  # fallback
         
-        # Determine filename from version name
+        # Determine filename from version name. Header values must be latin-1
+        # encodable, so provide an ASCII fallback plus RFC 5987 filename* for
+        # Unicode names such as en dashes or smart quotes.
         base_name = version.get('version_name', version_id)
         filename = f"{base_name}{file_ext}"
-        # Sanitize filename for Content-Disposition header
-        filename = filename.replace('"', '\\"')
+        ascii_filename = filename.encode('ascii', errors='ignore').decode('ascii').strip()
+        ascii_filename = ascii_filename.replace('"', '').replace('\\', '_') or f"{version_id}{file_ext}"
+        utf8_filename = quote(filename, safe='')
+        content_disposition = (
+            f'attachment; filename="{ascii_filename}"; '
+            f"filename*=UTF-8''{utf8_filename}"
+        )
 
         def iterfile():
             """Generator to stream file in chunks."""
@@ -535,7 +543,7 @@ async def stream_cv_file(
             iterfile(),
             media_type=media_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": content_disposition,
                 "Content-Length": str(stat.size),
                 "Cache-Control": "private, max-age=3600",
             }
