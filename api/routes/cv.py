@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
@@ -18,7 +19,8 @@ MAX_CV_FILE_SIZE = 10 * 1024 * 1024  # 10MB max
 ALLOWED_CV_EXTENSIONS = {'.pdf', '.docx', '.txt'}
 PDF_MAGIC_BYTES = b'%PDF'
 DOCX_MAGIC_BYTES = b'PK'  # DOCX is a ZIP file
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
@@ -48,6 +50,14 @@ from utils.minio_storage import get_minio_storage
 from utils.utils import create_docx, create_pdf, extract_text_from_file
 
 logger = logging.getLogger(__name__)
+
+
+class GeneratedCVDownloadRequest(BaseModel):
+    """Request to proxy-download a generated CV file from MinIO storage."""
+    file_url: str = Field(..., description="Generated CV presigned/storage URL returned by the API")
+    filename: Optional[str] = Field(None, max_length=255, description="Suggested download filename")
+    format: Optional[str] = Field("pdf", description="Requested file format: pdf or docx")
+
 
 router = APIRouter(prefix="/cv", tags=["CV Generation"])
 
@@ -532,6 +542,70 @@ async def download_cv(
         path=str(pdf_path),
         filename=safe_filename,
         media_type="application/pdf"
+    )
+
+
+@router.post("/download/generated")
+async def download_generated_cv(
+    request: GeneratedCVDownloadRequest,
+    user: UserInfo = Depends(get_current_user)
+) -> StreamingResponse:
+    """Stream a generated CV file through the authenticated API."""
+    from minio.error import S3Error
+
+    minio = get_minio_storage()
+    parsed = urlparse(request.file_url)
+    path = unquote(parsed.path or "").lstrip("/")
+
+    storage_prefix = f"storage/{minio.bucket}/"
+    bucket_prefix = f"{minio.bucket}/"
+    if path.startswith(storage_prefix):
+        object_path = path[len(storage_prefix):]
+    elif path.startswith(bucket_prefix):
+        object_path = path[len(bucket_prefix):]
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported generated CV download URL")
+
+    user_prefix = f"{user.email}/versions/"
+    if not object_path.startswith(user_prefix):
+        logger.warning("Blocked generated CV download outside user prefix: user=%s path=%s", user.email, object_path)
+        raise HTTPException(status_code=403, detail="Access denied for generated CV file")
+
+    try:
+        response = minio.client.get_object(minio.bucket, object_path)
+        stat = minio.client.stat_object(minio.bucket, object_path)
+    except S3Error as exc:
+        logger.error("Failed to open generated CV from MinIO: %s", exc)
+        raise HTTPException(status_code=404, detail="Generated CV file not found") from exc
+
+    requested_format = (request.format or "pdf").lower()
+    suffix = ".docx" if requested_format == "docx" else ".pdf"
+    media_type = stat.content_type or (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if suffix == ".docx" else "application/pdf"
+    )
+
+    safe_filename = Path(request.filename or Path(object_path).name).name
+    if not safe_filename.lower().endswith((".pdf", ".docx")):
+        safe_filename = f"{safe_filename}{suffix}"
+    safe_filename = safe_filename.replace('"', '\\"')
+
+    def iterfile():
+        try:
+            for chunk in response.stream(32 * 1024):
+                yield chunk
+        finally:
+            response.close()
+            response.release_conn()
+
+    return StreamingResponse(
+        iterfile(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Content-Length": str(stat.size),
+            "Cache-Control": "private, max-age=3600",
+        }
     )
 
 

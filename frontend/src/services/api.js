@@ -451,6 +451,40 @@ export const cvService = {
     document.body.removeChild(a)
   },
 
+  // Download generated CV through the authenticated API proxy.
+  // This avoids browser failures when public /storage presigned URLs are unavailable.
+  async downloadGeneratedFile(url, filename, format = 'pdf') {
+    const response = await fetch(`${API_BASE_URL}/api/v1/cv/download/generated`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        file_url: url,
+        filename: filename || `cv.${format}`,
+        format,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}))
+      const { code, message } = categorizeError(response.status, errorBody)
+      throw new ApiError(message, code, response.status, errorBody)
+    }
+
+    const blob = await response.blob()
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = filename || `cv.${format}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(downloadUrl)
+  },
+
   // Get CV-JD fit analysis
   async getAnalysis(historyId) {
     return fetchAPI(`/api/v1/cv/analysis/${historyId}`)

@@ -381,16 +381,27 @@ export default function GenerateCV() {
     }
   }
 
-  const handleDownload = (format = 'pdf') => {
+  const handleDownload = async (format = 'pdf') => {
     setShowDownloadMenu(false)
     // Track CV download
     if (result?.history_id) {
       trackCVDownload(result.history_id, format)
     }
-    if (format === 'pdf' && result?.cv_pdf_url) {
-      cvService.downloadFromUrl(result.cv_pdf_url, `${result.job_title}_cv.pdf`)
-    } else if (format === 'docx' && result?.cv_docx_url) {
-      cvService.downloadFromUrl(result.cv_docx_url, `${result.job_title}_cv.docx`)
+
+    const safeJobTitle = normalizeDisplayText(result?.job_title, 'generated_cv').replace(/[\\/:*?"<>|]/g, '_')
+    try {
+      if (format === 'pdf' && result?.cv_pdf_url) {
+        await cvService.downloadGeneratedFile(result.cv_pdf_url, `${safeJobTitle}_cv.pdf`, 'pdf')
+      } else if (format === 'docx' && result?.cv_docx_url) {
+        await cvService.downloadGeneratedFile(result.cv_docx_url, `${safeJobTitle}_cv.docx`, 'docx')
+      }
+    } catch (err) {
+      console.error('Failed to download generated CV via API proxy:', err)
+      if (format === 'pdf' && result?.cv_pdf_url) {
+        cvService.downloadFromUrl(result.cv_pdf_url, `${safeJobTitle}_cv.pdf`)
+      } else if (format === 'docx' && result?.cv_docx_url) {
+        cvService.downloadFromUrl(result.cv_docx_url, `${safeJobTitle}_cv.docx`)
+      }
     }
   }
 
