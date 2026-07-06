@@ -32,9 +32,15 @@ class SeekJobScraper:
             .set_paths(browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH) \
             .set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 
+        if Config.HEADLESS:
+            # Chromium 149+ is more reliable in containers with the new headless backend.
+            options.set_argument('--headless=new')
+
         if Config.RUNNING_IN_DOCKER:
             options.set_argument('--no-sandbox')
             options.set_argument('--disable-gpu')
+            options.set_argument('--disable-crash-reporter')
+            options.set_argument('--disable-crashpad')
 
         self.browser = Chromium(options)
 

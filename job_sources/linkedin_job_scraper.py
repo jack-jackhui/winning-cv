@@ -40,10 +40,16 @@ class LinkedInJobScraper:
         options.set_argument('--disable-dev-shm-usage')
         options.set_argument('--window-size=1920,1080')
 
+        if Config.HEADLESS:
+            # Chromium 149+ is more reliable in containers with the new headless backend.
+            options.set_argument('--headless=new')
+
         if Config.RUNNING_IN_DOCKER:
             options.set_argument('--no-sandbox')
             options.set_argument('--disable-gpu')
-            options.set_argument('--single-process')
+            options.set_argument('--disable-crash-reporter')
+            options.set_argument('--disable-crashpad')
+            # Do not use --single-process: Chromium 149 can crash with Trace/breakpoint trap.
 
         self.browser = Chromium(options)
 
