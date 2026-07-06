@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   X,
   ChevronDown,
@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   XCircle,
   Minus,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react'
 
 /**
@@ -114,7 +116,7 @@ function ItemList({ items, type = 'matched' }) {
 /**
  * CV-JD Fit Analysis Modal
  */
-export default function AnalysisModal({ analysis, onClose }) {
+export default function AnalysisModal({ analysis, onClose, onRegenerate, isRegenerating, hasRegenerated }) {
   if (!analysis) return null
 
   const {
@@ -127,6 +129,24 @@ export default function AnalysisModal({ analysis, onClose }) {
     gap_analysis,
     talking_points,
   } = analysis
+
+  // Build improvement suggestions from analysis
+  const improvementSuggestions = useMemo(() => {
+    const suggestions = []
+    if (keyword_match?.missing?.length) {
+      suggestions.push(`Add these missing keywords: ${keyword_match.missing.slice(0, 5).join(", ")}`)
+    }
+    if (skills_coverage?.technical_skills?.missing?.length) {
+      suggestions.push(`Emphasize these skills: ${skills_coverage.technical_skills.missing.slice(0, 3).join(", ")}`)
+    }
+    if (gap_analysis?.mitigation_suggestions?.length) {
+      suggestions.push(...gap_analysis.mitigation_suggestions.slice(0, 3))
+    }
+    if (ats_optimization?.recommendations?.length) {
+      suggestions.push(...ats_optimization.recommendations.slice(0, 2))
+    }
+    return suggestions
+  }, [keyword_match, skills_coverage, gap_analysis, ats_optimization])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -340,14 +360,34 @@ export default function AnalysisModal({ analysis, onClose }) {
             </CollapsibleSection>
           )}
         </div>
-
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="w-full btn-secondary"
-          >
-            Close
+        <div className="px-6 py-4 border-t border-border space-y-3">
+          {hasRegenerated ? (
+            <div className="text-center text-sm text-text-muted p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <CheckCircle2 className="w-4 h-4 inline mr-1.5 text-emerald-400" />
+              CV regenerated with improvements. Click "Run Fresh Analysis" below to see updated results.
+            </div>
+          ) : improvementSuggestions.length > 0 && onRegenerate && (
+            <button
+              onClick={() => onRegenerate(improvementSuggestions)}
+              disabled={isRegenerating}
+              className="w-full btn-primary"
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Regenerating with improvements...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Regenerate CV with Improvements
+                </>
+              )}
+            </button>
+          )}
+          <button onClick={onClose} className="w-full btn-secondary">
+            {hasRegenerated ? "Run Fresh Analysis" : "Close"}
           </button>
         </div>
       </div>

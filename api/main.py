@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, profile_router
+from api.routes import auth_router, cv_router, cv_versions_router, jobs_router, job_tools_router, profile_router
 from api.middleware.auth_middleware import auth_middleware
 from utils.logger import setup_logger
 from scheduler.job_scheduler import JobScheduler
@@ -136,6 +136,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cv_router, prefix="/api/v1")
 app.include_router(cv_versions_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(job_tools_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
 
 
@@ -161,6 +162,12 @@ async def api_root():
             "cv": "/api/v1/cv",
             "cv_versions": "/api/v1/cv/versions",
             "jobs": "/api/v1/jobs",
+            "job_tools": {
+                "search": "/api/v1/jobs/tools/search",
+                "match": "/api/v1/jobs/tools/match",
+                "analyze": "/api/v1/jobs/tools/analyze",
+                "generate_cv": "/api/v1/cv/tools/generate"
+            },
             "profile": "/api/v1/profile",
             "docs": "/api/docs"
         }

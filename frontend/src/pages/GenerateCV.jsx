@@ -52,7 +52,8 @@ export default function GenerateCV() {
   const downloadMenuRef = useRef(null)
 
   // Analysis state
-  const [analysisStatus, setAnalysisStatus] = useState('idle') // idle | pending | ready | failed
+  const [analysisStatus, setAnalysisStatus] = useState('idle')
+  const [hasRegenerated, setHasRegenerated] = useState(false) // idle | pending | ready | failed
   const [analysis, setAnalysis] = useState(null)
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
   const analysisPollingRef = useRef(null)
@@ -109,6 +110,7 @@ export default function GenerateCV() {
 
     setAnalysisStatus('pending')
     setAnalysis(null)
+    setHasRegenerated(false)
 
     // Poll every 3 seconds
     analysisPollingRef.current = setInterval(async () => {
@@ -123,6 +125,7 @@ export default function GenerateCV() {
           clearInterval(analysisPollingRef.current)
           setAnalysisStatus('failed')
           setAnalysis(null)
+    setHasRegenerated(false)
         }
         // If still pending, continue polling
       } catch (err) {
@@ -362,6 +365,7 @@ export default function GenerateCV() {
     setError(null)
     setAnalysisStatus('idle')
     setAnalysis(null)
+    setHasRegenerated(false)
     // Reset library save state
     setSavedToLibrary(null)
     setSavingToLibrary(false)
@@ -370,6 +374,72 @@ export default function GenerateCV() {
     setCustomVersionName('')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+  }
+
+
+  // Handle regeneration with improvement suggestions from analysis
+  const handleRegenerateWithImprovements = async (suggestions) => {
+    if (!result || generating) return
+    
+    // Build improvement instructions from suggestions
+    const improvementInstructions = `IMPORTANT: Apply these specific improvements based on CV-JD analysis:\n\n${suggestions.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nMake these changes while maintaining the overall structure and professional tone.`
+    
+    // Preserve current job description but update instructions
+    const currentJD = jobDescription
+    const combinedInstructions = instructions 
+      ? `${instructions}\n\n${improvementInstructions}`
+      : improvementInstructions
+    
+    setGenerating(true)
+    setError(null)
+    
+    // Stop current analysis polling
+    if (analysisPollingRef.current) {
+      clearInterval(analysisPollingRef.current)
+    }
+    
+    try {
+      let response
+      
+      if (cvSource === "library" && selectedVersion) {
+        const { download_url } = await cvVersionsService.getDownloadUrl(selectedVersion.version_id)
+        const fileResponse = await fetch(download_url)
+        const blob = await fileResponse.blob()
+        const file = new File([blob], selectedVersion.file_name || "cv.pdf", {
+          type: blob.type || "application/pdf",
+        })
+        response = await cvService.generateCV(currentJD, file, combinedInstructions)
+      } else if (cvFile) {
+        response = await cvService.generateCV(currentJD, cvFile, combinedInstructions)
+      } else {
+        throw new Error("No CV source available for regeneration")
+      }
+      
+      setResult(response)
+      setHasRegenerated(true)
+      setAnalysisStatus("idle")
+      setAnalysis(null)
+    setHasRegenerated(false)
+      
+      // Auto-save regenerated version
+      if (response.history_id) {
+        saveToLibrary(response.history_id, `${response.job_title} (Improved)`)
+      }
+    } catch (err) {
+      setError(err.message || "Failed to regenerate CV")
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  // Handle closing analysis modal - if regenerated, trigger fresh analysis
+  const handleCloseAnalysisModal = () => {
+    setShowAnalysisModal(false)
+    if (hasRegenerated && result?.history_id) {
+      // Start fresh analysis for regenerated CV
+      setHasRegenerated(false)
+      startAnalysisPolling(result.history_id)
     }
   }
 
@@ -789,7 +859,10 @@ export default function GenerateCV() {
       {showAnalysisModal && analysis && (
         <AnalysisModal
           analysis={analysis}
-          onClose={() => setShowAnalysisModal(false)}
+          onClose={handleCloseAnalysisModal}
+          onRegenerate={handleRegenerateWithImprovements}
+          isRegenerating={generating}
+          hasRegenerated={hasRegenerated}
         />
       )}
     </div>
