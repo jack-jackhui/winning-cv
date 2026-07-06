@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CVGenerateRequest(BaseModel):
@@ -163,6 +163,43 @@ class CVVersionFromHistoryRequest(BaseModel):
     version_name: Optional[str] = Field(None, max_length=100, description="Custom name (auto-generated if not provided)")
     auto_category: Optional[str] = Field(None, max_length=50, description="Category for the CV")
     user_tags: Optional[List[str]] = Field(default_factory=list, description="User-defined tags")
+
+    @field_validator('history_id', 'version_name', 'auto_category', mode='before')
+    @classmethod
+    def coerce_string_fields(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        if isinstance(value, dict):
+            for key in ('history_id', 'id', 'value', 'job_title', 'title', 'name', 'label'):
+                candidate = value.get(key)
+                if candidate is not None:
+                    return str(candidate)
+        return str(value)
+
+    @field_validator('user_tags', mode='before')
+    @classmethod
+    def coerce_user_tags(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        if isinstance(value, list):
+            tags = []
+            for item in value:
+                if item is None:
+                    continue
+                if isinstance(item, dict):
+                    item = item.get('value') or item.get('name') or item.get('label') or item.get('id')
+                if item is not None:
+                    tag = str(item).strip()
+                    if tag:
+                        tags.append(tag)
+            return tags
+        return [str(value)]
 
 
 # ──────────────────────────────────────────────────────────

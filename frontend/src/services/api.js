@@ -74,9 +74,57 @@ function getAuthHeaders() {
   return {}
 }
 
+function formatErrorDetail(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map((item) => {
+      if (typeof item === 'string') return item
+      if (item?.msg) {
+        const location = Array.isArray(item.loc) ? item.loc.join('.') : item.loc
+        return location ? `${location}: ${item.msg}` : item.msg
+      }
+      try {
+        return JSON.stringify(item)
+      } catch {
+        return String(item)
+      }
+    }).join('; ')
+  }
+
+  if (detail && typeof detail === 'object') {
+    if (detail.msg) return detail.msg
+    if (detail.message) return detail.message
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+
+  return detail ? String(detail) : ''
+}
+
+function normalizeApiString(value, fallback = '') {
+  if (value === null || value === undefined) return fallback
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (typeof value === 'object') {
+    const candidate = value.job_title || value.title || value.name || value.label || value.value || value.id
+    return candidate === undefined || candidate === null ? fallback : String(candidate)
+  }
+  return String(value)
+}
+
+function normalizeStringList(value) {
+  if (value === null || value === undefined) return []
+  const values = Array.isArray(value) ? value : [value]
+  return values.map((item) => normalizeApiString(item).trim()).filter(Boolean)
+}
+
 // Detect specific error types from response
 function categorizeError(status, errorBody) {
-  const detail = (errorBody?.detail || errorBody?.message || '').toLowerCase()
+  const rawDetail = errorBody?.detail ?? errorBody?.message ?? ''
+  const detail = formatErrorDetail(rawDetail)
+  const detailLower = detail.toLowerCase()
 
   // Auth errors
   if (status === 401) {
@@ -89,7 +137,7 @@ function categorizeError(status, errorBody) {
   // Not found
   if (status === 404) {
     // Check for expired presigned URLs
-    if (detail.includes('expired') || detail.includes('presigned')) {
+    if (detailLower.includes('expired') || detailLower.includes('presigned')) {
       return { code: ErrorCodes.DOWNLOAD_EXPIRED, message: 'Download link expired' }
     }
     return { code: ErrorCodes.NOT_FOUND, message: 'Resource not found' }
@@ -97,14 +145,14 @@ function categorizeError(status, errorBody) {
 
   // Validation errors
   if (status === 422 || status === 400) {
-    return { code: ErrorCodes.VALIDATION_ERROR, message: errorBody?.detail || 'Invalid input' }
+    return { code: ErrorCodes.VALIDATION_ERROR, message: detail || 'Invalid input' }
   }
 
   // Server errors
   if (status >= 500) {
     // Check for LinkedIn/scraper specific errors
-    if (detail.includes('linkedin') || detail.includes('cookie')) {
-      if (detail.includes('expired') || detail.includes('invalid')) {
+    if (detailLower.includes('linkedin') || detailLower.includes('cookie')) {
+      if (detailLower.includes('expired') || detailLower.includes('invalid')) {
         return { code: ErrorCodes.COOKIE_EXPIRED, message: 'LinkedIn session expired' }
       }
       return { code: ErrorCodes.SCRAPER_FAILED, message: 'Job search failed' }
@@ -112,7 +160,7 @@ function categorizeError(status, errorBody) {
     return { code: ErrorCodes.SERVER_ERROR, message: 'Server error' }
   }
 
-  return { code: ErrorCodes.UNKNOWN, message: errorBody?.detail || `Error: ${status}` }
+  return { code: ErrorCodes.UNKNOWN, message: detail || `Error: ${status}` }
 }
 
 // Generic fetch wrapper with improved error handling
@@ -645,13 +693,18 @@ export const cvVersionsService = {
 
   // Create a CV version from a history record (save generated CV to library)
   async createFromHistory(historyId, { versionName = null, autoCategory = null, userTags = [] } = {}) {
+    const normalizedHistoryId = normalizeApiString(historyId).trim()
+    if (!normalizedHistoryId) {
+      throw new ApiError('Missing generated CV history reference', ErrorCodes.VALIDATION_ERROR, 0)
+    }
+
     return fetchAPI('/api/v1/cv/versions/from-history', {
       method: 'POST',
       body: JSON.stringify({
-        history_id: historyId,
-        version_name: versionName,
-        auto_category: autoCategory,
-        user_tags: userTags,
+        history_id: normalizedHistoryId,
+        version_name: versionName === null || versionName === undefined ? null : normalizeApiString(versionName).trim().slice(0, 100),
+        auto_category: autoCategory === null || autoCategory === undefined ? null : normalizeApiString(autoCategory).trim().slice(0, 50),
+        user_tags: normalizeStringList(userTags),
       }),
     })
   },

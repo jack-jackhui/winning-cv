@@ -35,6 +35,17 @@ import {
   trackCVSaveLibrary,
 } from '../services/telemetry'
 
+function normalizeDisplayText(value, fallback = 'Generated CV') {
+  if (value === null || value === undefined) return fallback
+  if (typeof value === 'string') return value.trim() || fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (typeof value === 'object') {
+    const candidate = value.job_title || value.title || value.name || value.label || value.value
+    return candidate === undefined || candidate === null ? fallback : String(candidate)
+  }
+  return String(value)
+}
+
 export default function GenerateCV() {
   const location = useLocation()
   // CV source state: 'library' | 'upload'
@@ -186,7 +197,8 @@ export default function GenerateCV() {
     setSaveError(null)
 
     try {
-      const versionName = customName || `${jobTitle} (${new Date().toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })})`
+      const safeJobTitle = normalizeDisplayText(jobTitle)
+      const versionName = customName || `${safeJobTitle} (${new Date().toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })})`
       const savedVersion = await cvVersionsService.createFromHistory(historyId, {
         versionName,
         autoCategory: 'Generated',
