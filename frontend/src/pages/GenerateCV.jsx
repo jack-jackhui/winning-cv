@@ -330,15 +330,12 @@ export default function GenerateCV() {
       let response
 
       if (cvSource === 'library' && selectedVersion) {
-        // Using CV from library - fetch the file first
-        const { download_url } = await cvVersionsService.getDownloadUrl(selectedVersion.version_id)
-
-        // Fetch the file from the download URL
-        const fileResponse = await fetch(download_url)
-        const blob = await fileResponse.blob()
-        const file = new File([blob], selectedVersion.file_name || 'cv.pdf', {
-          type: blob.type || 'application/pdf',
-        })
+        // Using CV from library - fetch the file through the API proxy so the
+        // generated File keeps the real MIME type and extension (PDF vs DOCX).
+        const file = await cvVersionsService.getVersionFile(
+          selectedVersion.version_id,
+          selectedVersion.version_name || 'cv'
+        )
 
         response = await cvService.generateCV(jobDescription, file, instructions, useKnowledgeBase)
 

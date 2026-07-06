@@ -567,6 +567,39 @@ export const cvVersionsService = {
     return fetchAPI(`/api/v1/cv/versions/${versionId}/download?expires_hours=${expiresHours}`)
   },
 
+  // Fetch a CV version through the API proxy, preserving the real file type.
+  // This avoids feeding an HTML/MinIO error page or a DOCX named cv.pdf into /cv/generate.
+  async getVersionFile(versionId, fallbackName = 'cv') {
+    const response = await fetch(`${API_BASE_URL}/api/v1/cv/versions/${versionId}/file`, {
+      credentials: 'include',
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}))
+      const { code, message } = categorizeError(response.status, errorBody)
+      throw new ApiError(message, code, response.status, errorBody)
+    }
+
+    const blob = await response.blob()
+    const contentDisposition = response.headers.get('content-disposition') || ''
+    const dispositionFilename = contentDisposition.match(/filename="?([^";]+)"?/)?.[1]
+
+    let filename = dispositionFilename || fallbackName || 'cv'
+    if (!/\.(pdf|docx|txt)$/i.test(filename)) {
+      const extByType = {
+        'application/pdf': '.pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        'text/plain': '.txt',
+      }
+      filename = `${filename}${extByType[blob.type] || ''}`
+    }
+
+    return new File([blob], filename, {
+      type: blob.type || 'application/octet-stream',
+    })
+  },
+
   // Record usage (when CV is applied to job)
   async recordUsage(versionId) {
     return fetchAPI(`/api/v1/cv/versions/${versionId}/use`, {
