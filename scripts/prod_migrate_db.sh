@@ -9,4 +9,10 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_status VARCHAR(50) DEFAULT
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_notes TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP WITH TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(application_status);
+
+ALTER TABLE cv_history ADD COLUMN IF NOT EXISTS cv_docx_url VARCHAR(2000);
+
+ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_storage_path VARCHAR(500);
+ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_file_size INTEGER DEFAULT 0;
+ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_content_hash VARCHAR(64);
 SQL

@@ -269,6 +269,27 @@ class DualWriteCVVersionManager:
         
         return result
 
+    def create_version_from_history(
+        self,
+        user_email: str,
+        history_record: Dict[str, Any],
+        version_name: Optional[str] = None,
+        auto_category: Optional[str] = None,
+        user_tags: Optional[List[str]] = None,
+    ) -> Optional[Dict]:
+        result = self.airtable.create_version_from_history(
+            user_email, history_record, version_name, auto_category, user_tags
+        )
+
+        try:
+            self.postgres.create_version_from_history(
+                user_email, history_record, version_name, auto_category, user_tags
+            )
+        except Exception as e:
+            self.logger.warning(f"Postgres shadow write failed (create_version_from_history): {e}")
+
+        return result
+
 
 # =============================================================================
 # FACTORY FUNCTIONS

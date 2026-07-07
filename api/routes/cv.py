@@ -354,6 +354,7 @@ async def generate_cv(
                 "instructions": instructions or "",
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
+                "cv_docx_url": cv_docx_url,
                 "analysis_status": "pending",  # Mark as pending analysis
                 "llm_response_id": llm_response_id,  # Store for Responses API chaining
             }
@@ -494,6 +495,7 @@ async def get_cv_history(
                 job_title=fields.get("job_title", "Untitled"),
                 created_at=fields.get("created_at", datetime.now().isoformat()),
                 cv_pdf_url=fields.get("cv_pdf_url", ""),
+                cv_docx_url=fields.get("cv_docx_url"),
                 job_description=fields.get("job_description"),
                 instructions=fields.get("Instructions")
             ))
@@ -932,6 +934,7 @@ async def regenerate_cv_with_improvements(
                 "instructions": combined_instructions,
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
+                "cv_docx_url": cv_docx_url,
                 "analysis_status": "pending",
                 "llm_response_id": llm_response_id,  # Store for Responses API chaining
             }
@@ -1155,6 +1158,7 @@ async def refine_cv_with_instructions(
                 "instructions": f"{original_instructions}\n\n[Refinement v{refinement_count}]\n{refinement_instructions}",
                 "cv_markdown": raw_md,
                 "cv_pdf_url": cv_pdf_url,
+                "cv_docx_url": cv_docx_url,
                 "analysis_status": "pending",
                 "llm_response_id": new_response_id,  # Store for future chaining
                 "parent_history_id": parent_history_id,

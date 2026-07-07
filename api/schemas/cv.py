@@ -35,6 +35,7 @@ class CVHistoryItem(BaseModel):
     job_title: str
     created_at: datetime
     cv_pdf_url: str
+    cv_docx_url: Optional[str] = None
     job_description: Optional[str] = None
     instructions: Optional[str] = None
 
@@ -77,6 +78,8 @@ class CVVersionResponse(CVVersionBase):
     version_id: str
     user_email: str
     storage_path: str
+    docx_storage_path: Optional[str] = None
+    has_docx: bool = False
     parent_version_id: Optional[str] = None
     is_archived: bool = False
     usage_count: int = 0
@@ -84,7 +87,9 @@ class CVVersionResponse(CVVersionBase):
     source_job_link: Optional[str] = None
     source_job_title: Optional[str] = None
     file_size: int = 0
+    docx_file_size: int = 0
     content_hash: Optional[str] = None
+    docx_content_hash: Optional[str] = None
     created_at: datetime
     download_url: Optional[str] = None  # Presigned URL, populated on request
     index_status: Optional[str] = None  # Knowledge base index status: indexed | pending | null

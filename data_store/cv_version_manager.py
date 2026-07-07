@@ -46,6 +46,7 @@ class CVVersionManager:
         "auto_category": "auto_category",
         "user_tags": "user_tags",
         "storage_path": "storage_path",
+        "docx_storage_path": "docx_storage_path",
         "parent_version_id": "parent_version_id",
         "is_archived": "is_archived",
         "usage_count": "usage_count",
@@ -53,7 +54,9 @@ class CVVersionManager:
         "source_job_link": "source_job_link",
         "source_job_title": "source_job_title",
         "file_size": "file_size",
+        "docx_file_size": "docx_file_size",
         "content_hash": "content_hash",
+        "docx_content_hash": "docx_content_hash",
     }
 
     def __init__(self):
@@ -82,6 +85,7 @@ class CVVersionManager:
         parent_version_id: Optional[str] = None,
         source_job_link: Optional[str] = None,
         source_job_title: Optional[str] = None,
+        docx_file_path: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new CV version.
@@ -95,6 +99,7 @@ class CVVersionManager:
             parent_version_id: ID of parent version if forked
             source_job_link: Job this CV was generated for
             source_job_title: Title of the source job
+            docx_file_path: Optional generated DOCX companion artifact
 
         Returns:
             Created version record
@@ -105,19 +110,46 @@ class CVVersionManager:
         # Generate unique version ID
         version_id = f"cv_{uuid.uuid4().hex[:12]}"
 
+        def _file_hash(path: str) -> str:
+            with open(path, "rb") as f:
+                return hashlib.md5(f.read()).hexdigest()
+
+        def _is_docx(path: str) -> bool:
+            with open(path, "rb") as f:
+                return f.read(4) == b"PK\x03\x04"
+
         # Get file info
         file_size = os.path.getsize(file_path)
-        with open(file_path, "rb") as f:
-            content_hash = hashlib.md5(f.read()).hexdigest()
+        content_hash = _file_hash(file_path)
 
-        # Upload to MinIO
-        filename = f"{version_id}.pdf"
+        # Upload primary artifact to MinIO. Generated CVs use PDF as primary;
+        # uploaded DOCX files retain their real extension/content type.
+        primary_is_docx = _is_docx(file_path)
+        filename = f"{version_id}.docx" if primary_is_docx else f"{version_id}.pdf"
         storage_path = self.minio.upload_cv(
             file_path=file_path,
             user_id=user_email,
             filename=filename,
-            version_id=version_id
+            version_id=version_id,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                if primary_is_docx else "application/pdf"
+            )
         )
+
+        docx_storage_path = None
+        docx_file_size = 0
+        docx_content_hash = None
+        if docx_file_path:
+            docx_file_size = os.path.getsize(docx_file_path)
+            docx_content_hash = _file_hash(docx_file_path)
+            docx_storage_path = self.minio.upload_cv(
+                file_path=docx_file_path,
+                user_id=user_email,
+                filename=f"{version_id}.docx",
+                version_id=version_id,
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
 
         # Create Airtable record
         # Note: Omit empty string values - Airtable may reject them for certain field types
@@ -126,12 +158,16 @@ class CVVersionManager:
             "user_email": user_email,
             "version_name": version_name,
             "storage_path": storage_path,
+            "docx_storage_path": docx_storage_path,
             "is_archived": False,
             "usage_count": 0,
             "response_count": 0,
             "file_size": file_size,
+            "docx_file_size": docx_file_size,
             "content_hash": content_hash,
+            "docx_content_hash": docx_content_hash,
         }
+        record_data = {k: v for k, v in record_data.items() if v is not None}
         # Only add optional fields if they have values
         if auto_category:
             record_data["auto_category"] = auto_category
@@ -169,6 +205,8 @@ class CVVersionManager:
             # Cleanup MinIO on failure
             try:
                 self.minio.delete_cv(user_email, filename, version_id)
+                if docx_storage_path:
+                    self.minio.delete_cv(user_email, f"{version_id}.docx", version_id)
             except Exception:
                 pass
             raise
@@ -392,14 +430,20 @@ class CVVersionManager:
         self,
         version_id: str,
         user_email: str,
-        expires_hours: int = 1
+        expires_hours: int = 1,
+        file_format: str = "pdf"
     ) -> Optional[str]:
-        """Get a presigned download URL for a CV version."""
+        """Get a presigned download URL for a CV version.
+
+        file_format="docx" returns the generated DOCX artifact when present.
+        Existing PDF-only records fall back to the primary storage_path.
+        """
         version = self.get_version(version_id, user_email)
         if not version:
             return None
 
-        storage_path = version.get('storage_path')
+        storage_path = version.get('docx_storage_path') if file_format == "docx" else None
+        storage_path = storage_path or version.get('storage_path')
         if not storage_path:
             return None
 
@@ -601,6 +645,7 @@ class CVVersionManager:
         fields = history_record.get('fields', {})
         job_title = fields.get('job_title', 'Generated CV')
         cv_pdf_url = fields.get('cv_pdf_url', '')
+        cv_docx_url = fields.get('cv_docx_url', '')
         history_id = history_record.get('id', '')
 
         if not cv_pdf_url:
@@ -644,6 +689,22 @@ class CVVersionManager:
             with open(tmp_path, 'wb') as f:
                 f.write(resp.content)
 
+        docx_tmp_path = None
+        if cv_docx_url:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_docx:
+                docx_tmp_path = tmp_docx.name
+
+            docx_object_path = _object_path_from_presigned_url(cv_docx_url)
+            if docx_object_path:
+                logger.info(f"Fetching history DOCX directly from MinIO: {docx_object_path}")
+                self.minio.client.fget_object(self.minio.bucket, docx_object_path, docx_tmp_path)
+            else:
+                logger.info("Fetching history DOCX from URL fallback")
+                resp = requests.get(cv_docx_url, timeout=60)
+                resp.raise_for_status()
+                with open(docx_tmp_path, 'wb') as f:
+                    f.write(resp.content)
+
         try:
             # Create the version
             new_version = self.create_version(
@@ -653,6 +714,7 @@ class CVVersionManager:
                 auto_category=auto_category or "Generated",
                 user_tags=user_tags or ["generated", "auto-saved"],
                 source_job_title=job_title,
+                docx_file_path=docx_tmp_path,
             )
 
             logger.info(f"Created CV version from history {history_id}: {new_version.get('version_id')}")
@@ -664,6 +726,11 @@ class CVVersionManager:
                 os.unlink(tmp_path)
             except Exception:
                 pass
+            if docx_tmp_path:
+                try:
+                    os.unlink(docx_tmp_path)
+                except Exception:
+                    pass
 
     def _record_to_dict(self, record: Dict) -> Dict[str, Any]:
         """Convert Airtable record to clean dictionary."""
@@ -679,6 +746,7 @@ class CVVersionManager:
             'auto_category': fields.get('auto_category', ''),
             'user_tags': user_tags,
             'storage_path': fields.get('storage_path', ''),
+            'docx_storage_path': fields.get('docx_storage_path', ''),
             'parent_version_id': fields.get('parent_version_id', ''),
             'is_archived': fields.get('is_archived', False),
             'usage_count': fields.get('usage_count', 0),
@@ -686,7 +754,9 @@ class CVVersionManager:
             'source_job_link': fields.get('source_job_link', ''),
             'source_job_title': fields.get('source_job_title', ''),
             'file_size': fields.get('file_size', 0),
+            'docx_file_size': fields.get('docx_file_size', 0),
             'content_hash': fields.get('content_hash', ''),
+            'docx_content_hash': fields.get('docx_content_hash', ''),
             'created_at': record.get('createdTime', ''),
         }
 

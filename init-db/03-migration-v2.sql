@@ -68,6 +68,16 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- cv_history: Preserve generated DOCX artifact URL for later library saves
+-- =============================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_history' AND column_name='cv_docx_url') THEN
+        ALTER TABLE cv_history ADD COLUMN cv_docx_url VARCHAR(2000);
+    END IF;
+END $$;
+
+-- =============================================================================
 -- cv_versions: Add missing columns for PostgresCVVersionManager
 -- =============================================================================
 DO $$
@@ -105,12 +115,24 @@ BEGIN
         END IF;
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='docx_storage_path') THEN
+        ALTER TABLE cv_versions ADD COLUMN docx_storage_path VARCHAR(500);
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='file_size') THEN
         ALTER TABLE cv_versions ADD COLUMN file_size INTEGER DEFAULT 0;
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='docx_file_size') THEN
+        ALTER TABLE cv_versions ADD COLUMN docx_file_size INTEGER DEFAULT 0;
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='content_hash') THEN
         ALTER TABLE cv_versions ADD COLUMN content_hash VARCHAR(64);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='docx_content_hash') THEN
+        ALTER TABLE cv_versions ADD COLUMN docx_content_hash VARCHAR(64);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cv_versions' AND column_name='source_job_link') THEN

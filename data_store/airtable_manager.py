@@ -27,6 +27,7 @@ class AirtableManager:
             "instructions": "Instructions",
             "cv_markdown": "cv_markdown",
             "cv_pdf_url": "cv_pdf_url",
+            "cv_docx_url": "cv_docx_url",
             "cv_analysis": "cv_analysis",  # JSON string of fit analysis
             "analysis_status": "analysis_status",  # pending | ready | failed
             # "created_at" is auto‐populated in Airtable as a "Created Time" field

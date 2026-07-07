@@ -33,10 +33,10 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
   const [loggingApp, setLoggingApp] = useState(false)
   const [loggingResponse, setLoggingResponse] = useState(false)
 
-  const handleDownload = async () => {
+  const handleDownload = async (format = 'pdf') => {
     setDownloading(true)
     try {
-      await onDownload(version)
+      await onDownload(version, format)
     } finally {
       setDownloading(false)
     }
@@ -157,13 +157,23 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleDownload}
+            onClick={() => handleDownload('pdf')}
             disabled={downloading}
             className="btn-icon text-text-muted hover:text-accent-400"
-            title="Download"
+            title="Download PDF"
           >
             {downloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
           </button>
+          {version.has_docx && (
+            <button
+              onClick={() => handleDownload('docx')}
+              disabled={downloading}
+              className="px-2 py-1 rounded-lg text-xs font-semibold text-text-muted hover:text-accent-400 hover:bg-surface-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download Word/DOCX"
+            >
+              DOCX
+            </button>
+          )}
 
           <div className="relative">
             <button
@@ -350,13 +360,23 @@ function CVVersionCard({ version, viewMode, onDownload, onArchive, onRestore, on
 
       <div className="flex gap-2">
         <button
-          onClick={handleDownload}
+          onClick={() => handleDownload('pdf')}
           disabled={downloading}
           className="btn-secondary flex-1 text-sm"
         >
           {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          Download
+          PDF
         </button>
+        {version.has_docx && (
+          <button
+            onClick={() => handleDownload('docx')}
+            disabled={downloading}
+            className="btn-secondary flex-1 text-sm"
+          >
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Word
+          </button>
+        )}
       </div>
 
       {version.is_archived && (
@@ -740,11 +760,11 @@ export default function CVLibrary() {
     await loadAnalytics()
   }
 
-  const handleDownload = async (version) => {
+  const handleDownload = async (version, format = 'pdf') => {
     try {
       // Use /file endpoint which detects actual file type from magic bytes
       const token = localStorage.getItem('winningcv_auth_token')
-      const response = await fetch(`/api/v1/cv/versions/${version.version_id}/file`, {
+      const response = await fetch(`/api/v1/cv/versions/${version.version_id}/file?format=${format}`, {
         headers: {
           'Authorization': `Token ${token}`
         }

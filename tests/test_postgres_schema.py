@@ -93,7 +93,8 @@ class TestCVVersionsSchema:
         # Core
         'id', 'version_id', 'user_email', 'version_name', 'created_at', 'updated_at',
         # Metadata
-        'auto_category', 'user_tags', 'storage_path', 'file_size', 'content_hash',
+        'auto_category', 'user_tags', 'storage_path', 'docx_storage_path',
+        'file_size', 'docx_file_size', 'content_hash', 'docx_content_hash',
         # State
         'is_base', 'is_archived', 'usage_count', 'response_count',
         # Relationships
@@ -144,7 +145,7 @@ class TestCVHistorySchema:
 
     EXPECTED_COLUMNS = {
         'id', 'user_email', 'job_title', 'job_description', 'instructions',
-        'cv_markdown', 'cv_pdf_url', 'cv_analysis', 'analysis_status',
+        'cv_markdown', 'cv_pdf_url', 'cv_docx_url', 'cv_analysis', 'analysis_status',
         'created_at', 'updated_at',
     }
 

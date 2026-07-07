@@ -142,6 +142,8 @@ def _version_to_response(version: dict, include_url: bool = False, index_status:
         auto_category=version.get('auto_category') or None,
         user_tags=tags,
         storage_path=version.get('storage_path', ''),
+        docx_storage_path=version.get('docx_storage_path') or None,
+        has_docx=bool(version.get('docx_storage_path')) or str(version.get('storage_path', '')).lower().endswith('.docx'),
         parent_version_id=version.get('parent_version_id') or None,
         is_archived=version.get('is_archived', False),
         usage_count=version.get('usage_count', 0),
@@ -149,7 +151,9 @@ def _version_to_response(version: dict, include_url: bool = False, index_status:
         source_job_link=version.get('source_job_link') or None,
         source_job_title=version.get('source_job_title') or None,
         file_size=version.get('file_size', 0),
+        docx_file_size=version.get('docx_file_size') or 0,
         content_hash=version.get('content_hash') or None,
+        docx_content_hash=version.get('docx_content_hash') or None,
         created_at=created_at,
         download_url=version.get('download_url') if include_url else None,
         index_status=index_status or version.get('index_status')
@@ -438,6 +442,7 @@ async def fork_version(
 async def get_download_url(
     version_id: str,
     expires_hours: int = Query(1, ge=1, le=24),
+    format: str = Query("pdf", pattern="^(pdf|docx)$", description="Preferred file format"),
     user: UserInfo = Depends(get_current_user)
 ) -> dict:
     """Get a presigned download URL for a CV version."""
@@ -447,7 +452,8 @@ async def get_download_url(
         manager.get_download_url,
         version_id,
         user.email,
-        expires_hours
+        expires_hours,
+        file_format=format
     )
 
     if not url:
@@ -456,13 +462,15 @@ async def get_download_url(
     return {
         "version_id": version_id,
         "download_url": url,
-        "expires_hours": expires_hours
+        "expires_hours": expires_hours,
+        "format": format,
     }
 
 
 @router.get("/{version_id}/file")
 async def stream_cv_file(
     version_id: str,
+    format: str = Query("pdf", pattern="^(pdf|docx)$", description="Preferred file format"),
     user: UserInfo = Depends(get_current_user)
 ) -> StreamingResponse:
     """
@@ -485,7 +493,8 @@ async def stream_cv_file(
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    storage_path = version.get('storage_path')
+    storage_path = version.get('docx_storage_path') if format == "docx" else None
+    storage_path = storage_path or version.get('storage_path')
     if not storage_path:
         raise HTTPException(status_code=404, detail="File not found in storage")
 
@@ -687,7 +696,8 @@ async def create_from_history(
     Create a CV version from a history record (previously generated CV).
 
     This allows users to save a generated CV to their library for reuse.
-    The PDF is downloaded from the history record and stored as a new version.
+    The PDF is downloaded from the history record and stored as a new version;
+    when a generated DOCX artifact exists, it is stored alongside the PDF.
     """
     from config.settings import Config
 
@@ -706,7 +716,7 @@ async def create_from_history(
         if fields.get("user_email") != user.email:
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Check if PDF URL exists
+        # Check if PDF URL exists (DOCX is optional)
         if not fields.get("cv_pdf_url"):
             raise HTTPException(
                 status_code=400,
@@ -726,7 +736,7 @@ async def create_from_history(
         if not version:
             raise HTTPException(
                 status_code=502,
-                detail="Failed to create CV version from generated history PDF"
+                detail="Failed to create CV version from generated history files"
             )
 
         return _version_to_response(version)

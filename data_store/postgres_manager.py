@@ -232,8 +232,8 @@ class PostgresManager:
                 cursor.execute("""
                     INSERT INTO cv_history (
                         user_email, job_title, job_description, instructions,
-                        cv_markdown, cv_pdf_url, analysis_status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        cv_markdown, cv_pdf_url, cv_docx_url, analysis_status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
                     data.get("user_email"),
@@ -242,6 +242,7 @@ class PostgresManager:
                     data.get("instructions"),
                     data.get("cv_markdown"),
                     data.get("cv_pdf_url"),
+                    data.get("cv_docx_url"),
                     data.get("analysis_status", "pending"),
                 ))
                 result = cursor.fetchone()
@@ -275,7 +276,7 @@ class PostgresManager:
             with self.get_cursor() as cursor:
                 cursor.execute("""
                     SELECT id, user_email, job_title, job_description, instructions,
-                           cv_markdown, cv_pdf_url, cv_analysis, analysis_status, created_at
+                           cv_markdown, cv_pdf_url, cv_docx_url, cv_analysis, analysis_status, created_at
                     FROM cv_history WHERE id = %s
                 """, (record_id,))
                 row = cursor.fetchone()
@@ -292,7 +293,7 @@ class PostgresManager:
             with self.get_cursor() as cursor:
                 cursor.execute("""
                     SELECT id, user_email, job_title, job_description, instructions,
-                           cv_markdown, cv_pdf_url, cv_analysis, analysis_status, created_at
+                           cv_markdown, cv_pdf_url, cv_docx_url, cv_analysis, analysis_status, created_at
                     FROM cv_history
                     WHERE user_email = %s
                     ORDER BY created_at DESC
@@ -659,6 +660,7 @@ class PostgresCVVersionManager:
         parent_version_id: Optional[str] = None,
         source_job_link: Optional[str] = None,
         source_job_title: Optional[str] = None,
+        docx_file_path: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new CV version."""
         import hashlib
@@ -666,33 +668,62 @@ class PostgresCVVersionManager:
 
         version_id = f"cv_{uuid.uuid4().hex[:12]}"
 
+        def _file_hash(path: str) -> str:
+            with open(path, "rb") as f:
+                return hashlib.md5(f.read()).hexdigest()
+
+        def _is_docx(path: str) -> bool:
+            with open(path, "rb") as f:
+                return f.read(4) == b"PK\x03\x04"
+
         # Get file info
         file_size = os.path.getsize(file_path)
-        with open(file_path, "rb") as f:
-            content_hash = hashlib.md5(f.read()).hexdigest()
+        content_hash = _file_hash(file_path)
 
-        # Upload to MinIO
-        filename = f"{version_id}.pdf"
+        # Upload primary artifact to MinIO. Generated CVs use PDF as primary;
+        # uploaded DOCX files retain their real extension/content type.
+        primary_is_docx = _is_docx(file_path)
+        filename = f"{version_id}.docx" if primary_is_docx else f"{version_id}.pdf"
         storage_path = self.minio.upload_cv(
             file_path=file_path,
             user_id=user_email,
             filename=filename,
-            version_id=version_id
+            version_id=version_id,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                if primary_is_docx else "application/pdf"
+            )
         )
+
+        docx_storage_path = None
+        docx_file_size = 0
+        docx_content_hash = None
+        if docx_file_path:
+            docx_file_size = os.path.getsize(docx_file_path)
+            docx_content_hash = _file_hash(docx_file_path)
+            docx_storage_path = self.minio.upload_cv(
+                file_path=docx_file_path,
+                user_id=user_email,
+                filename=f"{version_id}.docx",
+                version_id=version_id,
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
 
         try:
             with self.get_cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO cv_versions (
                         version_id, user_email, version_name, auto_category, user_tags,
-                        storage_path, file_size, content_hash, parent_version_id,
+                        storage_path, docx_storage_path, file_size, docx_file_size,
+                        content_hash, docx_content_hash, parent_version_id,
                         is_archived, usage_count, response_count,
                         source_job_link, source_job_title
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, created_at
                 """, (
                     version_id, user_email, version_name, auto_category,
-                    user_tags or [], storage_path, file_size, content_hash,
+                    user_tags or [], storage_path, docx_storage_path, file_size,
+                    docx_file_size, content_hash, docx_content_hash,
                     parent_version_id, False, 0, 0, source_job_link, source_job_title
                 ))
                 result = cursor.fetchone()
@@ -706,8 +737,11 @@ class PostgresCVVersionManager:
                     "auto_category": auto_category or "",
                     "user_tags": ",".join(user_tags) if user_tags else "",
                     "storage_path": storage_path,
+                    "docx_storage_path": docx_storage_path or "",
                     "file_size": file_size,
+                    "docx_file_size": docx_file_size,
                     "content_hash": content_hash,
+                    "docx_content_hash": docx_content_hash or "",
                     "created_at": str(result["created_at"]),
                 }
         except Exception as e:
@@ -715,6 +749,8 @@ class PostgresCVVersionManager:
             # Cleanup MinIO on failure
             try:
                 self.minio.delete_cv(user_email, filename, version_id)
+                if docx_storage_path:
+                    self.minio.delete_cv(user_email, f"{version_id}.docx", version_id)
             except Exception:
                 pass
             raise
@@ -903,6 +939,7 @@ class PostgresCVVersionManager:
             "auto_category": row["auto_category"] or "",
             "user_tags": ",".join(row["user_tags"]) if row["user_tags"] else "",
             "storage_path": row["storage_path"] or "",
+            "docx_storage_path": row.get("docx_storage_path") or "",
             "parent_version_id": row["parent_version_id"] or "",
             "is_archived": row["is_archived"],
             "usage_count": row["usage_count"],
@@ -910,7 +947,9 @@ class PostgresCVVersionManager:
             "source_job_link": row["source_job_link"] or "",
             "source_job_title": row["source_job_title"] or "",
             "file_size": row["file_size"],
+            "docx_file_size": row.get("docx_file_size") or 0,
             "content_hash": row["content_hash"] or "",
+            "docx_content_hash": row.get("docx_content_hash") or "",
             "created_at": str(row["created_at"]) if row["created_at"] else "",
         }
 
@@ -932,14 +971,20 @@ class PostgresCVVersionManager:
         self,
         version_id: str,
         user_email: str,
-        expires_hours: int = 1
+        expires_hours: int = 1,
+        file_format: str = "pdf"
     ) -> Optional[str]:
-        """Get a presigned download URL for a CV version."""
+        """Get a presigned download URL for a CV version.
+
+        file_format="docx" returns the generated DOCX artifact when present.
+        Existing PDF-only records fall back to the primary storage_path.
+        """
         version = self.get_version(version_id, user_email)
         if not version:
             return None
 
-        storage_path = version.get('storage_path')
+        storage_path = version.get('docx_storage_path') if file_format == "docx" else None
+        storage_path = storage_path or version.get('storage_path')
         if not storage_path:
             return None
 
@@ -1052,6 +1097,7 @@ class PostgresCVVersionManager:
 
         fields = history_record.get('fields', history_record)
         pdf_url = fields.get('cv_pdf_url')
+        docx_url = fields.get('cv_docx_url')
 
         if not pdf_url:
             self.logger.error("No PDF URL in history record")
@@ -1094,6 +1140,22 @@ class PostgresCVVersionManager:
                 with open(temp_path, 'wb') as f:
                     f.write(resp.content)
 
+            docx_temp_path = None
+            if docx_url:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_docx:
+                    docx_temp_path = tmp_docx.name
+
+                docx_object_path = _object_path_from_presigned_url(docx_url)
+                if docx_object_path:
+                    self.logger.info(f"Fetching history DOCX directly from MinIO: {docx_object_path}")
+                    self.minio.client.fget_object(self.minio.bucket, docx_object_path, docx_temp_path)
+                else:
+                    self.logger.info("Fetching history DOCX from URL fallback")
+                    resp = requests.get(docx_url, timeout=30)
+                    resp.raise_for_status()
+                    with open(docx_temp_path, 'wb') as f:
+                        f.write(resp.content)
+
             # Create version
             new_version = self.create_version(
                 user_email=user_email,
@@ -1103,6 +1165,7 @@ class PostgresCVVersionManager:
                 user_tags=user_tags,
                 source_job_link=fields.get('source_job_link'),
                 source_job_title=fields.get('job_title'),
+                docx_file_path=docx_temp_path,
             )
             return new_version
         except Exception as e:
@@ -1113,6 +1176,11 @@ class PostgresCVVersionManager:
             if 'temp_path' in locals():
                 try:
                     os.unlink(temp_path)
+                except Exception:
+                    pass
+            if 'docx_temp_path' in locals() and docx_temp_path:
+                try:
+                    os.unlink(docx_temp_path)
                 except Exception:
                     pass
 

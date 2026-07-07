@@ -645,14 +645,14 @@ export const cvVersionsService = {
   },
 
   // Get download URL
-  async getDownloadUrl(versionId, expiresHours = 1) {
-    return fetchAPI(`/api/v1/cv/versions/${versionId}/download?expires_hours=${expiresHours}`)
+  async getDownloadUrl(versionId, expiresHours = 1, format = 'pdf') {
+    return fetchAPI(`/api/v1/cv/versions/${versionId}/download?expires_hours=${expiresHours}&format=${format}`)
   },
 
   // Fetch a CV version through the API proxy, preserving the real file type.
   // This avoids feeding an HTML/MinIO error page or a DOCX named cv.pdf into /cv/generate.
-  async getVersionFile(versionId, fallbackName = 'cv') {
-    const response = await fetch(`${API_BASE_URL}/api/v1/cv/versions/${versionId}/file`, {
+  async getVersionFile(versionId, fallbackName = 'cv', format = 'pdf') {
+    const response = await fetch(`${API_BASE_URL}/api/v1/cv/versions/${versionId}/file?format=${format}`, {
       credentials: 'include',
       headers: getAuthHeaders(),
     })
