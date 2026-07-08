@@ -34,7 +34,7 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Python Backend
 # =============================================================================
-FROM python:3.12-slim AS backend
+FROM python:3.12-slim-bookworm AS backend
 
 LABEL authors="jackhui"
 
@@ -55,11 +55,19 @@ WORKDIR /winning-cv
 # Copy in your requirements
 COPY requirements.in requirements.txt ./
 
+# Pin Chromium below 150 on arm64: Debian Chromium 150 currently exits with
+# SIGTRAP in the Azure production container before DrissionPage can attach.
+# Keep chromium/common/driver aligned.
+ARG CHROMIUM_DEB_VERSION=147.0.7727.137-1~deb12u1
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         build-essential gcc g++ python3-dev \
-        chromium chromium-driver libnss3 \
+        chromium=${CHROMIUM_DEB_VERSION} \
+        chromium-common=${CHROMIUM_DEB_VERSION} \
+        chromium-driver=${CHROMIUM_DEB_VERSION} \
+        libnss3 \
         libfontconfig1 fonts-liberation fonts-noto-cjk \
         libssl-dev libffi-dev && \
     \
