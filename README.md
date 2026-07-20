@@ -189,6 +189,15 @@ python webui_new.py
 python main.py --user-email your@email.com
 ```
 
+### Authentication requirement for self-hosting
+
+WinningCV does not include an authentication server. Jack’s hosted deployment uses the private `ai-video-backend` service for OAuth and user authentication; that service is not distributed with this repository. To self-host the web application, either provide a compatible auth service or adapter that matches the integration WinningCV expects, or modify WinningCV to integrate your chosen identity provider.
+
+- Set the FastAPI auth service URL with `AUTH_SERVICE_URL` and, when building the frontend, set `VITE_AUTH_SERVICE_URL`. Configure the relevant frontend OAuth client IDs with `VITE_GOOGLE_CLIENT_ID`, `VITE_MICROSOFT_CLIENT_ID`, and/or `VITE_GITHUB_CLIENT_ID`.
+- Configure OAuth app credentials, callback/redirect URLs, and allowed origins/CORS in your auth solution and provider. Changing the URL variables alone does not make an arbitrary auth provider compatible.
+
+User lifecycle webhooks are optional and separate from login and API authentication; see [User Lifecycle Webhooks](#user-lifecycle-webhooks).
+
 ---
 
 ## How It Works
@@ -457,29 +466,10 @@ Built with these amazing open-source technologies:
 
 ## User Lifecycle Webhooks
 
-WinningCV receives user lifecycle events from the shared auth backend (`ai-video-backend`).
+The hosted deployment uses the private shared auth backend `ai-video-backend` (not included in this repository) to send optional `user.created` and `user.login` events to `POST /api/v1/webhooks/auth`. When Airtable storage is enabled, these events synchronize user activity; new-signup events can also trigger Telegram alerts. They are not required for login or API authentication. Self-hosters only need an equivalent webhook sender if they want this lifecycle synchronization.
 
-### Webhook Endpoint
-```
-POST /api/v1/webhooks/auth
-```
+When `AUTH_WEBHOOK_SECRET` is configured, requests must include the HMAC-SHA256 digest of the raw body in `X-Webhook-Signature`. Example payload:
 
-### Events Supported
-| Event | Description | Action |
-|-------|-------------|--------|
-| `user.created` | New user signup | Creates Airtable record, sends Telegram alert |
-| `user.login` | User logged in | Updates `last_active_at` in Airtable |
-
-### Configuration (`.env`)
-```bash
-# Secret for verifying webhook signatures (must match ai-video-backend)
-AUTH_WEBHOOK_SECRET=your-shared-secret
-
-# Admin Telegram chat ID for signup alerts
-ADMIN_TELEGRAM_CHAT_ID=2055631678
-```
-
-### Payload Structure
 ```json
 {
   "event": "user.created",
@@ -493,6 +483,3 @@ ADMIN_TELEGRAM_CHAT_ID=2055631678
   }
 }
 ```
-
-### Security
-Webhooks are signed using HMAC-SHA256. The signature is sent in the `X-Webhook-Signature` header.
