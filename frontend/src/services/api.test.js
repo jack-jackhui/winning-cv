@@ -39,13 +39,13 @@ test('loads one matched job from the result endpoint', async () => {
   let request
   globalThis.fetch = async (url, options) => {
     request = { url, options }
-    return makeResponse({ id: 'job/123', job_title: 'Platform Engineer' })
+    return makeResponse({ id: 'recA1b2C3d4E5f6G7', job_title: 'Platform Engineer' })
   }
 
-  const result = await jobService.getResult('job/123')
+  const result = await jobService.getResult('recA1b2C3d4E5f6G7')
 
-  assert.equal(result.id, 'job/123')
-  assert.equal(request.url, 'http://localhost:8000/api/v1/jobs/results/job%2F123')
+  assert.equal(result.id, 'recA1b2C3d4E5f6G7')
+  assert.equal(request.url, 'http://localhost:8000/api/v1/jobs/results/recA1b2C3d4E5f6G7')
   assert.equal(request.options.credentials, 'include')
   assert.equal(request.options.headers.Authorization, 'Token test-token')
 })

@@ -356,7 +356,7 @@ export default function History() {
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => navigate(`/applications/${job.id}`)}
+                      onClick={() => navigate(`/applications/${encodeURIComponent(job.id)}`)}
                       className="btn-secondary text-sm py-1.5 px-3"
                       title="Open application workspace"
                     >

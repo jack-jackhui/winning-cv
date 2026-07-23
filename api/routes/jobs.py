@@ -767,11 +767,10 @@ async def get_job_result(
     job_id: str,
     user: UserInfo = Depends(get_current_user),
 ) -> JobResult:
-    """Get one matched job owned by the authenticated user."""
+    """Get one owned job by its path-safe PostgreSQL UUID or Airtable record ID."""
     try:
         manager = get_data_manager()
-        records = manager.get_records_by_filter(_user_jobs_formula(str(user.email)))
-        record = next((item for item in records if str(item.get("id", "")) == job_id), None)
+        record = manager.get_job_result(job_id=job_id, user_email=str(user.email))
         if record is None:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -790,7 +789,7 @@ async def update_application_status_result(
     update: ApplicationStatusUpdate,
     user: UserInfo = Depends(get_current_user)
 ) -> JobResult:
-    """Update application tracking state for a matched job."""
+    """Update tracking for a path-safe PostgreSQL UUID or Airtable record ID."""
     try:
         manager = get_data_manager()
         if not hasattr(manager, "update_application_status"):
@@ -805,7 +804,11 @@ async def update_application_status_result(
         if not updated:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        return await get_job_result(job_id=job_id, user=user)
+        record = manager.get_job_result(job_id=job_id, user_email=str(user.email))
+        if record is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        history = get_history_manager().get_history_by_user(user.email)
+        return _job_result_from_record(record, _cv_dates_by_url(history))
     except HTTPException:
         raise
     except Exception as e:
