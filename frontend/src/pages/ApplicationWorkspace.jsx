@@ -83,18 +83,21 @@ export default function ApplicationWorkspace() {
       setLoading(true)
       setLoadError(null)
       try {
-        const jobs = await jobService.getMatchedJobs('date')
-        const selectedJob = jobs.find((item) => String(item.id) === String(jobId))
+        const selectedJob = await jobService.getResult(jobId)
         if (!active) return
 
-        setJob(selectedJob || null)
+        setJob(selectedJob)
         if (selectedJob) {
           setStatus(selectedJob.application_status || 'saved')
           setNotes(selectedJob.application_notes || '')
           trackJobDetailsOpen(String(selectedJob.id), selectedJob.job_title)
         }
       } catch (error) {
-        if (active) setLoadError(error.userMessage || error.message || 'Failed to load this application')
+        if (active && error.status === 404) {
+          setJob(null)
+        } else if (active) {
+          setLoadError(error.userMessage || error.message || 'Failed to load this application')
+        }
       } finally {
         if (active) setLoading(false)
       }

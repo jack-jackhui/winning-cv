@@ -30,7 +30,7 @@ from api.schemas.jobs import (
 from config.settings import Config
 
 # Import storage factory for backend-agnostic access
-from data_store.storage_factory import get_data_manager, get_history_manager, get_cv_version_manager
+from data_store.storage_factory import get_cv_version_manager, get_data_manager, get_history_manager
 from job_processing.core import JobProcessor
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 from ui.helpers import upload_pdf_to_wordpress
@@ -654,106 +654,97 @@ async def get_user_search_tasks(
     ]
 
 
+def _user_jobs_formula(user_email: str) -> str:
+    """Build an Airtable-compatible, escaped user ownership filter."""
+    safe_email = user_email.replace("'", "\\'")
+    return f"{{User Email}} = '{safe_email}'"
+
+
+def _cv_dates_by_url(history_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Map generated CV URLs to their creation timestamps."""
+    cv_dates = {}
+    for record in history_records:
+        fields = record.get("fields", {})
+        cv_url = fields.get("cv_pdf_url", "")
+        created_at = fields.get("created_at")
+        if cv_url and created_at:
+            cv_dates[cv_url] = created_at
+    return cv_dates
+
+
+def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> JobResult:
+    """Convert a storage record into the public job result shape."""
+    fields = rec.get("fields", {})
+    reasons_raw = fields.get("Match Reasons", "")
+    suggestions_raw = fields.get("Match Suggestions", "")
+    reasons = reasons_raw.split("\n") if reasons_raw else None
+    suggestions = suggestions_raw.split("\n") if suggestions_raw else None
+
+    cv_link = fields.get("CV Link") or None
+    cv_generated_at = None
+    if cv_link and cv_link in cv_dates:
+        try:
+            cv_generated_at = datetime.fromisoformat(cv_dates[cv_link].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+
+    score_breakdown = None
+    ats_score = fields.get("Matching Score")
+    hr_score = fields.get("HR Score")
+    if ats_score is not None or hr_score is not None:
+        matched_kw_raw = fields.get("Matched Keywords", "")
+        missing_kw_raw = fields.get("Missing Keywords", "")
+        matched_keywords = [kw.strip() for kw in matched_kw_raw.split(",") if kw.strip()] if matched_kw_raw else None
+        missing_keywords = [kw.strip() for kw in missing_kw_raw.split(",") if kw.strip()] if missing_kw_raw else None
+        score_breakdown = ScoreBreakdown(
+            ats_score=float(ats_score) if ats_score else None,
+            hr_score=float(hr_score) if hr_score else None,
+            llm_score=float(fields.get("LLM Score")) if fields.get("LLM Score") else None,
+            recommendation=fields.get("HR Recommendation"),
+            matched_keywords=matched_keywords,
+            missing_keywords=missing_keywords,
+        )
+
+    return JobResult(
+        id=rec.get("id", ""),
+        job_title=fields.get("Job Title", "Untitled"),
+        company=fields.get("Company", "Unknown"),
+        location=fields.get("Location"),
+        score=float(fields.get("Matching Score", 0)),
+        score_breakdown=score_breakdown,
+        cv_link=cv_link,
+        cv_generated_at=cv_generated_at,
+        job_link=fields.get("Job Link", ""),
+        posted_date=fields.get("Job Date"),
+        description=fields.get("Job Description"),
+        match_reasons=reasons,
+        suggestions=suggestions,
+        application_status=fields.get("Application Status") or "saved",
+        application_notes=fields.get("Application Notes"),
+        applied_at=fields.get("Applied At"),
+    )
+
+
 @router.get("/results", response_model=JobResultsResponse)
 async def get_job_results(
     user: UserInfo = Depends(get_current_user),
     limit: int = 100,
     sort_by: str = "date"  # "date" or "score"
 ) -> JobResultsResponse:
-    """
-    Get the user's job search results with CV generation status.
-
-    Args:
-        user: Authenticated user
-        limit: Maximum number of results
-        sort_by: Sort order - "date" (default, most recent first) or "score" (highest first)
-
-    Returns:
-        List of job results with CV generation status
-    """
+    """Get the authenticated user's job search results."""
     try:
         joblist_manager = get_data_manager()
         history_manager = get_history_manager()
+        cv_dates = _cv_dates_by_url(history_manager.get_history_by_user(user.email))
+        records = joblist_manager.get_records_by_filter(_user_jobs_formula(str(user.email)))
+        items = [_job_result_from_record(rec, cv_dates) for rec in records[:limit]]
 
-        # Get CV history to map cv_link -> cv_generated_at
-        history_records = history_manager.get_history_by_user(user.email)
-
-        # Build a map of cv_pdf_url -> created_at
-        cv_dates = {}
-        for hr in history_records:
-            hf = hr.get("fields", {})
-            cv_url = hf.get("cv_pdf_url", "")
-            created_at = hf.get("created_at")
-            if cv_url and created_at:
-                cv_dates[cv_url] = created_at
-
-        records = joblist_manager.get_records_by_filter(f"{{User Email}} = '{user.email}'")
-
-        items = []
-        for rec in records[:limit]:
-            fields = rec.get("fields", {})
-
-            # Parse match reasons and suggestions
-            reasons_raw = fields.get("Match Reasons", "")
-            suggestions_raw = fields.get("Match Suggestions", "")
-
-            reasons = reasons_raw.split("\n") if reasons_raw else None
-            suggestions = suggestions_raw.split("\n") if suggestions_raw else None
-
-            cv_link = fields.get("CV Link") or None
-            cv_generated_at = None
-            if cv_link and cv_link in cv_dates:
-                try:
-                    cv_generated_at = datetime.fromisoformat(cv_dates[cv_link].replace('Z', '+00:00'))
-                except (ValueError, AttributeError):
-                    pass
-
-            # Build score breakdown (may be None for older records)
-            score_breakdown = None
-            ats_score = fields.get("Matching Score")
-            hr_score = fields.get("HR Score")
-            if ats_score is not None or hr_score is not None:
-                # Parse matched/missing keywords from comma-separated strings
-                matched_kw_raw = fields.get("Matched Keywords", "")
-                missing_kw_raw = fields.get("Missing Keywords", "")
-                matched_keywords = [kw.strip() for kw in matched_kw_raw.split(",") if kw.strip()] if matched_kw_raw else None
-                missing_keywords = [kw.strip() for kw in missing_kw_raw.split(",") if kw.strip()] if missing_kw_raw else None
-
-                score_breakdown = ScoreBreakdown(
-                    ats_score=float(ats_score) if ats_score else None,
-                    hr_score=float(hr_score) if hr_score else None,
-                    llm_score=float(fields.get("LLM Score")) if fields.get("LLM Score") else None,
-                    recommendation=fields.get("HR Recommendation"),
-                    matched_keywords=matched_keywords,
-                    missing_keywords=missing_keywords
-                )
-
-            items.append(JobResult(
-                id=rec.get("id", ""),
-                job_title=fields.get("Job Title", "Untitled"),
-                company=fields.get("Company", "Unknown"),
-                location=fields.get("Location"),
-                score=float(fields.get("Matching Score", 0)),
-                score_breakdown=score_breakdown,
-                cv_link=cv_link,
-                cv_generated_at=cv_generated_at,
-                job_link=fields.get("Job Link", ""),
-                posted_date=fields.get("Job Date"),
-                description=fields.get("Job Description"),
-                match_reasons=reasons,
-                suggestions=suggestions,
-                application_status=fields.get("Application Status") or "saved",
-                application_notes=fields.get("Application Notes"),
-                applied_at=fields.get("Applied At")
-            ))
-
-        # Sort based on user preference
         def parse_date(date_str):
-            """Parse date string to datetime"""
+            """Parse date string to datetime."""
             if not date_str:
                 return datetime.min
             try:
-                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 try:
                     return datetime.strptime(date_str, "%Y-%m-%d")
@@ -761,23 +752,36 @@ async def get_job_results(
                     return datetime.min
 
         if sort_by == "score":
-            # Sort by score descending, then by date
-            items.sort(key=lambda x: (x.score, parse_date(x.posted_date)), reverse=True)
+            items.sort(key=lambda item: (item.score, parse_date(item.posted_date)), reverse=True)
         else:
-            # Default: sort by date descending, then by score
-            items.sort(key=lambda x: (parse_date(x.posted_date), x.score), reverse=True)
+            items.sort(key=lambda item: (parse_date(item.posted_date), item.score), reverse=True)
 
-        return JobResultsResponse(
-            items=items,
-            total=len(items)
-        )
-
+        return JobResultsResponse(items=items, total=len(items))
     except Exception as e:
         logger.error(f"Failed to get job results: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get results: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get results: {str(e)}")
+
+
+@router.get("/results/{job_id}", response_model=JobResult)
+async def get_job_result(
+    job_id: str,
+    user: UserInfo = Depends(get_current_user),
+) -> JobResult:
+    """Get one matched job owned by the authenticated user."""
+    try:
+        manager = get_data_manager()
+        records = manager.get_records_by_filter(_user_jobs_formula(str(user.email)))
+        record = next((item for item in records if str(item.get("id", "")) == job_id), None)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        history = get_history_manager().get_history_by_user(user.email)
+        return _job_result_from_record(record, _cv_dates_by_url(history))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get job result: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get result: {str(e)}")
 
 
 @router.patch("/results/{job_id}/application", response_model=JobResult)
@@ -801,11 +805,7 @@ async def update_application_status_result(
         if not updated:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        results = await get_job_results(user=user, limit=500, sort_by="date")
-        for item in results.items:
-            if item.id == job_id:
-                return item
-        raise HTTPException(status_code=404, detail="Job not found")
+        return await get_job_result(job_id=job_id, user=user)
     except HTTPException:
         raise
     except Exception as e:

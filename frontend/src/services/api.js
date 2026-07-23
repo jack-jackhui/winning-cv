@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000'
 
 // Lazy import telemetry to avoid circular dependencies
 let trackAPIError = null
@@ -348,6 +348,11 @@ export const jobService = {
   // Get job results with optional sorting
   async getResults(limit = 100, sortBy = 'date') {
     return fetchAPI(`/api/v1/jobs/results?limit=${limit}&sort_by=${sortBy}`)
+  },
+
+  // Get one matched job by result id
+  async getResult(jobId) {
+    return fetchAPI(`/api/v1/jobs/results/${encodeURIComponent(jobId)}`)
   },
 
   // Get matched jobs (alias for results)
