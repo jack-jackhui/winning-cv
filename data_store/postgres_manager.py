@@ -466,6 +466,58 @@ class PostgresManager:
             return []
 
 
+    def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
+        """Return one job owned by the user using parameterized SQL."""
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, user_email, job_title, job_description,
+                           job_date, job_link, company, location, matching_score,
+                           cv_link, match_reasons, match_suggestions,
+                           ats_score, hr_score, llm_score, hr_recommendation,
+                           matched_keywords, missing_keywords, application_status,
+                           application_notes, applied_at, created_at, updated_at
+                    FROM jobs
+                    WHERE id = %s AND user_email = %s
+                    LIMIT 1
+                """, (job_id, user_email))
+                row = cursor.fetchone()
+                return self._job_row_to_record(row) if row else None
+        except Exception as e:
+            self.logger.error(f"Job result lookup failed: {e}")
+            return None
+
+    @staticmethod
+    def _job_row_to_record(row: Dict) -> Dict:
+        """Convert a PostgreSQL job row to the shared Airtable-shaped record."""
+        return {
+            "id": str(row["id"]),
+            "fields": {
+                "User Email": row["user_email"],
+                "Job Title": row["job_title"],
+                "Job Description": row["job_description"],
+                "Job Date": str(row["job_date"]) if row["job_date"] else None,
+                "Job Link": row["job_link"],
+                "Company": row["company"],
+                "Location": row["location"],
+                "Matching Score": row["matching_score"],
+                "CV Link": row["cv_link"],
+                "Match Reasons": row["match_reasons"],
+                "Match Suggestions": row["match_suggestions"],
+                "ATS Score": row["ats_score"],
+                "HR Score": row["hr_score"],
+                "LLM Score": row["llm_score"],
+                "HR Recommendation": row["hr_recommendation"],
+                "Matched Keywords": row["matched_keywords"],
+                "Missing Keywords": row["missing_keywords"],
+                "Application Status": row.get("application_status") or "saved",
+                "Application Notes": row.get("application_notes"),
+                "Applied At": row.get("applied_at"),
+                "Created At": row["created_at"].isoformat() if row["created_at"] else None,
+                "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
+            },
+        }
+
     # =========================================================================
     # AIRTABLE API COMPATIBILITY LAYER
     # =========================================================================
@@ -522,39 +574,7 @@ class PostgresManager:
 
                 rows = cursor.fetchall()
 
-                # Convert to Airtable format
-                records = []
-                for row in rows:
-                    record = {
-                        "id": str(row["id"]),
-                        "fields": {
-                            "User Email": row["user_email"],
-                            "Job Title": row["job_title"],
-                            "Job Description": row["job_description"],
-                            "Job Date": str(row["job_date"]) if row["job_date"] else None,
-                            "Job Link": row["job_link"],
-                            "Company": row["company"],
-                            "Location": row["location"],
-                            "Matching Score": row["matching_score"],
-                            "CV Link": row["cv_link"],
-                            "Match Reasons": row["match_reasons"],
-                            "Match Suggestions": row["match_suggestions"],
-                            "ATS Score": row["ats_score"],
-                            "HR Score": row["hr_score"],
-                            "LLM Score": row["llm_score"],
-                            "HR Recommendation": row["hr_recommendation"],
-                            "Matched Keywords": row["matched_keywords"],
-                            "Missing Keywords": row["missing_keywords"],
-                            "Application Status": row.get("application_status") or "saved",
-                            "Application Notes": row.get("application_notes"),
-                            "Applied At": row.get("applied_at"),
-                            "Created At": row["created_at"].isoformat() if row["created_at"] else None,
-                            "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
-                        }
-                    }
-                    records.append(record)
-
-                return records
+                return [self._job_row_to_record(row) for row in rows]
 
         except Exception as e:
             self.logger.error(f"get_records_by_filter failed: {e}")

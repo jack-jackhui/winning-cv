@@ -20,6 +20,7 @@ import UploadCV from './pages/UploadCV'
 import Preferences from './pages/Preferences'
 import GenerateCV from './pages/GenerateCV'
 import History from './pages/History'
+import ApplicationWorkspace from './pages/ApplicationWorkspace'
 import Profile from './pages/Profile'
 import CVLibrary from './pages/CVLibrary'
 import CVAnalytics from './pages/CVAnalytics'
@@ -104,6 +105,7 @@ function App() {
         <Route path="/preferences" element={<Preferences />} />
         <Route path="/generate" element={<GenerateCV />} />
         <Route path="/history" element={<History />} />
+        <Route path="/applications/:jobId" element={<ApplicationWorkspace />} />
         <Route path="/cv-library" element={<CVLibrary />} />
         <Route path="/cv-analytics" element={<CVAnalytics />} />
         <Route path="/profile" element={<Profile />} />

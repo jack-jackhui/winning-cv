@@ -232,6 +232,18 @@ class AirtableManager:
             self.logger.error("get_all_records error: %s", e)
             return []
 
+    def get_job_result(self, job_id: str, user_email: str) -> dict | None:
+        """Return a job only when the Airtable record is owned by the user."""
+        try:
+            record = self.table.get(job_id)
+        except Exception as e:
+            self.logger.info("Job result lookup failed for %s: %s", job_id, e)
+            return None
+
+        if record.get("fields", {}).get("User Email") != user_email:
+            return None
+        return record
+
     def get_records_by_filter(self, formula: str) -> list:
         """
         Run any Airtable formula, e.g. "{User Email} = 'joe@example.com'".

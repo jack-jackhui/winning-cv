@@ -67,6 +67,9 @@ class DualWriteDataManager:
     def get_unprocessed_jobs(self) -> List[Dict]:
         return self.airtable.get_unprocessed_jobs()
     
+    def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
+        return self.airtable.get_job_result(job_id, user_email)
+
     def get_history_record(self, record_id: str) -> Optional[Dict]:
         return self.airtable.get_history_record(record_id)
     
