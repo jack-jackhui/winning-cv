@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
+from requests import HTTPError
 
 from pyairtable.formulas import AND, EQ, NE, Field
 
@@ -236,13 +238,34 @@ class AirtableManager:
         """Return a job only when the Airtable record is owned by the user."""
         try:
             record = self.table.get(job_id)
-        except Exception as e:
-            self.logger.info("Job result lookup failed for %s: %s", job_id, e)
-            return None
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            raise
 
         if record.get("fields", {}).get("User Email") != user_email:
             return None
         return record
+
+    def update_application_status(
+        self,
+        job_id: str,
+        user_email: str,
+        application_status: str,
+        application_notes: str | None = None,
+    ) -> dict | None:
+        """Update application tracking only when the record is exactly user-owned."""
+        record = self.get_job_result(job_id, user_email)
+        if record is None:
+            return None
+
+        fields = {
+            "Application Status": application_status,
+            "Application Notes": application_notes,
+        }
+        if application_status == "applied" and not record.get("fields", {}).get("Applied At"):
+            fields["Applied At"] = datetime.now(timezone.utc).isoformat()
+        return self.table.update(record["id"], fields)
 
     def get_records_by_filter(self, formula: str) -> list:
         """

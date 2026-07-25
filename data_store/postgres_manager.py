@@ -468,24 +468,20 @@ class PostgresManager:
 
     def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
         """Return one job owned by the user using parameterized SQL."""
-        try:
-            with self.get_cursor() as cursor:
-                cursor.execute("""
-                    SELECT id, user_email, job_title, job_description,
-                           job_date, job_link, company, location, matching_score,
-                           cv_link, match_reasons, match_suggestions,
-                           ats_score, hr_score, llm_score, hr_recommendation,
-                           matched_keywords, missing_keywords, application_status,
-                           application_notes, applied_at, created_at, updated_at
-                    FROM jobs
-                    WHERE id = %s AND user_email = %s
-                    LIMIT 1
-                """, (job_id, user_email))
-                row = cursor.fetchone()
-                return self._job_row_to_record(row) if row else None
-        except Exception as e:
-            self.logger.error(f"Job result lookup failed: {e}")
-            return None
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, user_email, job_title, job_description,
+                       job_date, job_link, company, location, matching_score,
+                       cv_link, match_reasons, match_suggestions,
+                       ats_score, hr_score, llm_score, hr_recommendation,
+                       matched_keywords, missing_keywords, application_status,
+                       application_notes, applied_at, created_at, updated_at
+                FROM jobs
+                WHERE id::text = %s AND user_email = %s
+                LIMIT 1
+            """, (job_id, user_email))
+            row = cursor.fetchone()
+            return self._job_row_to_record(row) if row else None
 
     @staticmethod
     def _job_row_to_record(row: Dict) -> Dict:
@@ -586,27 +582,27 @@ class PostgresManager:
         user_email: str,
         application_status: str,
         application_notes: Optional[str] = None,
+        *,
+        job_link: Optional[str] = None,
     ) -> Optional[Dict]:
-        """Update the user-facing application tracking state for a job."""
-        try:
-            with self.get_cursor() as cursor:
-                cursor.execute("""
-                    UPDATE jobs SET
-                        application_status = %s,
-                        application_notes = %s,
-                        applied_at = CASE
-                            WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
-                            ELSE applied_at
-                        END,
-                        updated_at = NOW()
-                    WHERE id = %s AND user_email = %s
-                    RETURNING id
-                """, (application_status, application_notes, application_status, job_id, user_email))
-                result = cursor.fetchone()
-                return {"id": str(result["id"])} if result else None
-        except Exception as e:
-            self.logger.error(f"Application status update failed: {e}")
-            return None
+        """Update application tracking for an owned ID, or job link during dual-write."""
+        lookup_column = "job_link" if job_link else "id::text"
+        lookup_value = job_link or job_id
+        with self.get_cursor() as cursor:
+            cursor.execute(f"""
+                UPDATE jobs SET
+                    application_status = %s,
+                    application_notes = %s,
+                    applied_at = CASE
+                        WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
+                        ELSE applied_at
+                    END,
+                    updated_at = NOW()
+                WHERE {lookup_column} = %s AND user_email = %s
+                RETURNING id
+            """, (application_status, application_notes, application_status, lookup_value, user_email))
+            result = cursor.fetchone()
+            return {"id": str(result["id"])} if result else None
 
     # =========================================================================
     # UTILITIES

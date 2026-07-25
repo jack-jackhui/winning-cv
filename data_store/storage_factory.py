@@ -110,6 +110,32 @@ class DualWriteDataManager:
             self.logger.warning(f"Postgres shadow write failed (update_cv_info): {e}")
         
         return result
+
+    def update_application_status(
+        self,
+        job_id: str,
+        user_email: str,
+        application_status: str,
+        application_notes: Optional[str] = None,
+    ) -> Optional[Dict]:
+        result = self.airtable.update_application_status(
+            job_id, user_email, application_status, application_notes
+        )
+        if result is None:
+            return None
+
+        try:
+            self.postgres.update_application_status(
+                job_id,
+                user_email,
+                application_status,
+                application_notes,
+                job_link=result.get("fields", {}).get("Job Link"),
+            )
+        except Exception as e:
+            self.logger.warning(f"Postgres shadow write failed (update_application_status): {e}")
+
+        return result
     
     def create_history_record(self, data: Dict) -> Optional[str]:
         result = self.airtable.create_history_record(data)

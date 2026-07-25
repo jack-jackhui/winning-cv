@@ -1,6 +1,9 @@
 """Focused tests for the application workspace job-result routes."""
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from unittest.mock import Mock
+
+from requests import HTTPError, Response
 
 import pytest
 from fastapi import HTTPException
@@ -10,6 +13,7 @@ from api.schemas.auth import UserInfo
 from api.schemas.jobs import ApplicationStatusUpdate
 from data_store.airtable_manager import AirtableManager
 from data_store.postgres_manager import PostgresManager
+from data_store.storage_factory import DualWriteDataManager
 
 
 def make_user(email: str = "owner@example.com") -> UserInfo:
@@ -156,7 +160,7 @@ def test_postgres_job_lookup_parameterizes_apostrophe_email():
 
     assert result["id"] == row["id"]
     query, params = cursor.execute.call_args.args
-    assert "WHERE id = %s AND user_email = %s" in query
+    assert "WHERE id::text = %s AND user_email = %s" in query
     assert params == (row["id"], "o'connor@example.com")
 
 
@@ -169,3 +173,229 @@ def test_airtable_job_lookup_checks_exact_owner_without_formula():
     assert manager.get_job_result("job-123", "o'connor@example.com")["id"] == "job-123"
     assert manager.get_job_result("job-123", "foreign@example.com") is None
     manager.table.get.assert_called_with("job-123")
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        datetime(2026, 7, 25, 1, 30, tzinfo=timezone.utc),
+        datetime(2026, 7, 25, 1, 30),
+    ],
+)
+def test_job_result_accepts_postgres_datetime_for_cv_history(created_at):
+    record = make_record(**{"CV Link": "https://example.com/cv.pdf"})
+
+    result = jobs._job_result_from_record(
+        record,
+        {"https://example.com/cv.pdf": created_at},
+    )
+
+    assert result.cv_generated_at == created_at
+
+
+def test_postgres_application_update_is_owner_scoped_and_persists():
+    cursor = Mock()
+    cursor.fetchone.return_value = {"id": "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14"}
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    result = manager.update_application_status(
+        "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14",
+        "owner@example.com",
+        "applied",
+        "Submitted today",
+    )
+
+    assert result == {"id": "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14"}
+    query, params = cursor.execute.call_args.args
+    assert "WHERE id::text = %s AND user_email = %s" in query
+    assert params == (
+        "applied",
+        "Submitted today",
+        "applied",
+        "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14",
+        "owner@example.com",
+    )
+
+
+def test_postgres_application_update_denies_cross_user():
+    cursor = Mock()
+    cursor.fetchone.return_value = None
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    result = manager.update_application_status(
+        "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14",
+        "foreign@example.com",
+        "applied",
+        None,
+    )
+
+    assert result is None
+    _, params = cursor.execute.call_args.args
+    assert params[-2:] == (
+        "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14",
+        "foreign@example.com",
+    )
+
+
+def test_postgres_lookup_propagates_backend_failure():
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def failing_cursor():
+        raise RuntimeError("database unavailable")
+        yield
+
+    manager.get_cursor = failing_cursor
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        manager.get_job_result("job-123", "owner@example.com")
+
+
+def test_airtable_application_update_persists_for_exact_owner():
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    manager.table.get.return_value = make_record()
+    manager.table.update.return_value = make_record(
+        **{
+            "Application Status": "applied",
+            "Application Notes": "Submitted today",
+        }
+    )
+
+    result = manager.update_application_status(
+        "job-123", "owner@example.com", "applied", "Submitted today"
+    )
+
+    assert result["fields"]["Application Status"] == "applied"
+    updated_id, fields = manager.table.update.call_args.args
+    assert updated_id == "job-123"
+    assert fields["Application Status"] == "applied"
+    assert fields["Application Notes"] == "Submitted today"
+    assert datetime.fromisoformat(fields["Applied At"]).tzinfo is not None
+
+
+def test_airtable_application_update_denies_cross_user():
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    manager.table.get.return_value = make_record()
+
+    assert manager.update_application_status(
+        "job-123", "foreign@example.com", "applied", "Should not save"
+    ) is None
+    manager.table.update.assert_not_called()
+
+
+def test_airtable_lookup_returns_none_for_real_not_found_response():
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    response = Response()
+    response.status_code = 404
+    manager.table.get.side_effect = HTTPError(response=response)
+
+    assert manager.get_job_result("missing-job", "owner@example.com") is None
+
+
+def test_airtable_lookup_propagates_backend_failure():
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    manager.table.get.side_effect = RuntimeError("airtable unavailable")
+
+    with pytest.raises(RuntimeError, match="airtable unavailable"):
+        manager.get_job_result("job-123", "owner@example.com")
+
+
+def test_dual_write_application_update_uses_airtable_primary_and_postgres_shadow():
+    airtable = Mock()
+    postgres = Mock()
+    airtable.update_application_status.return_value = make_record()
+    manager = DualWriteDataManager(airtable, postgres)
+
+    result = manager.update_application_status(
+        "job-123", "owner@example.com", "interviewing", "Phone screen"
+    )
+
+    assert result["id"] == "job-123"
+    airtable.update_application_status.assert_called_once_with(
+        "job-123", "owner@example.com", "interviewing", "Phone screen"
+    )
+    postgres.update_application_status.assert_called_once_with(
+        "job-123",
+        "owner@example.com",
+        "interviewing",
+        "Phone screen",
+        job_link="https://jobs.example.com/123",
+    )
+
+
+def test_dual_write_application_update_tolerates_shadow_failure():
+    airtable = Mock()
+    postgres = Mock()
+    airtable.update_application_status.return_value = {"id": "job-123"}
+    postgres.update_application_status.side_effect = RuntimeError("postgres unavailable")
+    manager = DualWriteDataManager(airtable, postgres)
+
+    result = manager.update_application_status(
+        "job-123", "owner@example.com", "saved", None
+    )
+
+    assert result == {"id": "job-123"}
+
+
+def test_postgres_dual_write_update_uses_owner_scoped_job_link():
+    cursor = Mock()
+    cursor.fetchone.return_value = {"id": 42}
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    result = manager.update_application_status(
+        "recAirtable",
+        "owner@example.com",
+        "applied",
+        "Submitted",
+        job_link="https://jobs.example.com/123",
+    )
+
+    assert result == {"id": "42"}
+    query, params = cursor.execute.call_args.args
+    assert "WHERE job_link = %s AND user_email = %s" in query
+    assert params[-2:] == ("https://jobs.example.com/123", "owner@example.com")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["lookup", "update"])
+async def test_routes_report_storage_failure_as_service_unavailable(monkeypatch, operation):
+    manager = Mock()
+    manager.get_job_result.side_effect = RuntimeError("backend unavailable")
+    manager.update_application_status.side_effect = RuntimeError("backend unavailable")
+    monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
+
+    with pytest.raises(HTTPException) as exc_info:
+        if operation == "lookup":
+            await jobs.get_job_result("job-123", make_user())
+        else:
+            await jobs.update_application_status_result(
+                "job-123",
+                ApplicationStatusUpdate(application_status="saved"),
+                make_user(),
+            )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Job storage unavailable"

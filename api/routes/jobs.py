@@ -683,10 +683,14 @@ def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> Jo
     cv_link = fields.get("CV Link") or None
     cv_generated_at = None
     if cv_link and cv_link in cv_dates:
-        try:
-            cv_generated_at = datetime.fromisoformat(cv_dates[cv_link].replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
-            pass
+        created_at = cv_dates[cv_link]
+        if isinstance(created_at, datetime):
+            cv_generated_at = created_at
+        elif isinstance(created_at, str):
+            try:
+                cv_generated_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError:
+                pass
 
     score_breakdown = None
     ats_score = fields.get("Matching Score")
@@ -780,7 +784,7 @@ async def get_job_result(
         raise
     except Exception as e:
         logger.error(f"Failed to get job result: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get result: {str(e)}")
+        raise HTTPException(status_code=503, detail="Job storage unavailable")
 
 
 @router.patch("/results/{job_id}/application", response_model=JobResult)
@@ -813,7 +817,7 @@ async def update_application_status_result(
         raise
     except Exception as e:
         logger.error(f"Failed to update application status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update application status: {str(e)}")
+        raise HTTPException(status_code=503, detail="Job storage unavailable")
 
 
 @router.get("/linkedin/status")
