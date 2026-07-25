@@ -97,53 +97,60 @@ class PostgresManager:
     # JOBS
     # =========================================================================
 
-    def job_exists(self, job_link: str) -> bool:
-        """Check if a job with this link already exists."""
+    def job_exists(self, job_link: str, user_email: Optional[str] = None) -> bool:
+        """Check for a duplicate URL, optionally within one user's jobs."""
         with self.get_cursor() as cursor:
-            cursor.execute(
-                "SELECT 1 FROM jobs WHERE job_link = %s LIMIT 1",
-                (job_link,)
-            )
+            if user_email is None:
+                cursor.execute("SELECT 1 FROM jobs WHERE job_link = %s LIMIT 1", (job_link,))
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM jobs WHERE user_email = %s AND job_link = %s LIMIT 1",
+                    (user_email, job_link),
+                )
             return cursor.fetchone() is not None
 
-    def get_existing_job_links(self) -> set:
-        """Get all existing job links to prevent duplicates."""
-        try:
-            with self.get_cursor() as cursor:
+    def get_existing_job_links(self, user_email: Optional[str] = None) -> set:
+        """Get existing links, optionally scoped to one user."""
+        with self.get_cursor() as cursor:
+            if user_email is None:
                 cursor.execute("SELECT job_link FROM jobs WHERE job_link IS NOT NULL")
-                return {row["job_link"] for row in cursor.fetchall()}
-        except Exception as e:
-            self.logger.error(f"Failed to fetch existing jobs: {e}")
-            return set()
+            else:
+                cursor.execute(
+                    "SELECT job_link FROM jobs WHERE user_email = %s AND job_link IS NOT NULL",
+                    (user_email,),
+                )
+            return {row["job_link"] for row in cursor.fetchall()}
 
     def create_job_record(self, job_data: Dict, user_email: str = "system") -> Optional[Dict]:
-        """Create new job record."""
-        try:
-            with self.get_cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO jobs (
-                        user_email, job_title, job_description, job_date, job_link,
-                        company, location, matching_score, cv_link, application_status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, created_at
-                """, (
-                    user_email,
-                    job_data.get("Job Title"),
-                    job_data.get("Job Description"),
-                    self._format_date(job_data.get("Job Date")),
-                    job_data.get("Job Link"),
-                    job_data.get("Company"),
-                    job_data.get("Location"),
-                    job_data.get("score", 0),
-                    job_data.get("cv_url", ""),
-                    job_data.get("Application Status", "saved"),
-                ))
-                result = cursor.fetchone()
-                self.logger.info(f"Created job: {result['id']}")
-                return {"id": str(result["id"]), "fields": job_data}
-        except Exception as e:
-            self.logger.error(f"Create failed: {e}")
-            return None
+        """Create a job; duplicate URLs are allowed across different users."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO jobs (
+                    user_email, job_title, job_description, job_date, job_link,
+                    company, location, matching_score, cv_link, application_status
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_email, job_link) DO NOTHING
+                RETURNING id, created_at
+            """, (
+                user_email,
+                job_data.get("Job Title"),
+                job_data.get("Job Description"),
+                self._format_date(job_data.get("Job Date")),
+                job_data.get("Job Link"),
+                job_data.get("Company"),
+                job_data.get("Location"),
+                job_data.get("score", 0),
+                job_data.get("cv_url", ""),
+                job_data.get("Application Status", "saved"),
+            ))
+            result = cursor.fetchone()
+            if result is None:
+                self.logger.info("Job already exists for user: %s", user_email)
+                return None
+            self.logger.info(f"Created job: {result['id']}")
+            fields = dict(job_data)
+            fields["User Email"] = user_email
+            return {"id": str(result["id"]), "fields": fields}
 
     def update_cv_info(
         self,
@@ -157,12 +164,14 @@ class PostgresManager:
         llm_score: Optional[int] = None,
         recommendation: Optional[str] = None,
         matched_keywords: Optional[List[str]] = None,
-        missing_keywords: Optional[List[str]] = None
+        missing_keywords: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
     ) -> Optional[Dict]:
         """Update matching score and CV link for existing job."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                owner_clause = " AND user_email = %s" if user_email is not None else ""
+                cursor.execute(f"""
                     UPDATE jobs SET
                         matching_score = %s,
                         cv_link = %s,
@@ -176,7 +185,7 @@ class PostgresManager:
                         missing_keywords = %s,
                         application_status = CASE WHEN application_status = 'saved' THEN 'cv_generated' ELSE application_status END,
                         updated_at = NOW()
-                    WHERE job_link = %s
+                    WHERE job_link = %s{owner_clause}
                     RETURNING id
                 """, (
                     score,
@@ -190,6 +199,7 @@ class PostgresManager:
                     ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords,
                     ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords,
                     job_link,
+                    *([user_email] if user_email is not None else []),
                 ))
                 result = cursor.fetchone()
                 return {"id": str(result["id"])} if result else None
@@ -197,18 +207,20 @@ class PostgresManager:
             self.logger.error(f"Update failed: {e}")
             return None
 
-    def get_unprocessed_jobs(self) -> List[Dict]:
-        """Get jobs without CV links that have descriptions."""
+    def get_unprocessed_jobs(self, user_email: Optional[str] = None) -> List[Dict]:
+        """Get jobs without CV links, optionally scoped to one user."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                owner_clause = " AND user_email = %s" if user_email is not None else ""
+                cursor.execute(f"""
                     SELECT id, job_title as "Job Title", job_description as "Job Description",
                            job_link as "Job Link", company as "Company"
                     FROM jobs
                     WHERE (cv_link IS NULL OR cv_link = '')
                       AND job_description IS NOT NULL AND job_description != ''
+                      {owner_clause}
                     ORDER BY created_at DESC
-                """)
+                """, (user_email,) if user_email is not None else ())
                 results = []
                 for row in cursor.fetchall():
                     fields = dict(row)
@@ -466,9 +478,73 @@ class PostgresManager:
             return []
 
 
+    def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
+        """Return one job owned by the user using parameterized SQL."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, user_email, job_title, job_description,
+                       job_date, job_link, company, location, matching_score,
+                       cv_link, match_reasons, match_suggestions,
+                       ats_score, hr_score, llm_score, hr_recommendation,
+                       matched_keywords, missing_keywords, application_status,
+                       application_notes, applied_at, created_at, updated_at
+                FROM jobs
+                WHERE id::text = %s AND user_email = %s
+                LIMIT 1
+            """, (job_id, user_email))
+            row = cursor.fetchone()
+            return self._job_row_to_record(row) if row else None
+
+    @staticmethod
+    def _job_row_to_record(row: Dict) -> Dict:
+        """Convert a PostgreSQL job row to the shared Airtable-shaped record."""
+        return {
+            "id": str(row["id"]),
+            "fields": {
+                "User Email": row["user_email"],
+                "Job Title": row["job_title"],
+                "Job Description": row["job_description"],
+                "Job Date": str(row["job_date"]) if row["job_date"] else None,
+                "Job Link": row["job_link"],
+                "Company": row["company"],
+                "Location": row["location"],
+                "Matching Score": row["matching_score"],
+                "CV Link": row["cv_link"],
+                "Match Reasons": row["match_reasons"],
+                "Match Suggestions": row["match_suggestions"],
+                "ATS Score": row["ats_score"],
+                "HR Score": row["hr_score"],
+                "LLM Score": row["llm_score"],
+                "HR Recommendation": row["hr_recommendation"],
+                "Matched Keywords": row["matched_keywords"],
+                "Missing Keywords": row["missing_keywords"],
+                "Application Status": row.get("application_status") or "saved",
+                "Application Notes": row.get("application_notes"),
+                "Applied At": row.get("applied_at"),
+                "Created At": row["created_at"].isoformat() if row["created_at"] else None,
+                "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
+            },
+        }
+
     # =========================================================================
     # AIRTABLE API COMPATIBILITY LAYER
     # =========================================================================
+
+    def get_jobs_by_user(self, user_email: str) -> List[Dict]:
+        """Return jobs owned by a user without parsing an Airtable formula."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, user_email, job_title, job_description,
+                       job_date, job_link, company, location, matching_score,
+                       cv_link, match_reasons, match_suggestions,
+                       ats_score, hr_score, llm_score, hr_recommendation,
+                       matched_keywords, missing_keywords, application_status,
+                       application_notes, applied_at, created_at, updated_at
+                FROM jobs
+                WHERE user_email = %s
+                ORDER BY created_at DESC
+            """, (user_email,))
+            return [self._job_row_to_record(row) for row in cursor.fetchall()]
 
     def get_records_by_filter(self, formula: str) -> List[Dict]:
         """
@@ -522,39 +598,7 @@ class PostgresManager:
 
                 rows = cursor.fetchall()
 
-                # Convert to Airtable format
-                records = []
-                for row in rows:
-                    record = {
-                        "id": str(row["id"]),
-                        "fields": {
-                            "User Email": row["user_email"],
-                            "Job Title": row["job_title"],
-                            "Job Description": row["job_description"],
-                            "Job Date": str(row["job_date"]) if row["job_date"] else None,
-                            "Job Link": row["job_link"],
-                            "Company": row["company"],
-                            "Location": row["location"],
-                            "Matching Score": row["matching_score"],
-                            "CV Link": row["cv_link"],
-                            "Match Reasons": row["match_reasons"],
-                            "Match Suggestions": row["match_suggestions"],
-                            "ATS Score": row["ats_score"],
-                            "HR Score": row["hr_score"],
-                            "LLM Score": row["llm_score"],
-                            "HR Recommendation": row["hr_recommendation"],
-                            "Matched Keywords": row["matched_keywords"],
-                            "Missing Keywords": row["missing_keywords"],
-                            "Application Status": row.get("application_status") or "saved",
-                            "Application Notes": row.get("application_notes"),
-                            "Applied At": row.get("applied_at"),
-                            "Created At": row["created_at"].isoformat() if row["created_at"] else None,
-                            "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
-                        }
-                    }
-                    records.append(record)
-
-                return records
+                return [self._job_row_to_record(row) for row in rows]
 
         except Exception as e:
             self.logger.error(f"get_records_by_filter failed: {e}")
@@ -566,27 +610,27 @@ class PostgresManager:
         user_email: str,
         application_status: str,
         application_notes: Optional[str] = None,
+        *,
+        job_link: Optional[str] = None,
     ) -> Optional[Dict]:
-        """Update the user-facing application tracking state for a job."""
-        try:
-            with self.get_cursor() as cursor:
-                cursor.execute("""
-                    UPDATE jobs SET
-                        application_status = %s,
-                        application_notes = %s,
-                        applied_at = CASE
-                            WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
-                            ELSE applied_at
-                        END,
-                        updated_at = NOW()
-                    WHERE id = %s AND user_email = %s
-                    RETURNING id
-                """, (application_status, application_notes, application_status, job_id, user_email))
-                result = cursor.fetchone()
-                return {"id": str(result["id"])} if result else None
-        except Exception as e:
-            self.logger.error(f"Application status update failed: {e}")
-            return None
+        """Update application tracking for an owned ID, or job link during dual-write."""
+        lookup_column = "job_link" if job_link else "id::text"
+        lookup_value = job_link or job_id
+        with self.get_cursor() as cursor:
+            cursor.execute(f"""
+                UPDATE jobs SET
+                    application_status = %s,
+                    application_notes = %s,
+                    applied_at = CASE
+                        WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
+                        ELSE applied_at
+                    END,
+                    updated_at = NOW()
+                WHERE {lookup_column} = %s AND user_email = %s
+                RETURNING id
+            """, (application_status, application_notes, application_status, lookup_value, user_email))
+            result = cursor.fetchone()
+            return {"id": str(result["id"])} if result else None
 
     # =========================================================================
     # UTILITIES

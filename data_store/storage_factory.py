@@ -40,6 +40,10 @@ if STORAGE_BACKEND not in ("airtable", "postgres", "dual"):
 # DATA MANAGER (Jobs, History, User Config, Notifications)
 # =============================================================================
 
+class ShadowWriteError(RuntimeError):
+    """Raised when a required PostgreSQL shadow write is not persisted."""
+
+
 class DualWriteDataManager:
     """
     Dual-write manager that writes to both Airtable and PostgreSQL.
@@ -58,15 +62,21 @@ class DualWriteDataManager:
     # READ OPERATIONS (Airtable primary)
     # =========================================================================
     
-    def job_exists(self, job_link: str) -> bool:
-        return self.airtable.job_exists(job_link)
+    def job_exists(self, job_link: str, user_email: Optional[str] = None) -> bool:
+        return self.airtable.job_exists(job_link, user_email=user_email)
     
-    def get_existing_job_links(self) -> set:
-        return self.airtable.get_existing_job_links()
+    def get_existing_job_links(self, user_email: Optional[str] = None) -> set:
+        return self.airtable.get_existing_job_links(user_email=user_email)
+
+    def get_jobs_by_user(self, user_email: str) -> List[Dict]:
+        return self.airtable.get_jobs_by_user(user_email)
     
-    def get_unprocessed_jobs(self) -> List[Dict]:
-        return self.airtable.get_unprocessed_jobs()
+    def get_unprocessed_jobs(self, user_email: Optional[str] = None) -> List[Dict]:
+        return self.airtable.get_unprocessed_jobs(user_email=user_email)
     
+    def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
+        return self.airtable.get_job_result(job_id, user_email)
+
     def get_history_record(self, record_id: str) -> Optional[Dict]:
         return self.airtable.get_history_record(record_id)
     
@@ -90,22 +100,68 @@ class DualWriteDataManager:
         # Primary: Airtable
         result = self.airtable.create_job_record(job_data, user_email)
         
-        # Shadow: PostgreSQL (fire and forget, log errors)
+        if result is None:
+            return None
         try:
-            self.postgres.create_job_record(job_data, user_email)
+            shadow_result = self.postgres.create_job_record(job_data, user_email)
         except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (create_job): {e}")
-        
+            self.logger.warning("Postgres shadow write failed (create_job): %s", e)
+            raise ShadowWriteError("Postgres shadow job create failed") from e
+        if shadow_result is None:
+            self.logger.warning("Postgres shadow write missed job create for user_email=%s", user_email)
+            raise ShadowWriteError("Postgres shadow job create did not persist")
         return result
     
     def update_cv_info(self, job_link: str, score: int, cv_url: str, **kwargs) -> Optional[Dict]:
         result = self.airtable.update_cv_info(job_link, score, cv_url, **kwargs)
-        
+        if result is None:
+            return None
+
         try:
-            self.postgres.update_cv_info(job_link, score, cv_url, **kwargs)
+            shadow_result = self.postgres.update_cv_info(job_link, score, cv_url, **kwargs)
         except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (update_cv_info): {e}")
-        
+            self.logger.warning("Postgres shadow write failed (update_cv_info): %s", e)
+            raise ShadowWriteError("Postgres shadow CV update failed") from e
+        if shadow_result is None:
+            self.logger.warning(
+                "Postgres shadow write missed CV update job_link=%s", job_link
+            )
+            raise ShadowWriteError("Postgres shadow CV update did not persist")
+
+        return result
+
+    def update_application_status(
+        self,
+        job_id: str,
+        user_email: str,
+        application_status: str,
+        application_notes: Optional[str] = None,
+    ) -> Optional[Dict]:
+        result = self.airtable.update_application_status(
+            job_id, user_email, application_status, application_notes
+        )
+        if result is None:
+            return None
+
+        try:
+            shadow_result = self.postgres.update_application_status(
+                job_id,
+                user_email,
+                application_status,
+                application_notes,
+                job_link=result.get("fields", {}).get("Job Link"),
+            )
+        except Exception as e:
+            self.logger.warning("Postgres shadow write failed (update_application_status): %s", e)
+            raise ShadowWriteError("Postgres shadow application update failed") from e
+        if shadow_result is None:
+            self.logger.warning(
+                "Postgres shadow write missed application job_id=%s user_email=%s",
+                job_id,
+                user_email,
+            )
+            raise ShadowWriteError("Postgres shadow application update did not persist")
+
         return result
     
     def create_history_record(self, data: Dict) -> Optional[str]:

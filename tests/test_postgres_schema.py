@@ -133,11 +133,10 @@ class TestJobsSchema:
         missing = self.EXPECTED_COLUMNS - sql_columns
         assert not missing, f"Missing columns in jobs: {missing}"
 
-    def test_job_link_is_unique(self, schema_content):
-        """Verify job_link has UNIQUE constraint."""
-        # Check for UNIQUE in the column definition
-        assert 'job_link VARCHAR(2000) UNIQUE' in schema_content, \
-            "job_link should be UNIQUE"
+    def test_job_link_is_unique_per_user(self, schema_content):
+        """Verify duplicate URLs are prevented only within a user."""
+        assert 'job_link VARCHAR(2000) UNIQUE' not in schema_content
+        assert 'uq_jobs_user_email_job_link ON jobs(user_email, job_link)' in schema_content
 
 
 class TestCVHistorySchema:
@@ -189,6 +188,8 @@ class TestSchemaIntegrity:
         """Verify migration file exists."""
         migration_path = Path(__file__).parent.parent / "init-db" / "03-migration-v2.sql"
         assert migration_path.exists(), "Migration file should exist"
+        ownership_migration = Path(__file__).parent.parent / "init-db" / "06-jobs-user-link-uniqueness.sql"
+        assert ownership_migration.exists(), "Per-user job uniqueness migration should exist"
 
     def test_analytics_function_exists(self, schema_content):
         """Verify get_cv_analytics function is defined."""

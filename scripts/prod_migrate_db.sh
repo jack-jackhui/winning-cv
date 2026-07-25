@@ -16,3 +16,6 @@ ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_storage_path VARCHAR(500);
 ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_file_size INTEGER DEFAULT 0;
 ALTER TABLE cv_versions ADD COLUMN IF NOT EXISTS docx_content_hash VARCHAR(64);
 SQL
+
+# Apply file-backed migrations that alter constraints/indexes.
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 < init-db/06-jobs-user-link-uniqueness.sql

@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
 } from 'lucide-react'
 import { jobService } from '../services/api'
+import { getSafeExternalUrl } from '../utils/applicationWorkspace'
 
 export default function History() {
   const navigate = useNavigate()
@@ -80,7 +81,7 @@ export default function History() {
       item.id === job.id ? { ...item, application_status: applicationStatus } : item
     ))
     try {
-      await jobService.updateApplicationStatus(job.id, applicationStatus)
+      await jobService.updateApplicationStatus(job.id, applicationStatus, job.application_notes)
     } catch (err) {
       console.error('Failed to update application status:', err)
       setError(err.message || 'Failed to update application status')
@@ -92,10 +93,13 @@ export default function History() {
 
   const handleDownload = async (cvLink, jobTitle) => {
     try {
+      const safeCvLink = getSafeExternalUrl(cvLink)
+      if (!safeCvLink) throw new Error('Unsafe CV download URL')
+
       // Extract filename from URL or use job title
       const filename = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_CV.pdf`
       const link = document.createElement('a')
-      link.href = cvLink
+      link.href = safeCvLink
       link.download = filename
       link.target = '_blank'
       document.body.appendChild(link)
@@ -146,7 +150,7 @@ export default function History() {
   // Calculate stats
   const stats = {
     totalMatches: jobs.length,
-    withCV: jobs.filter((j) => j.cv_link).length,
+    withCV: jobs.filter((j) => getSafeExternalUrl(j.cv_link)).length,
     applied: jobs.filter((j) => ['applied', 'interviewing', 'offer'].includes(j.application_status)).length,
     avgScore: jobs.length
       ? Math.round(jobs.reduce((acc, j) => acc + (j.score || 0), 0) / jobs.length)
@@ -320,7 +324,7 @@ export default function History() {
 
                     {/* CV Status */}
                     <div className="mt-2">
-                      {job.cv_link ? (
+                      {getSafeExternalUrl(job.cv_link) ? (
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           CV Generated {formatGeneratedDate(job.cv_generated_at) && `on ${formatGeneratedDate(job.cv_generated_at)}`}
@@ -354,10 +358,18 @@ export default function History() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {job.cv_link ? (
+                    <button
+                      onClick={() => navigate(`/applications/${encodeURIComponent(job.id)}`)}
+                      className="btn-secondary text-sm py-1.5 px-3"
+                      title="Open application workspace"
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      Workspace
+                    </button>
+                    {getSafeExternalUrl(job.cv_link) ? (
                       <>
                         <a
-                          href={job.cv_link}
+                          href={getSafeExternalUrl(job.cv_link)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn-icon text-text-muted hover:text-accent-400"
@@ -385,16 +397,18 @@ export default function History() {
                         Generate CV
                       </button>
                     )}
-                    <a
-                      href={job.job_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-icon text-text-muted hover:text-accent-400"
-                      aria-label="View job posting"
-                      title="View job posting"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                    </a>
+                    {getSafeExternalUrl(job.job_link) && (
+                      <a
+                        href={getSafeExternalUrl(job.job_link)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-icon text-text-muted hover:text-accent-400"
+                        aria-label="View job posting"
+                        title="View job posting"
+                      >
+                        <ExternalLink className="w-5 h-5" />
+                      </a>
+                    )}
                   </div>
                 </div>
 

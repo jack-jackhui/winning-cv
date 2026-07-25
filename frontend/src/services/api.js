@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000'
 
 // Lazy import telemetry to avoid circular dependencies
 let trackAPIError = null
@@ -350,6 +350,11 @@ export const jobService = {
     return fetchAPI(`/api/v1/jobs/results?limit=${limit}&sort_by=${sortBy}`)
   },
 
+  // Result IDs are opaque, path-safe PostgreSQL UUIDs or Airtable record IDs.
+  async getResult(jobId) {
+    return fetchAPI(`/api/v1/jobs/results/${encodeURIComponent(jobId)}`)
+  },
+
   // Get matched jobs (alias for results)
   async getMatchedJobs(sortBy = 'date') {
     const response = await this.getResults(100, sortBy)
@@ -358,7 +363,7 @@ export const jobService = {
 
   // Update application tracking status
   async updateApplicationStatus(jobId, applicationStatus, notes = null) {
-    return fetchAPI(`/api/v1/jobs/results/${jobId}/application`, {
+    return fetchAPI(`/api/v1/jobs/results/${encodeURIComponent(jobId)}/application`, {
       method: 'PATCH',
       body: JSON.stringify({
         application_status: applicationStatus,

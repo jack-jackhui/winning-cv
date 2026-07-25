@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
+from requests import HTTPError
 
 from pyairtable.formulas import AND, EQ, NE, Field
 
@@ -33,16 +35,19 @@ class AirtableManager:
             # "created_at" is auto‐populated in Airtable as a "Created Time" field
         }
 
-    def job_exists(self, job_link):
-        # Use formula helper for safety
+    def job_exists(self, job_link, user_email: str | None = None):
+        # Scope deduplication to the current user when one is supplied.
         formula = EQ(Field("Job Link"), job_link)
+        if user_email is not None:
+            formula = AND(formula, EQ(Field("User Email"), user_email))
         records = self.table.all(formula=str(formula))
         return len(records) > 0
 
-    def get_existing_job_links(self):
-        """Get all existing job links to prevent duplicates"""
+    def get_existing_job_links(self, user_email: str | None = None):
+        """Get existing job links, optionally scoped to one user."""
         try:
-            records = self.table.all()
+            formula = str(EQ(Field("User Email"), user_email)) if user_email is not None else None
+            records = self.table.all(formula=formula) if formula else self.table.all()
             return {rec['fields']['Job Link'] for rec in records if 'Job Link' in rec['fields']}
         except Exception as e:
             self.logger.error(f"Failed to fetch existing jobs: {str(e)}")
@@ -80,12 +85,16 @@ class AirtableManager:
         llm_score=None,
         recommendation=None,
         matched_keywords=None,
-        missing_keywords=None
+        missing_keywords=None,
+        user_email: str | None = None,
     ):
-        """Update matching score, CV link, and score breakdown for existing job"""
+        """Update matching score, CV link, and score breakdown for an owned job."""
         try:
+            formula = EQ(Field("Job Link"), job_link)
+            if user_email is not None:
+                formula = AND(formula, EQ(Field("User Email"), user_email))
             record = self.table.first(
-                formula=str(EQ(Field("Job Link"), job_link)),
+                formula=str(formula),
                 fields=["Job Link"]
             )
             if record:
@@ -135,13 +144,13 @@ class AirtableManager:
                 continue
         return datetime.now().strftime('%Y-%m-%d')
 
-    def get_unprocessed_jobs(self):
-        """Get unprocessed jobs with filter formula"""
+    def get_unprocessed_jobs(self, user_email: str | None = None):
+        """Get unprocessed jobs, optionally scoped to one user."""
         try:
-            formula = AND(
-                EQ(Field("CV Link"), ""),
-                NE(Field("Job Description"),"")
-            )
+            filters = [EQ(Field("CV Link"), ""), NE(Field("Job Description"), "")]
+            if user_email is not None:
+                filters.append(EQ(Field("User Email"), user_email))
+            formula = AND(*filters)
             return self.table.all(
                 formula=str(formula),
                 fields=["Job Title", "Job Description", "Job Link", "Company"]
@@ -231,6 +240,47 @@ class AirtableManager:
         except Exception as e:
             self.logger.error("get_all_records error: %s", e)
             return []
+
+    def get_job_result(self, job_id: str, user_email: str) -> dict | None:
+        """Return a job only when the Airtable record is owned by the user."""
+        try:
+            record = self.table.get(job_id)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            raise
+
+        if record.get("fields", {}).get("User Email") != user_email:
+            return None
+        return record
+
+    def update_application_status(
+        self,
+        job_id: str,
+        user_email: str,
+        application_status: str,
+        application_notes: str | None = None,
+    ) -> dict | None:
+        """Update application tracking only when the record is exactly user-owned."""
+        record = self.get_job_result(job_id, user_email)
+        if record is None:
+            return None
+
+        fields = {
+            "Application Status": application_status,
+            "Application Notes": application_notes,
+        }
+        if application_status == "applied" and not record.get("fields", {}).get("Applied At"):
+            fields["Applied At"] = datetime.now(timezone.utc).isoformat()
+        return self.table.update(record["id"], fields)
+
+    def get_jobs_by_user(self, user_email: str) -> list:
+        """Return jobs owned by a user using Airtable's formula builder."""
+        try:
+            return self.table.all(formula=str(EQ(Field("User Email"), user_email)))
+        except Exception as e:
+            self.logger.error("get_jobs_by_user error: %s", e)
+            raise
 
     def get_records_by_filter(self, formula: str) -> list:
         """
