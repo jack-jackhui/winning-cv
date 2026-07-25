@@ -19,15 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Test
+        run: npm test
 
       - name: Lint
         run: npm run lint
@@ -106,7 +109,7 @@ jobs:
       - name: Run unit tests
         run: |
           # Run unit tests that don't require external services
-          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py tests/test_job_result_workspace.py -v --tb=short
         env:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"
