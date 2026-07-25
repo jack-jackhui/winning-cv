@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_title VARCHAR(500),
     job_description TEXT,
     job_date TIMESTAMP WITH TIME ZONE,
-    job_link VARCHAR(2000) UNIQUE,
+    job_link VARCHAR(2000),
     company VARCHAR(255),
     location VARCHAR(255),
     matching_score INTEGER DEFAULT 0,
@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_jobs_user_email_job_link ON jobs(user_email, job_link);
 CREATE INDEX IF NOT EXISTS idx_jobs_job_link ON jobs(job_link);
 CREATE INDEX IF NOT EXISTS idx_jobs_user_email ON jobs(user_email);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC);

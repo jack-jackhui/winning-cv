@@ -24,7 +24,7 @@ const baseJob = {
   company: 'Example Co',
   location: 'Melbourne',
   score: 8.7,
-  score_breakdown: null,
+  score_breakdown: { ats_score: 92, hr_score: 81, llm_score: 7.4 },
   job_link: 'https://jobs.example.com/123',
   description: 'Build reliable systems',
   match_reasons: [],
@@ -69,6 +69,15 @@ describe('ApplicationWorkspace', () => {
 
     expect(await screen.findByRole('heading', { name: 'Workspace unavailable' })).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toContain('The workspace could not be loaded.')
+  })
+
+  it('renders distinct overall and ATS scores', async () => {
+    jobService.getResult.mockResolvedValue(baseJob)
+
+    renderWorkspace()
+
+    expect(await screen.findByText('87%')).toBeTruthy()
+    expect(screen.getByText('92%')).toBeTruthy()
   })
 
   it('initializes tracking fields and applies the saved response', async () => {

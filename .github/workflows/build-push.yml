@@ -171,7 +171,7 @@ jobs:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
-          source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql"
+          source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql,init-db/06-jobs-user-link-uniqueness.sql"
           target: "~/winning-cv"
           overwrite: true
 

@@ -95,8 +95,12 @@ class JobProcessor:
         logger.info("Processing LinkedIn jobs...")
         try:
             target_urls = self.get_target_urls()
-            existing_links = set(canonicalize_url(link) for link in self.airtable.get_existing_job_links())
-            # existing_links = self.airtable.get_existing_job_links()
+            existing_links = {
+                canonicalize_url(link)
+                for link in self.airtable.get_existing_job_links(
+                    user_email=self.config.user_email
+                )
+            }
             new_jobs = 0
             for url in target_urls:
                 logger.info(f"Scraping LinkedIn jobs from URL: {url}")
@@ -114,7 +118,7 @@ class JobProcessor:
                         logger.info(f"Job {job_url} already exists (in-memory dedup), skipping.")
                         continue
                     # Airtable-level check (race condition safety)
-                    if self.airtable.job_exists(job_url):
+                    if self.airtable.job_exists(job_url, user_email=self.config.user_email):
                         logger.info(f"Job {job_url} already exists in Airtable, skipping.")
                         existing_links.add(job_url)
                         continue
@@ -140,8 +144,12 @@ class JobProcessor:
             if not job_list:
                 logger.warning("No jobs returned from Seek scraper.")
                 return 0
-            # existing_links = self.airtable.get_existing_job_links()
-            existing_links = set(canonicalize_url(link) for link in self.airtable.get_existing_job_links())
+            existing_links = {
+                canonicalize_url(link)
+                for link in self.airtable.get_existing_job_links(
+                    user_email=self.config.user_email
+                )
+            }
             new_jobs = 0
             for job_data in job_list:
                 job_url = canonicalize_url(job_data.get("job_url"))
@@ -153,7 +161,7 @@ class JobProcessor:
                     logger.info(f"Job {job_url} already exists, skipping.")
                     continue
                 # Airtable-level check (race condition safety)
-                if self.airtable.job_exists(job_url):
+                if self.airtable.job_exists(job_url, user_email=self.config.user_email):
                     logger.info(f"Job {job_url} already exists in Airtable, skipping.")
                     existing_links.add(job_url)
                     continue
@@ -176,8 +184,12 @@ class JobProcessor:
             processed_jobs = self.additional_processor.scrape_and_process_jobs()
             if not processed_jobs:
                 return 0
-            # existing_links = self.airtable.get_existing_job_links()
-            existing_links = set(canonicalize_url(link) for link in self.airtable.get_existing_job_links())
+            existing_links = {
+                canonicalize_url(link)
+                for link in self.airtable.get_existing_job_links(
+                    user_email=self.config.user_email
+                )
+            }
             new_jobs_added = 0
 
             for job in processed_jobs:
@@ -185,7 +197,7 @@ class JobProcessor:
                 if not job_url or job_url in existing_links:
                     continue
                 # Airtable-level check (race condition safety)
-                if self.airtable.job_exists(job_url):
+                if self.airtable.job_exists(job_url, user_email=self.config.user_email):
                     logger.info(f"Job {job_url} already exists in Airtable, skipping.")
                     existing_links.add(job_url)
                     continue
@@ -218,7 +230,7 @@ class JobProcessor:
                 return jobs_with_cv
 
             # Fetch unprocessed jobs (no CV Link & has job desc)
-            unprocessed_jobs = self.airtable.get_unprocessed_jobs()
+            unprocessed_jobs = self.airtable.get_unprocessed_jobs(user_email=self.config.user_email)
             total_jobs = len(unprocessed_jobs)
             logger.info(f"Found {total_jobs} unprocessed jobs in Airtable.")
             self._update_progress(51, f"Analyzing {total_jobs} jobs against your CV...")
@@ -263,6 +275,7 @@ class JobProcessor:
                     recommendation=analysis.get('recommendation') if analysis else None,
                     matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
                     missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
+                    user_email=self.config.user_email,
                 )
                 if not updated_record:
                     logger.warning(f"Failed to update job with match score for {job_link}.")
@@ -285,6 +298,7 @@ class JobProcessor:
                             recommendation=analysis.get('recommendation') if analysis else None,
                             matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
                             missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
+                            user_email=self.config.user_email,
                         )
                         if updated_record:
                             logger.info(f"Generated targeted CV for '{job_title}' -> {cv_url}")

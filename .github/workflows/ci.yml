@@ -62,6 +62,20 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: winningcv_test
+          POSTGRES_PASSWORD: winningcv_test
+          POSTGRES_DB: winningcv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U winningcv_test -d winningcv_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     strategy:
       matrix:
         python-version: ['3.11', '3.12']
@@ -109,7 +123,7 @@ jobs:
       - name: Run unit tests
         run: |
           # Run unit tests that don't require external services
-          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py tests/test_job_result_workspace.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py tests/test_job_result_workspace.py tests/test_postgres_persistence.py -v --tb=short
         env:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"
@@ -121,6 +135,7 @@ jobs:
           AZURE_AI_ENDPOINT: "https://fake.openai.azure.com"
           AZURE_AI_API_KEY: "fake_key"
           AZURE_DEPLOYMENT: "fake_deployment"
+          TEST_POSTGRES_DSN: "postgresql://winningcv_test:winningcv_test@localhost:5432/winningcv_test"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

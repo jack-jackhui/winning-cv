@@ -654,12 +654,6 @@ async def get_user_search_tasks(
     ]
 
 
-def _user_jobs_formula(user_email: str) -> str:
-    """Build an Airtable-compatible, escaped user ownership filter."""
-    safe_email = user_email.replace("'", "\\'")
-    return f"{{User Email}} = '{safe_email}'"
-
-
 def _cv_dates_by_url(history_records: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Map generated CV URLs to their creation timestamps."""
     cv_dates = {}
@@ -693,7 +687,7 @@ def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> Jo
                 pass
 
     score_breakdown = None
-    ats_score = fields.get("Matching Score")
+    ats_score = fields.get("ATS Score")
     hr_score = fields.get("HR Score")
     if ats_score is not None or hr_score is not None:
         matched_kw_raw = fields.get("Matched Keywords", "")
@@ -701,9 +695,13 @@ def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> Jo
         matched_keywords = [kw.strip() for kw in matched_kw_raw.split(",") if kw.strip()] if matched_kw_raw else None
         missing_keywords = [kw.strip() for kw in missing_kw_raw.split(",") if kw.strip()] if missing_kw_raw else None
         score_breakdown = ScoreBreakdown(
-            ats_score=float(ats_score) if ats_score else None,
-            hr_score=float(hr_score) if hr_score else None,
-            llm_score=float(fields.get("LLM Score")) if fields.get("LLM Score") else None,
+            ats_score=float(ats_score) if ats_score is not None else None,
+            hr_score=float(hr_score) if hr_score is not None else None,
+            llm_score=(
+                float(fields.get("LLM Score"))
+                if fields.get("LLM Score") is not None
+                else None
+            ),
             recommendation=fields.get("HR Recommendation"),
             matched_keywords=matched_keywords,
             missing_keywords=missing_keywords,
@@ -740,7 +738,7 @@ async def get_job_results(
         joblist_manager = get_data_manager()
         history_manager = get_history_manager()
         cv_dates = _cv_dates_by_url(history_manager.get_history_by_user(user.email))
-        records = joblist_manager.get_records_by_filter(_user_jobs_formula(str(user.email)))
+        records = joblist_manager.get_jobs_by_user(str(user.email))
         items = [_job_result_from_record(rec, cv_dates) for rec in records[:limit]]
 
         def parse_date(date_str):

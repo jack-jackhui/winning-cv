@@ -13,7 +13,7 @@ from api.schemas.auth import UserInfo
 from api.schemas.jobs import ApplicationStatusUpdate
 from data_store.airtable_manager import AirtableManager
 from data_store.postgres_manager import PostgresManager
-from data_store.storage_factory import DualWriteDataManager
+from data_store.storage_factory import DualWriteDataManager, ShadowWriteError
 
 
 def make_user(email: str = "owner@example.com") -> UserInfo:
@@ -33,6 +33,7 @@ def make_record(**field_overrides):
         "Company": "Example Co",
         "Location": "Melbourne",
         "Matching Score": 8.7,
+        "ATS Score": 92,
         "Job Link": "https://jobs.example.com/123",
         "Job Description": "Build reliable systems",
         "Application Status": "saved",
@@ -55,6 +56,8 @@ async def test_get_job_result_returns_owned_job(monkeypatch):
     assert result.id == "job-123"
     assert result.job_title == "Platform Engineer"
     assert result.application_status.value == "saved"
+    assert result.score == 8.7
+    assert result.score_breakdown.ats_score == 92
     manager.get_job_result.assert_called_once_with(
         job_id="job-123",
         user_email="owner@example.com",
@@ -163,6 +166,21 @@ def test_postgres_job_lookup_parameterizes_apostrophe_email():
     assert "WHERE id::text = %s AND user_email = %s" in query
     assert params == (row["id"], "o'connor@example.com")
 
+
+def test_postgres_list_jobs_parameterizes_apostrophe_email():
+    cursor = Mock()
+    cursor.fetchall.return_value = []
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    assert manager.get_jobs_by_user("o'connor@example.com") == []
+    query, params = cursor.execute.call_args.args
+    assert "WHERE user_email = %s" in query
+    assert params == ("o'connor@example.com",)
 
 def test_airtable_job_lookup_checks_exact_owner_without_formula():
     manager = AirtableManager.__new__(AirtableManager)
@@ -341,18 +359,23 @@ def test_dual_write_application_update_uses_airtable_primary_and_postgres_shadow
     )
 
 
-def test_dual_write_application_update_tolerates_shadow_failure():
+@pytest.mark.parametrize("shadow_result", [None, RuntimeError("postgres unavailable")])
+def test_dual_write_application_update_reports_shadow_failure(shadow_result, caplog):
     airtable = Mock()
     postgres = Mock()
-    airtable.update_application_status.return_value = {"id": "job-123"}
-    postgres.update_application_status.side_effect = RuntimeError("postgres unavailable")
+    airtable.update_application_status.return_value = make_record()
+    if isinstance(shadow_result, Exception):
+        postgres.update_application_status.side_effect = shadow_result
+    else:
+        postgres.update_application_status.return_value = shadow_result
     manager = DualWriteDataManager(airtable, postgres)
 
-    result = manager.update_application_status(
-        "job-123", "owner@example.com", "saved", None
-    )
+    with pytest.raises(ShadowWriteError):
+        manager.update_application_status(
+            "job-123", "owner@example.com", "saved", None
+        )
 
-    assert result == {"id": "job-123"}
+    assert "Postgres shadow write" in caplog.text
 
 
 def test_postgres_dual_write_update_uses_owner_scoped_job_link():
@@ -399,3 +422,58 @@ async def test_routes_report_storage_failure_as_service_unavailable(monkeypatch,
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "Job storage unavailable"
+
+
+@pytest.mark.asyncio
+async def test_list_results_uses_typed_user_lookup(monkeypatch):
+    manager = Mock()
+    manager.get_jobs_by_user.return_value = [make_record()]
+    history_manager = Mock()
+    history_manager.get_history_by_user.return_value = []
+    monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
+    monkeypatch.setattr(jobs, "get_history_manager", lambda: history_manager)
+
+    result = await jobs.get_job_results(make_user("o'connor@example.com"))
+
+    assert result.total == 1
+    manager.get_jobs_by_user.assert_called_once_with("o'connor@example.com")
+    manager.get_records_by_filter.assert_not_called()
+
+
+@pytest.mark.parametrize("shadow_result", [None, RuntimeError("postgres unavailable")])
+def test_dual_write_create_reports_shadow_failure(shadow_result, caplog):
+    airtable = Mock()
+    postgres = Mock()
+    airtable.create_job_record.return_value = make_record()
+    if isinstance(shadow_result, Exception):
+        postgres.create_job_record.side_effect = shadow_result
+    else:
+        postgres.create_job_record.return_value = shadow_result
+    manager = DualWriteDataManager(airtable, postgres)
+
+    with pytest.raises(ShadowWriteError):
+        manager.create_job_record({"Job Link": "https://jobs.example.com/123"}, "owner@example.com")
+
+    assert "Postgres shadow write" in caplog.text
+
+
+@pytest.mark.parametrize("shadow_result", [None, RuntimeError("postgres unavailable")])
+def test_dual_write_cv_update_reports_shadow_failure(shadow_result, caplog):
+    airtable = Mock()
+    postgres = Mock()
+    airtable.update_cv_info.return_value = make_record()
+    if isinstance(shadow_result, Exception):
+        postgres.update_cv_info.side_effect = shadow_result
+    else:
+        postgres.update_cv_info.return_value = shadow_result
+    manager = DualWriteDataManager(airtable, postgres)
+
+    with pytest.raises(ShadowWriteError):
+        manager.update_cv_info(
+            "https://jobs.example.com/123",
+            9,
+            "https://files.example.com/cv.pdf",
+            user_email="owner@example.com",
+        )
+
+    assert "Postgres shadow write" in caplog.text
