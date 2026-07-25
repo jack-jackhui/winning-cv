@@ -11,6 +11,7 @@ test('accepts only credential-free HTTP and HTTPS apply URLs', () => {
   assert.equal(getSafeExternalUrl('https://jobs.example.com/apply?id=42'), 'https://jobs.example.com/apply?id=42')
   assert.equal(getSafeExternalUrl('http://jobs.example.com/role'), 'http://jobs.example.com/role')
   assert.equal(getSafeExternalUrl('javascript:alert(1)'), null)
+  assert.equal(getSafeExternalUrl('data:application/pdf;base64,JVBERi0x'), null)
   assert.equal(getSafeExternalUrl('https://user:secret@jobs.example.com/apply'), null)
   assert.equal(getSafeExternalUrl('/relative/apply'), null)
   assert.equal(getSafeExternalUrl('not a URL'), null)

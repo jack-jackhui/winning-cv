@@ -123,7 +123,7 @@ jobs:
       - name: Run unit tests
         run: |
           # Run unit tests that don't require external services
-          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py tests/test_job_result_workspace.py tests/test_postgres_persistence.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py tests/test_job_result_workspace.py tests/test_postgres_persistence.py tests/test_job_processor.py -v --tb=short
         env:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"

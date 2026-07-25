@@ -15,6 +15,20 @@ jobs:
   # Run tests first - builds only proceed if tests pass
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: winningcv_test
+          POSTGRES_PASSWORD: winningcv_test
+          POSTGRES_DB: winningcv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U winningcv_test -d winningcv_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +53,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_api_integration.py tests/test_task_queue.py -v --tb=short
+          pytest tests/test_utils.py tests/test_settings.py tests/test_postgres_schema.py tests/test_postgres_persistence.py tests/test_job_result_workspace.py tests/test_job_processor.py tests/test_api_integration.py tests/test_task_queue.py -v --tb=short
         env:
           AIRTABLE_PAT: "fake_for_testing"
           AIRTABLE_BASE_ID: "fake_base"
@@ -50,6 +64,7 @@ jobs:
           AZURE_AI_ENDPOINT: "https://fake.openai.azure.com"
           AZURE_AI_API_KEY: "fake_key"
           AZURE_DEPLOYMENT: "fake_deployment"
+          TEST_POSTGRES_DSN: "postgresql://winningcv_test:winningcv_test@localhost:5432/winningcv_test"
 
       - name: Validate deployment checks
         run: |

@@ -93,10 +93,13 @@ export default function History() {
 
   const handleDownload = async (cvLink, jobTitle) => {
     try {
+      const safeCvLink = getSafeExternalUrl(cvLink)
+      if (!safeCvLink) throw new Error('Unsafe CV download URL')
+
       // Extract filename from URL or use job title
       const filename = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_CV.pdf`
       const link = document.createElement('a')
-      link.href = cvLink
+      link.href = safeCvLink
       link.download = filename
       link.target = '_blank'
       document.body.appendChild(link)
@@ -147,7 +150,7 @@ export default function History() {
   // Calculate stats
   const stats = {
     totalMatches: jobs.length,
-    withCV: jobs.filter((j) => j.cv_link).length,
+    withCV: jobs.filter((j) => getSafeExternalUrl(j.cv_link)).length,
     applied: jobs.filter((j) => ['applied', 'interviewing', 'offer'].includes(j.application_status)).length,
     avgScore: jobs.length
       ? Math.round(jobs.reduce((acc, j) => acc + (j.score || 0), 0) / jobs.length)
@@ -321,7 +324,7 @@ export default function History() {
 
                     {/* CV Status */}
                     <div className="mt-2">
-                      {job.cv_link ? (
+                      {getSafeExternalUrl(job.cv_link) ? (
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           CV Generated {formatGeneratedDate(job.cv_generated_at) && `on ${formatGeneratedDate(job.cv_generated_at)}`}
@@ -363,10 +366,10 @@ export default function History() {
                       <ClipboardCheck className="w-4 h-4" />
                       Workspace
                     </button>
-                    {job.cv_link ? (
+                    {getSafeExternalUrl(job.cv_link) ? (
                       <>
                         <a
-                          href={job.cv_link}
+                          href={getSafeExternalUrl(job.cv_link)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn-icon text-text-muted hover:text-accent-400"

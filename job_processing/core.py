@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
 from cv.cv_generator import CVGenerator
-from data_store.storage_factory import get_data_manager
+from data_store.storage_factory import ShadowWriteError, get_data_manager
 from job_sources.additional_job_search import AdditionalJobProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from job_sources.seek_job_scraper import SeekJobScraper
@@ -71,6 +71,9 @@ class JobProcessor:
                     count = future.result()
                     logger.info(f"✔️ {name} added {count} new jobs")
                     results[name] = count
+                except ShadowWriteError:
+                    logger.exception("❌ %s failed because a shadow write diverged", name)
+                    raise
                 except Exception as e:
                     logger.error(f"❌ {name} failed: {e}")
                     results[name] = 0
@@ -131,6 +134,9 @@ class JobProcessor:
                         logger.info(f"Added LinkedIn job: {normalized['Job Title']} [{job_url}]")
             logger.info(f"Added {new_jobs} new LinkedIn jobs")
             return new_jobs
+        except ShadowWriteError:
+            logger.exception("LinkedIn job processing stopped because a shadow write diverged")
+            raise
         except Exception as e:
             logger.error(f"LinkedIn job processing failed: {str(e)}")
             return 0
@@ -173,6 +179,9 @@ class JobProcessor:
                     logger.info(f"Added Seek job: {normalized['Job Title']} [{job_url}]")
             logger.info(f"Added {new_jobs} new Seek jobs")
             return new_jobs
+        except ShadowWriteError:
+            logger.exception("Seek job processing stopped because a shadow write diverged")
+            raise
         except Exception as e:
             logger.error(f"Seek job processing failed: {str(e)}")
             return 0
@@ -207,6 +216,9 @@ class JobProcessor:
                     logger.info(f"Added job from additional source: {job['Job Title']}")
             logger.info(f"Added {new_jobs_added} jobs from additional sources")
             return new_jobs_added
+        except ShadowWriteError:
+            logger.exception("Additional job processing stopped because a shadow write diverged")
+            raise
         except Exception as e:
             logger.error(f"Additional job processing failed: {str(e)}")
             return 0
