@@ -57,10 +57,14 @@ COPY requirements.in requirements.txt ./
 
 # Pin Chromium below 150 on arm64: Debian Chromium 150 currently exits with
 # SIGTRAP in the Azure production container before DrissionPage can attach.
-# Keep chromium/common/driver aligned.
+# Debian removes superseded security packages, so keep the signed snapshot that
+# contains this version available for reproducible amd64/arm64 builds.
 ARG CHROMIUM_DEB_VERSION=147.0.7727.137-1~deb12u1
+ARG CHROMIUM_SNAPSHOT=20260501T073820Z
 
-RUN apt-get update && \
+RUN echo "deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/${CHROMIUM_SNAPSHOT}/ bookworm-security main" \
+        > /etc/apt/sources.list.d/chromium-snapshot.list && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         build-essential gcc g++ python3-dev \
