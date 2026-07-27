@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { jobService } from '../services/api'
 import { getSafeExternalUrl } from '../utils/applicationWorkspace'
+import { APPLICATION_STATUSES } from '../utils/applicationPipeline'
 
 export default function History() {
   const navigate = useNavigate()
@@ -33,16 +34,6 @@ export default function History() {
   const [sortBy, setSortBy] = useState('date') // 'date' or 'score'
   const [expandedJob, setExpandedJob] = useState(null) // Track which job's details are expanded
   const [updatingStatus, setUpdatingStatus] = useState(null)
-
-  const applicationStatusOptions = [
-    { value: 'saved', label: 'Saved' },
-    { value: 'cv_generated', label: 'CV generated' },
-    { value: 'applied', label: 'Applied' },
-    { value: 'interviewing', label: 'Interviewing' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'offer', label: 'Offer' },
-    { value: 'archived', label: 'Archived' },
-  ]
 
   useEffect(() => {
     loadJobs()
@@ -349,7 +340,7 @@ export default function History() {
                         disabled={updatingStatus === job.id}
                         className="input py-1 px-2 text-xs w-auto min-w-[130px]"
                       >
-                        {applicationStatusOptions.map((option) => (
+                        {APPLICATION_STATUSES.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>

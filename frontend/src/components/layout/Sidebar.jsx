@@ -4,6 +4,7 @@ import {
   Search,
   FileText,
   Briefcase,
+  ClipboardList,
   User,
   LogOut,
   ChevronLeft,
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Generate CV', href: '/generate', icon: FileText },
   { name: 'Job Search', href: '/preferences', icon: Search },
   { name: 'Job Matches', href: '/history', icon: Briefcase },
+  { name: 'Applications', href: '/applications', icon: ClipboardList, matchNested: true },
   { name: 'Profile', href: '/profile', icon: User },
 ]
 
@@ -80,7 +82,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile = false, onClose
         {/* Navigation */}
         <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href
+            const isActive = location.pathname === item.href || (item.matchNested && location.pathname.startsWith(`${item.href}/`))
             return (
               <Link
                 key={item.name}

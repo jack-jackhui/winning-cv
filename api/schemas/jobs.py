@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
 
@@ -82,6 +82,28 @@ class ApplicationStatusUpdate(BaseModel):
     """Update for a job application's tracking state."""
     application_status: ApplicationStatus = Field(..., description="Current application tracking state")
     application_notes: Optional[str] = Field(None, max_length=2000, description="Private notes about the application")
+    next_action_at: Optional[date] = Field(
+        None,
+        description="Calendar date for the user's next action; explicit null clears it",
+    )
+
+
+class ApplicationSummary(BaseModel):
+    """Lightweight application data used by the overview pipeline."""
+    id: str
+    job_title: str
+    company: str
+    location: Optional[str] = None
+    application_status: ApplicationStatus = ApplicationStatus.SAVED
+    application_notes: Optional[str] = None
+    applied_at: Optional[datetime] = None
+    next_action_at: Optional[date] = None
+
+
+class ApplicationsResponse(BaseModel):
+    """Complete application overview for the authenticated user."""
+    items: List[ApplicationSummary]
+    total: int
 
 
 class JobResult(BaseModel):
@@ -102,6 +124,7 @@ class JobResult(BaseModel):
     application_status: ApplicationStatus = ApplicationStatus.SAVED
     application_notes: Optional[str] = None
     applied_at: Optional[datetime] = None
+    next_action_at: Optional[date] = None
 
 
 class JobResultsResponse(BaseModel):

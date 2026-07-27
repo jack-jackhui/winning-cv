@@ -361,14 +361,23 @@ export const jobService = {
     return response.items || []
   },
 
-  // Update application tracking status
-  async updateApplicationStatus(jobId, applicationStatus, notes = null) {
+  // Get jobs included in the application pipeline.
+  async getApplications() {
+    const response = await fetchAPI('/api/v1/jobs/applications')
+    return Array.isArray(response) ? response : response?.items || []
+  },
+
+  // Update application tracking status and optional next action date.
+  async updateApplicationStatus(jobId, applicationStatus, notes = null, nextActionAt = undefined) {
+    const payload = {
+      application_status: applicationStatus,
+      application_notes: notes,
+    }
+    if (nextActionAt !== undefined) payload.next_action_at = nextActionAt
+
     return fetchAPI(`/api/v1/jobs/results/${encodeURIComponent(jobId)}/application`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        application_status: applicationStatus,
-        application_notes: notes,
-      }),
+      body: JSON.stringify(payload),
     })
   },
 

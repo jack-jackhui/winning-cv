@@ -1,17 +1,18 @@
 """Focused tests for the application workspace job-result routes."""
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import Mock
 
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from requests import HTTPError, Response
 
-import pytest
-from fastapi import HTTPException
-
+from api.middleware.auth_middleware import get_current_user
 from api.routes import jobs
 from api.schemas.auth import UserInfo
 from api.schemas.jobs import ApplicationStatusUpdate
-from data_store.airtable_manager import AirtableManager
+from data_store.airtable_manager import APPLICATION_SUMMARY_FIELDS, AirtableManager
 from data_store.postgres_manager import PostgresManager
 from data_store.storage_factory import DualWriteDataManager, ShadowWriteError
 
@@ -24,6 +25,14 @@ def make_user(email: str = "owner@example.com") -> UserInfo:
         provider="test",
         is_verified=True,
     )
+
+
+def make_test_client(user: UserInfo | None = None) -> TestClient:
+    app = FastAPI()
+    app.include_router(jobs.router, prefix="/api/v1")
+    if user is not None:
+        app.dependency_overrides[get_current_user] = lambda: user
+    return TestClient(app)
 
 
 def make_record(**field_overrides):
@@ -40,6 +49,52 @@ def make_record(**field_overrides):
     }
     fields.update(field_overrides)
     return {"id": "job-123", "fields": fields}
+
+
+def test_applications_route_requires_authentication():
+    response = make_test_client().get("/api/v1/jobs/applications")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_applications_route_is_user_scoped_and_not_truncated(monkeypatch):
+    next_action = date(2026, 7, 28)
+    records = []
+    for index in range(101):
+        record = make_record(**{"Next Action At": next_action.isoformat()})
+        record["id"] = f"job-{index:03d}"
+        records.append(record)
+
+    manager = Mock()
+    manager.get_applications_by_user.return_value = records
+
+    def fail_history_dependency():
+        pytest.fail("applications overview must not resolve CV history storage")
+
+    monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
+    monkeypatch.setattr(jobs, "get_history_manager", fail_history_dependency)
+
+    response = make_test_client(make_user("o'connor@example.com")).get(
+        "/api/v1/jobs/applications"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 101
+    assert len(response.json()["items"]) == 101
+    first_item = response.json()["items"][0]
+    assert first_item["next_action_at"] == "2026-07-28"
+    assert set(first_item) == {
+        "id",
+        "job_title",
+        "company",
+        "location",
+        "application_status",
+        "application_notes",
+        "applied_at",
+        "next_action_at",
+    }
+    manager.get_applications_by_user.assert_called_once_with("o'connor@example.com")
 
 
 @pytest.mark.asyncio
@@ -85,6 +140,7 @@ async def test_update_application_status_returns_saved_job(monkeypatch):
     def update_application_status(**kwargs):
         record["fields"]["Application Status"] = kwargs["application_status"]
         record["fields"]["Application Notes"] = kwargs["application_notes"]
+        record["fields"]["Next Action At"] = kwargs["next_action_at"]
         return {"id": kwargs["job_id"]}
 
     manager.update_application_status.side_effect = update_application_status
@@ -96,17 +152,77 @@ async def test_update_application_status_returns_saved_job(monkeypatch):
 
     result = await jobs.update_application_status_result(
         "job-123",
-        ApplicationStatusUpdate(application_status="applied", application_notes="Submitted today"),
+        ApplicationStatusUpdate(
+            application_status="applied",
+            application_notes="Submitted today",
+            next_action_at="2026-07-30",
+        ),
         make_user(),
     )
 
     assert result.application_status.value == "applied"
     assert result.application_notes == "Submitted today"
+    assert result.next_action_at == date(2026, 7, 30)
     manager.update_application_status.assert_called_once_with(
         job_id="job-123",
         user_email="owner@example.com",
         application_status="applied",
         application_notes="Submitted today",
+        next_action_at=date(2026, 7, 30),
+        update_next_action=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_application_status_preserves_omitted_next_action(monkeypatch):
+    manager = Mock()
+    manager.update_application_status.return_value = {"id": "job-123"}
+    manager.get_job_result.return_value = make_record()
+    history_manager = Mock()
+    history_manager.get_history_by_user.return_value = []
+    monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
+    monkeypatch.setattr(jobs, "get_history_manager", lambda: history_manager)
+
+    await jobs.update_application_status_result(
+        "job-123",
+        ApplicationStatusUpdate(application_status="interviewing"),
+        make_user(),
+    )
+
+    assert manager.update_application_status.call_args.kwargs["update_next_action"] is False
+
+
+def test_update_application_route_rejects_timestamp_next_action():
+    response = make_test_client(make_user()).patch(
+        "/api/v1/jobs/results/job-123/application",
+        json={
+            "application_status": "interviewing",
+            "next_action_at": "2026-07-30T23:30:00-05:00",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_application_route_hides_foreign_job(monkeypatch):
+    manager = Mock()
+    manager.update_application_status.return_value = None
+    monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
+
+    response = make_test_client(make_user()).patch(
+        "/api/v1/jobs/results/foreign-job/application",
+        json={"application_status": "applied", "next_action_at": None},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found"
+    manager.update_application_status.assert_called_once_with(
+        job_id="foreign-job",
+        user_email="owner@example.com",
+        application_status="applied",
+        application_notes=None,
+        next_action_at=None,
+        update_next_action=True,
     )
 
 
@@ -147,6 +263,7 @@ def test_postgres_job_lookup_parameterizes_apostrophe_email():
         "application_status": "saved",
         "application_notes": None,
         "applied_at": None,
+        "next_action_at": date(2026, 7, 30),
         "created_at": None,
         "updated_at": None,
     }
@@ -162,6 +279,7 @@ def test_postgres_job_lookup_parameterizes_apostrophe_email():
     result = manager.get_job_result(row["id"], row["user_email"])
 
     assert result["id"] == row["id"]
+    assert result["fields"]["Next Action At"] == row["next_action_at"]
     query, params = cursor.execute.call_args.args
     assert "WHERE id::text = %s AND user_email = %s" in query
     assert params == (row["id"], "o'connor@example.com")
@@ -181,6 +299,56 @@ def test_postgres_list_jobs_parameterizes_apostrophe_email():
     query, params = cursor.execute.call_args.args
     assert "WHERE user_email = %s" in query
     assert params == ("o'connor@example.com",)
+
+def test_postgres_application_list_is_projected_owner_scoped_and_ordered():
+    cursor = Mock()
+    cursor.fetchall.return_value = [
+        {
+            "id": 42,
+            "job_title": "Platform Engineer",
+            "company": "Example Co",
+            "location": "Melbourne",
+            "application_status": "interviewing",
+            "application_notes": "Phone screen",
+            "applied_at": datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc),
+            "next_action_at": date(2026, 7, 30),
+            "created_at": datetime(2026, 7, 19, 9, 0, tzinfo=timezone.utc),
+        }
+    ]
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    result = manager.get_applications_by_user("o'connor@example.com")
+
+    assert result == [
+        {
+            "id": "42",
+            "fields": {
+                "Job Title": "Platform Engineer",
+                "Company": "Example Co",
+                "Location": "Melbourne",
+                "Application Status": "interviewing",
+                "Application Notes": "Phone screen",
+                "Applied At": datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc),
+                "Next Action At": date(2026, 7, 30),
+            },
+        }
+    ]
+    query, params = cursor.execute.call_args.args
+    projection = query.split("FROM jobs", 1)[0]
+    assert "job_description" not in projection
+    assert "job_link" not in projection
+    assert "matching_score" not in projection
+    assert "cv_link" not in projection
+    assert "WHERE user_email = %s" in query
+    assert "ORDER BY next_action_at ASC NULLS LAST, created_at DESC, id ASC" in query
+    assert "LIMIT" not in query.upper()
+    assert params == ("o'connor@example.com",)
+
 
 def test_airtable_job_lookup_checks_exact_owner_without_formula():
     manager = AirtableManager.__new__(AirtableManager)
@@ -235,9 +403,43 @@ def test_postgres_application_update_is_owner_scoped_and_persists():
         "applied",
         "Submitted today",
         "applied",
+        False,
+        None,
         "d5b0fbe6-1e2b-4e65-90b0-2bb092f66d14",
         "owner@example.com",
     )
+
+
+@pytest.mark.parametrize(
+    ("next_action_at", "expected"),
+    [
+        (date(2026, 7, 30), date(2026, 7, 30)),
+        (None, None),
+    ],
+)
+def test_postgres_application_update_sets_or_clears_next_action(next_action_at, expected):
+    cursor = Mock()
+    cursor.fetchone.return_value = {"id": 42}
+    manager = PostgresManager("postgresql://unused")
+
+    @contextmanager
+    def fake_cursor():
+        yield cursor
+
+    manager.get_cursor = fake_cursor
+    manager.update_application_status(
+        "42",
+        "owner@example.com",
+        "interviewing",
+        None,
+        next_action_at,
+        True,
+    )
+
+    query, params = cursor.execute.call_args.args
+    assert "next_action_at = CASE WHEN %s THEN %s ELSE next_action_at END" in query
+    assert params[3:5] == (True, expected)
+    assert params[-2:] == ("42", "owner@example.com")
 
 
 def test_postgres_application_update_denies_cross_user():
@@ -303,6 +505,63 @@ def test_airtable_application_update_persists_for_exact_owner():
     assert datetime.fromisoformat(fields["Applied At"]).tzinfo is not None
 
 
+@pytest.mark.parametrize(
+    ("next_action_at", "expected"),
+    [
+        (date(2026, 7, 30), "2026-07-30"),
+        (None, None),
+    ],
+)
+def test_airtable_application_update_sets_or_clears_next_action(next_action_at, expected):
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    manager.table.get.return_value = make_record()
+    manager.table.update.return_value = make_record(**{"Next Action At": expected})
+
+    manager.update_application_status(
+        "job-123",
+        "owner@example.com",
+        "interviewing",
+        None,
+        next_action_at,
+        True,
+    )
+
+    _, fields = manager.table.update.call_args.args
+    assert fields["Next Action At"] == expected
+
+
+def test_airtable_application_list_projects_owner_scoped_fields_and_orders_dates():
+    manager = AirtableManager.__new__(AirtableManager)
+    manager.table = Mock()
+    manager.logger = Mock()
+    overdue = make_record(**{"Next Action At": "2026-07-26"})
+    overdue["id"] = "overdue"
+    upcoming = make_record(**{"Next Action At": "2026-07-30"})
+    upcoming["id"] = "upcoming"
+    unscheduled = make_record()
+    unscheduled["id"] = "unscheduled"
+    manager.table.all.return_value = [unscheduled, upcoming, overdue]
+
+    result = manager.get_applications_by_user("o'connor@example.com")
+
+    assert [record["id"] for record in result] == ["overdue", "upcoming", "unscheduled"]
+    kwargs = manager.table.all.call_args.kwargs
+    assert kwargs["fields"] == APPLICATION_SUMMARY_FIELDS
+    assert kwargs["fields"] == [
+        "Job Title",
+        "Company",
+        "Location",
+        "Application Status",
+        "Application Notes",
+        "Applied At",
+        "Next Action At",
+    ]
+    assert "User Email" in kwargs["formula"]
+    assert "o\\'connor@example.com" in kwargs["formula"]
+
+
 def test_airtable_application_update_denies_cross_user():
     manager = AirtableManager.__new__(AirtableManager)
     manager.table = Mock()
@@ -336,6 +595,19 @@ def test_airtable_lookup_propagates_backend_failure():
         manager.get_job_result("job-123", "owner@example.com")
 
 
+def test_dual_write_application_list_reads_from_airtable_primary():
+    airtable = Mock()
+    postgres = Mock()
+    airtable.get_applications_by_user.return_value = [make_record()]
+    manager = DualWriteDataManager(airtable, postgres)
+
+    result = manager.get_applications_by_user("owner@example.com")
+
+    assert len(result) == 1
+    airtable.get_applications_by_user.assert_called_once_with("owner@example.com")
+    postgres.get_applications_by_user.assert_not_called()
+
+
 def test_dual_write_application_update_uses_airtable_primary_and_postgres_shadow():
     airtable = Mock()
     postgres = Mock()
@@ -348,13 +620,15 @@ def test_dual_write_application_update_uses_airtable_primary_and_postgres_shadow
 
     assert result["id"] == "job-123"
     airtable.update_application_status.assert_called_once_with(
-        "job-123", "owner@example.com", "interviewing", "Phone screen"
+        "job-123", "owner@example.com", "interviewing", "Phone screen", None, False
     )
     postgres.update_application_status.assert_called_once_with(
         "job-123",
         "owner@example.com",
         "interviewing",
         "Phone screen",
+        None,
+        False,
         job_link="https://jobs.example.com/123",
     )
 

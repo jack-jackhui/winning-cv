@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     application_status VARCHAR(40) DEFAULT 'saved',
     application_notes TEXT,
     applied_at TIMESTAMP WITH TIME ZONE,
+    next_action_at DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -35,6 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_jobs_job_link ON jobs(job_link);
 CREATE INDEX IF NOT EXISTS idx_jobs_user_email ON jobs(user_email);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(application_status);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_next_action
+    ON jobs(user_email, next_action_at, created_at DESC, id);
 
 -- =============================================================================
 -- cv_history: CV generation history

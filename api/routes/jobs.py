@@ -19,6 +19,8 @@ from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.jobs import (
     ApplicationStatusUpdate,
+    ApplicationSummary,
+    ApplicationsResponse,
     JobConfigResponse,
     JobResult,
     JobResultsResponse,
@@ -724,7 +726,38 @@ def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> Jo
         application_status=fields.get("Application Status") or "saved",
         application_notes=fields.get("Application Notes"),
         applied_at=fields.get("Applied At"),
+        next_action_at=fields.get("Next Action At"),
     )
+
+
+def _application_summary_from_record(record: Dict[str, Any]) -> ApplicationSummary:
+    """Map a projected storage record to the applications overview contract."""
+    fields = record.get("fields", {})
+    return ApplicationSummary(
+        id=str(record.get("id", "")),
+        job_title=fields.get("Job Title") or "Untitled",
+        company=fields.get("Company") or "Unknown",
+        location=fields.get("Location"),
+        application_status=fields.get("Application Status") or "saved",
+        application_notes=fields.get("Application Notes"),
+        applied_at=fields.get("Applied At"),
+        next_action_at=fields.get("Next Action At"),
+    )
+
+
+@router.get("/applications", response_model=ApplicationsResponse)
+async def get_applications(
+    user: UserInfo = Depends(get_current_user),
+) -> ApplicationsResponse:
+    """List every application owned by the authenticated user in pipeline order."""
+    try:
+        manager = get_data_manager()
+        records = manager.get_applications_by_user(str(user.email))
+        items = [_application_summary_from_record(record) for record in records]
+        return ApplicationsResponse(items=items, total=len(items))
+    except Exception as e:
+        logger.error(f"Failed to get applications: {e}")
+        raise HTTPException(status_code=503, detail="Job storage unavailable")
 
 
 @router.get("/results", response_model=JobResultsResponse)
@@ -802,6 +835,8 @@ async def update_application_status_result(
             user_email=user.email,
             application_status=update.application_status.value,
             application_notes=update.application_notes,
+            next_action_at=update.next_action_at,
+            update_next_action="next_action_at" in update.model_fields_set,
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Job not found")

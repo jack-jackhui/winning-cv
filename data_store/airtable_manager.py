@@ -1,12 +1,22 @@
 import logging
-from datetime import datetime, timezone
-
-from requests import HTTPError
+from datetime import date, datetime, timezone
 
 from pyairtable.formulas import AND, EQ, NE, Field
+from requests import HTTPError
 
 from config.settings import Config
 from utils.airtable_client import create_airtable_api
+
+
+APPLICATION_SUMMARY_FIELDS = [
+    "Job Title",
+    "Company",
+    "Location",
+    "Application Status",
+    "Application Notes",
+    "Applied At",
+    "Next Action At",
+]
 
 
 class AirtableManager:
@@ -260,6 +270,8 @@ class AirtableManager:
         user_email: str,
         application_status: str,
         application_notes: str | None = None,
+        next_action_at: date | None = None,
+        update_next_action: bool = False,
     ) -> dict | None:
         """Update application tracking only when the record is exactly user-owned."""
         record = self.get_job_result(job_id, user_email)
@@ -270,9 +282,32 @@ class AirtableManager:
             "Application Status": application_status,
             "Application Notes": application_notes,
         }
+        if update_next_action:
+            fields["Next Action At"] = (
+                next_action_at.isoformat() if next_action_at is not None else None
+            )
         if application_status == "applied" and not record.get("fields", {}).get("Applied At"):
             fields["Applied At"] = datetime.now(timezone.utc).isoformat()
         return self.table.update(record["id"], fields)
+
+    def get_applications_by_user(self, user_email: str) -> list:
+        """Return projected owned applications in deterministic next-action order."""
+        formula = str(EQ(Field("User Email"), user_email))
+        records = self.table.all(
+            formula=formula,
+            fields=APPLICATION_SUMMARY_FIELDS,
+        )
+
+        def sort_key(record):
+            value = record.get("fields", {}).get("Next Action At")
+            if value:
+                try:
+                    return (0, date.fromisoformat(str(value)), record.get("id", ""))
+                except (TypeError, ValueError):
+                    pass
+            return (1, date.max, record.get("id", ""))
+
+        return sorted(records, key=sort_key)
 
     def get_jobs_by_user(self, user_email: str) -> list:
         """Return jobs owned by a user using Airtable's formula builder."""

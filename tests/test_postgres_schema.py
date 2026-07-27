@@ -123,6 +123,7 @@ class TestJobsSchema:
         'job_link', 'company', 'location', 'matching_score', 'cv_link',
         'match_reasons', 'match_suggestions', 'ats_score', 'hr_score',
         'llm_score', 'hr_recommendation', 'matched_keywords', 'missing_keywords',
+        'application_status', 'application_notes', 'applied_at', 'next_action_at',
         'created_at', 'updated_at',
     }
 
@@ -137,6 +138,15 @@ class TestJobsSchema:
         """Verify duplicate URLs are prevented only within a user."""
         assert 'job_link VARCHAR(2000) UNIQUE' not in schema_content
         assert 'uq_jobs_user_email_job_link ON jobs(user_email, job_link)' in schema_content
+
+    def test_next_action_is_calendar_date(self, schema_content):
+        """Verify next actions cannot acquire timezone-sensitive timestamps."""
+        assert "next_action_at DATE" in schema_content
+        assert "next_action_at TIMESTAMP" not in schema_content
+        assert (
+            "ON jobs(user_email, next_action_at, created_at DESC, id)"
+            in schema_content
+        )
 
 
 class TestCVHistorySchema:
@@ -190,6 +200,30 @@ class TestSchemaIntegrity:
         assert migration_path.exists(), "Migration file should exist"
         ownership_migration = Path(__file__).parent.parent / "init-db" / "06-jobs-user-link-uniqueness.sql"
         assert ownership_migration.exists(), "Per-user job uniqueness migration should exist"
+        next_action_migration = Path(__file__).parent.parent / "init-db" / "07-jobs-next-action.sql"
+        assert next_action_migration.exists(), "Next-action migration should exist"
+
+    def test_next_action_migration_is_idempotent_and_indexed(self):
+        migration_path = Path(__file__).parent.parent / "init-db" / "07-jobs-next-action.sql"
+        migration = migration_path.read_text()
+
+        assert "ADD COLUMN IF NOT EXISTS next_action_at DATE" in migration
+        assert "ALTER COLUMN next_action_at TYPE DATE" in migration
+        assert "AT TIME ZONE ''UTC''" in migration
+        assert "CREATE INDEX IF NOT EXISTS idx_jobs_user_next_action" in migration
+        assert "ON jobs(user_email, next_action_at, created_at DESC, id)" in migration
+        assert "indexdef NOT LIKE" in migration
+
+    def test_next_action_migration_is_wired_into_production_artifacts(self):
+        project_root = Path(__file__).parent.parent
+        migration_script = (project_root / "scripts" / "prod_migrate_db.sh").read_text()
+        build_workflow = (
+            project_root / ".github" / "workflows" / "build-push.yml"
+        ).read_text()
+
+        migration_name = "init-db/07-jobs-next-action.sql"
+        assert f"< {migration_name}" in migration_script
+        assert migration_name in build_workflow
 
     def test_analytics_function_exists(self, schema_content):
         """Verify get_cv_analytics function is defined."""
