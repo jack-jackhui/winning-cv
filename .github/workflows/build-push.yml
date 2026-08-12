@@ -180,22 +180,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync deployment files to Azure VM
+      - name: Sync deployment files to Tailscale server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.AZURE_VM_HOST }}
-          username: ${{ secrets.AZURE_VM_USER }}
-          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          host: ${{ secrets.TAILSCALE_DNS_NAME }}
+          username: ${{ secrets.TAILSCALE_SSH_USER || 'root' }}
+          key: ${{ secrets.TAILSCALE_AUTH_KEY }}
           source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql,init-db/06-jobs-user-link-uniqueness.sql"
           target: "~/winning-cv"
           overwrite: true
 
-      - name: Deploy to Azure VM
+      - name: Deploy to Tailscale server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.AZURE_VM_HOST }}
-          username: ${{ secrets.AZURE_VM_USER }}
-          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          host: ${{ secrets.TAILSCALE_DNS_NAME }}
+          username: ${{ secrets.TAILSCALE_SSH_USER || 'root' }}
+          key: ${{ secrets.TAILSCALE_AUTH_KEY }}
           command_timeout: 30m
           script: |
             cd ~/winning-cv
@@ -206,7 +206,7 @@ jobs:
             for i in $(seq 1 60); do
               frontend_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-frontend 2>/dev/null || echo missing)"
               api_health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' winning-cv-api 2>/dev/null || echo missing)"
-              if curl -fsS http://localhost:13001/health >/dev/null                 && curl -fsS http://localhost:13001/api/health >/dev/null                 && [ "$frontend_health" = "healthy" ]                 && [ "$api_health" = "healthy" ]; then
+              if curl -fsS http://localhost:13001/health >/dev/null && curl -fsS http://localhost:13001/api/health >/dev/null && [ "$frontend_health" = "healthy" ] && [ "$api_health" = "healthy" ]; then
                 echo "Deployment health checks passed after ${i}s"
                 break
               fi
@@ -235,7 +235,7 @@ jobs:
           format: html
           message: |
             ✅ <b>WinningCV Deployment Successful</b>
-            
+
             📦 Commit: <code>${{ github.sha }}</code>
             👤 Author: ${{ github.actor }}
             🔗 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a>
@@ -253,7 +253,7 @@ jobs:
           format: html
           message: |
             ❌ <b>WinningCV Deployment Failed</b>
-            
+
             📦 Commit: <code>${{ github.sha }}</code>
             👤 Author: ${{ github.actor }}
             🔗 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a>

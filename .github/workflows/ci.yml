@@ -128,7 +128,6 @@ jobs:
           # Minimal env vars for Config to load
           AIRTABLE_PAT: "fake_for_testing"
           AIRTABLE_BASE_ID: "fake_base"
-          AIRTABLE_TABLE_ID: "fake_table"
           AIRTABLE_TABLE_ID_HISTORY: "fake_history"
           AIRTABLE_TABLE_ID_USER_CONFIGS: "fake_configs"
           AIRTABLE_TABLE_ID_CV_VERSIONS: "fake_versions"
