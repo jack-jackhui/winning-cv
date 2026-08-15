@@ -24,16 +24,7 @@ import {
   getSafeExternalUrl,
   getWorkflowProgress,
 } from '../utils/applicationWorkspace'
-
-const STATUS_OPTIONS = [
-  { value: 'saved', label: 'Saved' },
-  { value: 'cv_generated', label: 'CV generated' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'interviewing', label: 'Interviewing' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'offer', label: 'Offer' },
-  { value: 'archived', label: 'Archived' },
-]
+import { APPLICATION_STATUSES, toLocalDateKey } from '../utils/applicationPipeline'
 
 function ScoreCard({ icon: Icon, label, value, colour }) {
   return (
@@ -72,6 +63,7 @@ export default function ApplicationWorkspace() {
   const [loadError, setLoadError] = useState(null)
   const [status, setStatus] = useState('saved')
   const [notes, setNotes] = useState('')
+  const [nextActionAt, setNextActionAt] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState(null)
   const [trackingUnavailable, setTrackingUnavailable] = useState(false)
@@ -90,6 +82,7 @@ export default function ApplicationWorkspace() {
         if (selectedJob) {
           setStatus(selectedJob.application_status || 'saved')
           setNotes(selectedJob.application_notes || '')
+          setNextActionAt(toLocalDateKey(selectedJob.next_action_at))
           trackJobDetailsOpen(String(selectedJob.id), selectedJob.job_title)
         }
       } catch (error) {
@@ -125,10 +118,11 @@ export default function ApplicationWorkspace() {
     setSaveMessage(null)
     try {
       const previousStatus = job.application_status || 'saved'
-      const updatedJob = await jobService.updateApplicationStatus(job.id, status, notes)
+      const updatedJob = await jobService.updateApplicationStatus(job.id, status, notes, nextActionAt || null)
       setJob(updatedJob)
       setStatus(updatedJob.application_status || status)
       setNotes(updatedJob.application_notes || '')
+      setNextActionAt(updatedJob.next_action_at === undefined ? nextActionAt : toLocalDateKey(updatedJob.next_action_at))
       if (previousStatus !== status) trackApplicationStatusUpdate(String(job.id), status)
       setSaveMessage({ type: 'success', text: 'Application tracking saved.' })
     } catch (error) {
@@ -156,8 +150,8 @@ export default function ApplicationWorkspace() {
   if (loadError) {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
-        <button type="button" onClick={() => navigate('/history')} className="btn-ghost">
-          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to job matches
+        <button type="button" onClick={() => navigate('/applications')} className="btn-ghost">
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to applications
         </button>
         <div className="card border-red-500/30" role="alert">
           <h1 className="text-xl font-semibold text-text-primary">Workspace unavailable</h1>
@@ -170,8 +164,8 @@ export default function ApplicationWorkspace() {
   if (!job) {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
-        <button type="button" onClick={() => navigate('/history')} className="btn-ghost">
-          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to job matches
+        <button type="button" onClick={() => navigate('/applications')} className="btn-ghost">
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to applications
         </button>
         <div className="card text-center py-12">
           <Briefcase className="w-12 h-12 text-text-muted mx-auto" aria-hidden="true" />
@@ -188,8 +182,8 @@ export default function ApplicationWorkspace() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <button type="button" onClick={() => navigate('/history')} className="btn-ghost -ml-4">
-        <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to job matches
+      <button type="button" onClick={() => navigate('/applications')} className="btn-ghost -ml-4">
+        <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to applications
       </button>
 
       <header className="card">
@@ -291,10 +285,22 @@ export default function ApplicationWorkspace() {
                   className="input"
                   disabled={saving || trackingUnavailable}
                 >
-                  {STATUS_OPTIONS.map((option) => (
+                  {APPLICATION_STATUSES.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label htmlFor="next-action-at" className="input-label">Next action date</label>
+                <input
+                  id="next-action-at"
+                  type="date"
+                  value={nextActionAt}
+                  onChange={(event) => setNextActionAt(event.target.value)}
+                  className="input"
+                  disabled={saving || trackingUnavailable}
+                />
+                <p className="mt-1 text-xs text-text-muted">Dates use your local calendar.</p>
               </div>
               <div>
                 <div className="flex items-center justify-between gap-3">

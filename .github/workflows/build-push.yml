@@ -186,7 +186,7 @@ jobs:
           host: ${{ secrets.TAILSCALE_DNS_NAME }}
           username: ${{ secrets.TAILSCALE_SSH_USER || 'root' }}
           key: ${{ secrets.TAILSCALE_AUTH_KEY }}
-          source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql,init-db/06-jobs-user-link-uniqueness.sql"
+          source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql,init-db/06-jobs-user-link-uniqueness.sql,init-db/07-jobs-next-action.sql"
           target: "~/winning-cv"
           overwrite: true
 

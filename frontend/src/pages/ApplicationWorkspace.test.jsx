@@ -32,6 +32,7 @@ const baseJob = {
   cv_link: null,
   application_status: 'saved',
   application_notes: null,
+  next_action_at: null,
 }
 
 function renderWorkspace() {
@@ -86,21 +87,26 @@ describe('ApplicationWorkspace', () => {
       ...baseJob,
       application_status: 'interviewing',
       application_notes: 'Phone screen booked',
+      next_action_at: '2026-08-01',
     })
     jobService.updateApplicationStatus.mockResolvedValue({
       ...baseJob,
       application_status: 'applied',
       application_notes: 'Submitted today',
+      next_action_at: '2026-08-02',
     })
 
     renderWorkspace()
 
     const status = await screen.findByLabelText('Application status')
     const notes = screen.getByLabelText('Notes')
+    const nextAction = screen.getByLabelText('Next action date')
     expect(status.value).toBe('interviewing')
     expect(notes.value).toBe('Phone screen booked')
+    expect(nextAction.value).toBe('2026-08-01')
 
     fireEvent.change(status, { target: { value: 'applied' } })
+    fireEvent.change(nextAction, { target: { value: '2026-08-03' } })
     await user.clear(notes)
     await user.type(notes, 'Sent via company portal')
     await user.click(screen.getByRole('button', { name: 'Save tracking' }))
@@ -110,11 +116,13 @@ describe('ApplicationWorkspace', () => {
         baseJob.id,
         'applied',
         'Sent via company portal',
+        '2026-08-03',
       )
     })
     expect(await screen.findByText('Application tracking saved.')).toBeTruthy()
     expect(status.value).toBe('applied')
     expect(notes.value).toBe('Submitted today')
+    expect(nextAction.value).toBe('2026-08-02')
   })
 
   it('disables tracking controls after a 501 response', async () => {
@@ -130,6 +138,7 @@ describe('ApplicationWorkspace', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Application tracking is unavailable')
     expect(screen.getByText('Application tracking is unavailable for the configured storage backend.')).toBeTruthy()
     expect(screen.getByLabelText('Application status').disabled).toBe(true)
+    expect(screen.getByLabelText('Next action date').disabled).toBe(true)
     expect(screen.getByLabelText('Notes').disabled).toBe(true)
     expect(saveButton.disabled).toBe(true)
   })

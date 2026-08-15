@@ -19,6 +19,7 @@ Usage:
 
 import logging
 import os
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,10 @@ class DualWriteDataManager:
 
     def get_jobs_by_user(self, user_email: str) -> List[Dict]:
         return self.airtable.get_jobs_by_user(user_email)
-    
+
+    def get_applications_by_user(self, user_email: str) -> List[Dict]:
+        return self.airtable.get_applications_by_user(user_email)
+
     def get_unprocessed_jobs(self, user_email: Optional[str] = None) -> List[Dict]:
         return self.airtable.get_unprocessed_jobs(user_email=user_email)
     
@@ -136,9 +140,16 @@ class DualWriteDataManager:
         user_email: str,
         application_status: str,
         application_notes: Optional[str] = None,
+        next_action_at: Optional[date] = None,
+        update_next_action: bool = False,
     ) -> Optional[Dict]:
         result = self.airtable.update_application_status(
-            job_id, user_email, application_status, application_notes
+            job_id,
+            user_email,
+            application_status,
+            application_notes,
+            next_action_at,
+            update_next_action,
         )
         if result is None:
             return None
@@ -149,6 +160,8 @@ class DualWriteDataManager:
                 user_email,
                 application_status,
                 application_notes,
+                next_action_at,
+                update_next_action,
                 job_link=result.get("fields", {}).get("Job Link"),
             )
         except Exception as e:

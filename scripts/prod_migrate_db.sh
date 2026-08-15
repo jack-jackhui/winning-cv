@@ -19,3 +19,4 @@ SQL
 
 # Apply file-backed migrations that alter constraints/indexes.
 docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 < init-db/06-jobs-user-link-uniqueness.sql
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 < init-db/07-jobs-next-action.sql

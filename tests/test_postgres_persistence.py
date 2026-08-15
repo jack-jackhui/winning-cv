@@ -1,6 +1,7 @@
 """Real PostgreSQL persistence tests for user-owned application records."""
 import os
 import uuid
+from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
@@ -47,6 +48,7 @@ def postgres_manager():
                     application_status VARCHAR(40) DEFAULT 'saved',
                     application_notes TEXT,
                     applied_at TIMESTAMP WITH TIME ZONE,
+                    next_action_at DATE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
@@ -101,17 +103,31 @@ def test_cross_user_persistence_ownership_and_apostrophe_listing(postgres_manage
     assert postgres_manager.get_job_result(second["id"], other_owner)["fields"]["Matching Score"] == 9
 
     updated = postgres_manager.update_application_status(
-        first["id"], apostrophe_owner, "interviewing", "Phone screen"
+        first["id"],
+        apostrophe_owner,
+        "interviewing",
+        "Phone screen",
+        date(2026, 7, 30),
+        True,
     )
     assert updated == {"id": first["id"]}
     persisted = postgres_manager.get_job_result(first["id"], apostrophe_owner)
     assert persisted["fields"]["Application Status"] == "interviewing"
     assert persisted["fields"]["Application Notes"] == "Phone screen"
+    assert persisted["fields"]["Next Action At"] == date(2026, 7, 30)
 
 
 def test_dual_write_shadow_miss_is_observable_with_real_postgres(postgres_manager, caplog):
     class AirtablePrimary:
-        def update_application_status(self, job_id, user_email, status, notes):
+        def update_application_status(
+            self,
+            job_id,
+            user_email,
+            status,
+            notes,
+            next_action_at,
+            update_next_action,
+        ):
             return {
                 "id": job_id,
                 "fields": {
@@ -129,6 +145,64 @@ def test_dual_write_shadow_miss_is_observable_with_real_postgres(postgres_manage
         )
 
     assert "Postgres shadow write missed" in caplog.text
+
+
+def test_next_action_migration_is_idempotent_and_replaces_old_index():
+    base_dsn = os.getenv("TEST_POSTGRES_DSN")
+    if not base_dsn:
+        pytest.skip("TEST_POSTGRES_DSN is required for PostgreSQL integration tests")
+
+    schema = f"test_next_action_migration_{uuid.uuid4().hex}"
+    migration_sql = (
+        Path(__file__).parent.parent / "init-db" / "07-jobs-next-action.sql"
+    ).read_text()
+    conn = psycopg2.connect(base_dsn)
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(f'CREATE SCHEMA "{schema}"')
+            cursor.execute(f'SET search_path TO "{schema}"')
+            cursor.execute("""
+                CREATE TABLE jobs (
+                    id SERIAL PRIMARY KEY,
+                    user_email VARCHAR(255) NOT NULL,
+                    next_action_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX idx_jobs_user_next_action "
+                "ON jobs(user_email, next_action_at, id)"
+            )
+            cursor.execute(
+                "INSERT INTO jobs (user_email, next_action_at) VALUES (%s, %s)",
+                ("owner@example.com", "2026-07-30T23:30:00-05:00"),
+            )
+
+            cursor.execute(migration_sql)
+            cursor.execute(migration_sql)
+
+            cursor.execute("""
+                SELECT data_type
+                FROM information_schema.columns
+                WHERE table_schema = %s
+                  AND table_name = 'jobs'
+                  AND column_name = 'next_action_at'
+            """, (schema,))
+            assert cursor.fetchone()[0] == "date"
+            cursor.execute("SELECT next_action_at FROM jobs")
+            assert cursor.fetchone()[0] == date(2026, 7, 31)
+            cursor.execute("""
+                SELECT indexdef
+                FROM pg_indexes
+                WHERE schemaname = %s
+                  AND indexname = 'idx_jobs_user_next_action'
+            """, (schema,))
+            assert "(user_email, next_action_at, created_at DESC, id)" in cursor.fetchone()[0]
+    finally:
+        with conn.cursor() as cursor:
+            cursor.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        conn.close()
 
 
 def test_user_link_migration_is_idempotent_on_existing_postgres():

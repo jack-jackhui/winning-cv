@@ -50,6 +50,21 @@ test('loads one matched job from the result endpoint', async () => {
   assert.equal(request.options.headers.Authorization, 'Token test-token')
 })
 
+test('loads applications from the dedicated pipeline endpoint', async () => {
+  installLocalStorage()
+  let request
+  globalThis.fetch = async (url, options) => {
+    request = { url, options }
+    return makeResponse({ items: [{ id: 'job-123', application_status: 'applied' }] })
+  }
+
+  const applications = await jobService.getApplications()
+
+  assert.deepEqual(applications, [{ id: 'job-123', application_status: 'applied' }])
+  assert.equal(request.url, 'http://localhost:8000/api/v1/jobs/applications')
+  assert.equal(request.options.credentials, 'include')
+})
+
 test('saves application tracking through the existing endpoint', async () => {
   installLocalStorage()
   let request
@@ -62,7 +77,7 @@ test('saves application tracking through the existing endpoint', async () => {
     })
   }
 
-  const result = await jobService.updateApplicationStatus('job-123', 'applied', 'Submitted today')
+  const result = await jobService.updateApplicationStatus('job-123', 'applied', 'Submitted today', '2026-07-30')
 
   assert.equal(result.application_status, 'applied')
   assert.equal(request.url, 'http://localhost:8000/api/v1/jobs/results/job-123/application')
@@ -70,6 +85,7 @@ test('saves application tracking through the existing endpoint', async () => {
   assert.deepEqual(JSON.parse(request.options.body), {
     application_status: 'applied',
     application_notes: 'Submitted today',
+    next_action_at: '2026-07-30',
   })
 })
 

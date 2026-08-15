@@ -10,8 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/**/*.test.js && vitest run src/pages/ApplicationWorkspace.test.jsx",
-    "test:component": "vitest run src/pages/ApplicationWorkspace.test.jsx",
+    "test": "node --test src/**/*.test.js && vitest run src/pages/*.test.jsx",
+    "test:component": "vitest run src/pages/*.test.jsx",
     "preview": "vite preview"
   },
   "dependencies": {

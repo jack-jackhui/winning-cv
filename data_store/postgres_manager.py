@@ -23,7 +23,7 @@ import logging
 import os
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -487,7 +487,7 @@ class PostgresManager:
                        cv_link, match_reasons, match_suggestions,
                        ats_score, hr_score, llm_score, hr_recommendation,
                        matched_keywords, missing_keywords, application_status,
-                       application_notes, applied_at, created_at, updated_at
+                       application_notes, applied_at, next_action_at, created_at, updated_at
                 FROM jobs
                 WHERE id::text = %s AND user_email = %s
                 LIMIT 1
@@ -521,8 +521,25 @@ class PostgresManager:
                 "Application Status": row.get("application_status") or "saved",
                 "Application Notes": row.get("application_notes"),
                 "Applied At": row.get("applied_at"),
+                "Next Action At": row.get("next_action_at"),
                 "Created At": row["created_at"].isoformat() if row["created_at"] else None,
                 "Updated At": row["updated_at"].isoformat() if row["updated_at"] else None,
+            },
+        }
+
+    @staticmethod
+    def _application_row_to_record(row: Dict) -> Dict:
+        """Convert a projected application row to the shared record shape."""
+        return {
+            "id": str(row["id"]),
+            "fields": {
+                "Job Title": row.get("job_title"),
+                "Company": row.get("company"),
+                "Location": row.get("location"),
+                "Application Status": row.get("application_status") or "saved",
+                "Application Notes": row.get("application_notes"),
+                "Applied At": row.get("applied_at"),
+                "Next Action At": row.get("next_action_at"),
             },
         }
 
@@ -539,12 +556,24 @@ class PostgresManager:
                        cv_link, match_reasons, match_suggestions,
                        ats_score, hr_score, llm_score, hr_recommendation,
                        matched_keywords, missing_keywords, application_status,
-                       application_notes, applied_at, created_at, updated_at
+                       application_notes, applied_at, next_action_at, created_at, updated_at
                 FROM jobs
                 WHERE user_email = %s
                 ORDER BY created_at DESC
             """, (user_email,))
             return [self._job_row_to_record(row) for row in cursor.fetchall()]
+
+    def get_applications_by_user(self, user_email: str) -> List[Dict]:
+        """Return projected owned applications in deterministic next-action order."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, job_title, company, location, application_status,
+                       application_notes, applied_at, next_action_at, created_at
+                FROM jobs
+                WHERE user_email = %s
+                ORDER BY next_action_at ASC NULLS LAST, created_at DESC, id ASC
+            """, (user_email,))
+            return [self._application_row_to_record(row) for row in cursor.fetchall()]
 
     def get_records_by_filter(self, formula: str) -> List[Dict]:
         """
@@ -590,7 +619,7 @@ class PostgresManager:
                            cv_link, match_reasons, match_suggestions,
                            ats_score, hr_score, llm_score, hr_recommendation,
                            matched_keywords, missing_keywords, application_status,
-                           application_notes, applied_at, created_at, updated_at
+                           application_notes, applied_at, next_action_at, created_at, updated_at
                     FROM jobs
                     WHERE {column_name} = %s
                     ORDER BY created_at DESC
@@ -610,6 +639,8 @@ class PostgresManager:
         user_email: str,
         application_status: str,
         application_notes: Optional[str] = None,
+        next_action_at: Optional[date] = None,
+        update_next_action: bool = False,
         *,
         job_link: Optional[str] = None,
     ) -> Optional[Dict]:
@@ -625,10 +656,19 @@ class PostgresManager:
                         WHEN %s = 'applied' AND applied_at IS NULL THEN NOW()
                         ELSE applied_at
                     END,
+                    next_action_at = CASE WHEN %s THEN %s ELSE next_action_at END,
                     updated_at = NOW()
                 WHERE {lookup_column} = %s AND user_email = %s
                 RETURNING id
-            """, (application_status, application_notes, application_status, lookup_value, user_email))
+            """, (
+                application_status,
+                application_notes,
+                application_status,
+                update_next_action,
+                next_action_at,
+                lookup_value,
+                user_email,
+            ))
             result = cursor.fetchone()
             return {"id": str(result["id"])} if result else None
 
