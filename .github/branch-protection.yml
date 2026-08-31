@@ -1,0 +1,41 @@
+# .github/branch-protection.yml
+# WinningCV Branch Protection Rules
+# Copy this file to your repo and apply via GitHub UI
+
+name: Branch Protection Rules
+
+# Trigger on all PRs
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-branch:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate branch name
+      run: |
+        BRANCH="${{ github.head_ref }}"
+        ALLOWED_PATTERNS=(
+          "^feat/"
+          "^bugfix/"
+          "^refactor/"
+          "^docs/"
+          "^release/"
+        )
+        
+        # Block bad branch names
+        if [[ $BRANCH =~ ^(wip/|hotfix/|migration/) ]]; then
+          echo "❌ Branch name '$BRANCH' is not allowed. Use conventional prefixes (feat/, bugfix/, etc.)"
+          exit 1
+        fi
+        
+        # Allow all other branches
+        echo "✅ Branch name '$BRANCH' is allowed."
+        exit 0
+
+# Optional: Add to your CI workflow to enforce branch protection
+# .github/workflows/branch-protection-check.yml
+EOF
