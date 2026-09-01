@@ -12,6 +12,7 @@ class Struct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
+
 def main(config_data: dict):
     # ----------------------------------------------------------------------
     # Set up Logging in a "logs" folder
@@ -36,7 +37,7 @@ def main(config_data: dict):
         results = processor.process_jobs()
 
         # Send notifications to the specific user running this job search
-        user_email = getattr(config, 'user_email', None)
+        user_email = getattr(config, "user_email", None)
         if user_email and results:
             notify_specific_user(user_email, len(results), results, config.airtable_ui_url)
         elif results:
@@ -48,12 +49,12 @@ def main(config_data: dict):
         logger.error(f"Main execution failed: {str(e)}")
         return []
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run job search and CV tailoring")
     parser.add_argument("--user-email", type=str, required=True, help="User email for job search session")
     args = parser.parse_args()
     # Config is now a singleton instance, use type() to get class attributes
-    config_data = {k.lower(): v for k, v in type(Config).__dict__.items() 
-                   if not k.startswith("_") and not callable(v)}
+    config_data = {k.lower(): v for k, v in type(Config).__dict__.items() if not k.startswith("_") and not callable(v)}
     config_data["user_email"] = args.user_email
     main(config_data)

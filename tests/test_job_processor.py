@@ -1,4 +1,5 @@
 """Regression tests for observable job-search shadow-write failures."""
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -79,11 +80,13 @@ def test_background_search_marks_shadow_write_failure_failed(monkeypatch):
     jobs._run_job_search("task-123", "owner@example.com", {})
 
     failed_calls = [
-        call for call in task_manager.update_task.call_args_list
+        call
+        for call in task_manager.update_task.call_args_list
         if call.kwargs.get("status") == jobs.SearchStatus.FAILED.value
     ]
     completed_calls = [
-        call for call in task_manager.update_task.call_args_list
+        call
+        for call in task_manager.update_task.call_args_list
         if call.kwargs.get("status") == jobs.SearchStatus.COMPLETED.value
     ]
     assert len(failed_calls) == 1

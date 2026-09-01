@@ -7,26 +7,27 @@ Tests cover:
 - Worker task claiming and processing logic
 """
 
-import pytest
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from api.tasks.state import (
-    TaskState,
-    TaskType,
-    is_terminal_state,
-    can_retry,
-    get_task_config,
-    validate_state_transition,
-    TASK_CONFIG,
-)
+import pytest
+
 from api.tasks.retry import (
-    RetryableError,
     PermanentError,
+    RetryableError,
     calculate_retry_delay,
     calculate_retry_timestamp,
-    should_retry_exception,
     get_retry_delay_for_exception,
+    should_retry_exception,
+)
+from api.tasks.state import (
+    TASK_CONFIG,
+    TaskState,
+    TaskType,
+    can_retry,
+    get_task_config,
+    is_terminal_state,
+    validate_state_transition,
 )
 
 
@@ -166,21 +167,13 @@ class TestRetryDelay:
 
     def test_max_delay_cap(self):
         """Delay should be capped at max_delay."""
-        delay = calculate_retry_delay(
-            attempts=10,
-            base_delay=30,
-            max_delay=100,
-            jitter_factor=0
-        )
+        delay = calculate_retry_delay(attempts=10, base_delay=30, max_delay=100, jitter_factor=0)
         # Should be capped at 100s + up to 10% jitter
         assert delay.total_seconds() <= 110
 
     def test_jitter_adds_randomness(self):
         """Jitter should add some randomness to delays."""
-        delays = [
-            calculate_retry_delay(attempts=2, jitter_factor=0.1)
-            for _ in range(10)
-        ]
+        delays = [calculate_retry_delay(attempts=2, jitter_factor=0.1) for _ in range(10)]
         # With jitter, not all delays should be identical
         unique_delays = set(d.total_seconds() for d in delays)
         # Very unlikely to have all 10 be identical with jitter
@@ -323,6 +316,7 @@ class TestPostgresTaskQueue:
 
         with patch("data_store.postgres_manager.psycopg2.connect"):
             from data_store.postgres_manager import PostgresTaskQueue
+
             queue = PostgresTaskQueue("postgresql://test:test@localhost/test")
 
             @contextmanager
@@ -378,7 +372,7 @@ class TestPostgresTaskQueue:
 
     def test_fail_task_with_retry(self, queue, mock_cursor):
         """Test failing a task with retry."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         mock_cursor.fetchone.return_value = [True]
         retry_at = datetime.now(timezone.utc) + timedelta(minutes=5)
@@ -420,21 +414,15 @@ class TestTaskQueueMigration:
     def test_migration_file_exists(self):
         """Verify migration file exists."""
         import os
-        migration_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "init-db",
-            "04-task-queue.sql"
-        )
+
+        migration_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "init-db", "04-task-queue.sql")
         assert os.path.exists(migration_path)
 
     def test_migration_has_required_elements(self):
         """Verify migration has all required SQL elements."""
         import os
-        migration_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "init-db",
-            "04-task-queue.sql"
-        )
+
+        migration_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "init-db", "04-task-queue.sql")
 
         with open(migration_path, "r") as f:
             content = f.read()
@@ -467,18 +455,17 @@ class TestRunWorkerScript:
 
     def test_worker_script_syntax(self):
         """Verify worker script has valid syntax."""
-        import py_compile
         import os
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "run_worker.py"
-        )
+        import py_compile
+
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "run_worker.py")
         py_compile.compile(script_path, doraise=True)
 
     def test_worker_script_imports(self):
         """Verify worker script can be imported."""
         with patch("data_store.postgres_manager.psycopg2.connect"):
             import run_worker
+
             assert hasattr(run_worker, "Worker")
             assert hasattr(run_worker, "TaskHandlerRegistry")
 
@@ -486,6 +473,7 @@ class TestRunWorkerScript:
         """Verify task handlers are registered."""
         with patch("data_store.postgres_manager.psycopg2.connect"):
             import run_worker
+
             registry = run_worker._registry
 
             assert "job_search" in registry.list_types()

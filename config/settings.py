@@ -34,7 +34,7 @@ try:
         # LinkedIn/Job URLs
         RSS_FEED_URL = settings.linkedin_rss_url or "your_default_rss_url"
         LINKEDIN_JOB_URL = settings.linkedin_job_url
-        LINKEDIN_API_KEY = getattr(settings, 'linkedin_api_key', '') or ''
+        LINKEDIN_API_KEY = getattr(settings, "linkedin_api_key", "") or ""
         SEEK_JOB_URL = settings.seek_job_url
 
         # Airtable
@@ -68,7 +68,9 @@ try:
 
         # Search config
         ADDITIONAL_SEARCH_TERM = 'AI IT (manager OR head OR director) "software engineering" leadership'
-        GOOGLE_SEARCH_TERM = 'head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week'
+        GOOGLE_SEARCH_TERM = (
+            "head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week"
+        )
         LOCATION = settings.location
         HOURS_OLD = settings.hours_old
         RESULTS_WANTED = settings.results_wanted
@@ -77,9 +79,9 @@ try:
         # Notifications
         TELEGRAM_BOT_TOKEN = settings.telegram_bot_token
         TELEGRAM_CHAT_ID = settings.telegram_chat_id
-        WECHAT_API_KEY = getattr(settings, 'wechat_api_key', None)
-        WECHAT_BOT_URL = getattr(settings, 'wechat_bot_url', None)
-        WECHAT_API_URL = getattr(settings, 'wechat_api_url', None)
+        WECHAT_API_KEY = getattr(settings, "wechat_api_key", None)
+        WECHAT_BOT_URL = getattr(settings, "wechat_bot_url", None)
+        WECHAT_API_URL = getattr(settings, "wechat_api_url", None)
         EMAIL_USER = settings.email_user
         EMAIL_PASSWORD = settings.email_password
         SMTP_SERVER = settings.smtp_server
@@ -87,9 +89,9 @@ try:
         DEFAULT_TO_EMAIL = settings.default_to_email
 
         # WordPress
-        WORDPRESS_SITE = getattr(settings, 'wordpress_site', None)
-        WORDPRESS_USERNAME = getattr(settings, 'wordpress_username', None)
-        WORDPRESS_APP_PASSWORD = getattr(settings, 'wordpress_app_password', None)
+        WORDPRESS_SITE = getattr(settings, "wordpress_site", None)
+        WORDPRESS_USERNAME = getattr(settings, "wordpress_username", None)
+        WORDPRESS_APP_PASSWORD = getattr(settings, "wordpress_app_password", None)
 
         # Runtime
         RUNNING_IN_DOCKER = settings.running_in_docker
@@ -153,11 +155,13 @@ except ImportError as e:
         AZURE_AI_API_KEY = os.getenv("AZURE_AI_API_KEY")
         AZURE_DEPLOYMENT = os.getenv("AZURE_DEPLOYMENT")
         ADDITIONAL_SEARCH_TERM = 'AI IT (manager OR head OR director) "software engineering" leadership'
-        GOOGLE_SEARCH_TERM = 'head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week'
-        LOCATION = os.getenv('LOCATION', 'Melbourne, VIC')
-        HOURS_OLD = int(os.getenv('HOURS_OLD', 168))
-        RESULTS_WANTED = int(os.getenv('RESULTS_WANTED', 10))
-        COUNTRY = os.getenv('COUNTRY', 'Australia')
+        GOOGLE_SEARCH_TERM = (
+            "head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week"
+        )
+        LOCATION = os.getenv("LOCATION", "Melbourne, VIC")
+        HOURS_OLD = int(os.getenv("HOURS_OLD", 168))
+        RESULTS_WANTED = int(os.getenv("RESULTS_WANTED", 10))
+        COUNTRY = os.getenv("COUNTRY", "Australia")
         TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
         TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
         WECHAT_API_KEY = os.getenv("WECHAT_API_KEY")
@@ -171,22 +175,74 @@ except ImportError as e:
         WORDPRESS_SITE = os.getenv("WORDPRESS_SITE")
         WORDPRESS_USERNAME = os.getenv("WORDPRESS_USERNAME")
         WORDPRESS_APP_PASSWORD = os.getenv("WORDPRESS_APP_PASSWORD")
-        RUNNING_IN_DOCKER = os.getenv('RUNNING_IN_DOCKER', 'false').lower() == 'true'
-        CHROMIUM_PATH = os.getenv('CHROMIUM_PATH')
-        CHROME_PATH = os.getenv('CHROME_PATH')
-        HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
+        RUNNING_IN_DOCKER = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
+        CHROMIUM_PATH = os.getenv("CHROMIUM_PATH")
+        CHROME_PATH = os.getenv("CHROME_PATH")
+        HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 
         SUPPORTED_COUNTRIES = [
-            "Argentina", "Australia", "Austria", "Bahrain", "Belgium", "Brazil",
-            "Canada", "Chile", "China", "Colombia", "Costa Rica", "Czech Republic",
-            "Denmark", "Ecuador", "Egypt", "Finland", "France", "Germany", "Greece",
-            "Hong Kong", "Hungary", "India", "Indonesia", "Ireland", "Israel", "Italy",
-            "Japan", "Kuwait", "Luxembourg", "Malaysia", "Mexico", "Morocco",
-            "Netherlands", "New Zealand", "Nigeria", "Norway", "Oman", "Pakistan",
-            "Panama", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania",
-            "Saudi Arabia", "Singapore", "South Africa", "South Korea", "Spain",
-            "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey", "Ukraine",
-            "United Arab Emirates", "UK", "USA", "Uruguay", "Venezuela", "Vietnam"
+            "Argentina",
+            "Australia",
+            "Austria",
+            "Bahrain",
+            "Belgium",
+            "Brazil",
+            "Canada",
+            "Chile",
+            "China",
+            "Colombia",
+            "Costa Rica",
+            "Czech Republic",
+            "Denmark",
+            "Ecuador",
+            "Egypt",
+            "Finland",
+            "France",
+            "Germany",
+            "Greece",
+            "Hong Kong",
+            "Hungary",
+            "India",
+            "Indonesia",
+            "Ireland",
+            "Israel",
+            "Italy",
+            "Japan",
+            "Kuwait",
+            "Luxembourg",
+            "Malaysia",
+            "Mexico",
+            "Morocco",
+            "Netherlands",
+            "New Zealand",
+            "Nigeria",
+            "Norway",
+            "Oman",
+            "Pakistan",
+            "Panama",
+            "Peru",
+            "Philippines",
+            "Poland",
+            "Portugal",
+            "Qatar",
+            "Romania",
+            "Saudi Arabia",
+            "Singapore",
+            "South Africa",
+            "South Korea",
+            "Spain",
+            "Sweden",
+            "Switzerland",
+            "Taiwan",
+            "Thailand",
+            "Turkey",
+            "Ukraine",
+            "United Arab Emirates",
+            "UK",
+            "USA",
+            "Uruguay",
+            "Venezuela",
+            "Vietnam",
         ]
 
         @classmethod

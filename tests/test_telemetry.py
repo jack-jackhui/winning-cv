@@ -1,6 +1,7 @@
 """
 Tests for product telemetry API endpoints.
 """
+
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -177,6 +178,7 @@ class TestTelemetryRoutesMocked:
     def mock_user(self):
         """Create a mock authenticated user."""
         from api.schemas.auth import UserInfo
+
         return UserInfo(
             auth_user_id=1,
             email="test@example.com",
@@ -191,6 +193,7 @@ class TestTelemetryRoutesMocked:
     def mock_admin_user(self):
         """Create a mock admin user."""
         from api.schemas.auth import UserInfo
+
         return UserInfo(
             auth_user_id=1,
             email="admin@example.com",

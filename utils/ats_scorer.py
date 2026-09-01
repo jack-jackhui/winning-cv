@@ -11,131 +11,421 @@ Ported from Resume-Builder, adapted for WinningCV.
 No SBERT/semantic similarity - pure rule-based scoring.
 """
 
-import re
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Any
-
+from typing import Any, Dict, List, Tuple
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
 # =============================================================================
 
 STOP_WORDS = {
-    'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
-    'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had',
-    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must',
-    'shall', 'can', 'need', 'dare', 'ought', 'used', 'it', 'its', 'this', 'that',
-    'these', 'those', 'i', 'you', 'he', 'she', 'we', 'they', 'what', 'which', 'who',
-    'whom', 'when', 'where', 'why', 'how', 'all', 'each', 'every', 'both', 'few',
-    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-    'same', 'so', 'than', 'too', 'very', 'just', 'also', 'now', 'here', 'there',
-    'then', 'once', 'if', 'unless', 'until', 'while', 'during', 'before', 'after',
-    'above', 'below', 'between', 'into', 'through', 'about', 'against', 'over',
-    'under', 'again', 'further', 'any', 'our', 'your', 'their', 'his', 'her', 'my',
-    'etc', 'eg', 'ie', 'via', 'per', 'vs', 'including', 'within', 'across', 'along',
-    'among', 'around', 'behind', 'beyond', 'like', 'near', 'since', 'upon', 'based'
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "need",
+    "dare",
+    "ought",
+    "used",
+    "it",
+    "its",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "you",
+    "he",
+    "she",
+    "we",
+    "they",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "just",
+    "also",
+    "now",
+    "here",
+    "there",
+    "then",
+    "once",
+    "if",
+    "unless",
+    "until",
+    "while",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "into",
+    "through",
+    "about",
+    "against",
+    "over",
+    "under",
+    "again",
+    "further",
+    "any",
+    "our",
+    "your",
+    "their",
+    "his",
+    "her",
+    "my",
+    "etc",
+    "eg",
+    "ie",
+    "via",
+    "per",
+    "vs",
+    "including",
+    "within",
+    "across",
+    "along",
+    "among",
+    "around",
+    "behind",
+    "beyond",
+    "like",
+    "near",
+    "since",
+    "upon",
+    "based",
 }
 
 # JD boilerplate words - common in job descriptions but NOT meaningful skills
 JD_BOILERPLATE_WORDS = {
-    'position', 'job', 'role', 'opportunity', 'candidate', 'applicant',
-    'requirement', 'qualification', 'responsibility', 'duty', 'duties',
-    'company', 'organization', 'employer', 'employee', 'team', 'department',
-    'salary', 'compensation', 'benefits', 'package', 'competitive',
-    'equal', 'eoe', 'diversity', 'inclusion',
-    'preferred', 'required', 'desired', 'minimum', 'maximum',
-    'experience', 'year', 'years', 'month', 'months',
-    'able', 'ability', 'capable', 'proficient', 'excellent',
-    'strong', 'proven', 'demonstrated', 'successful', 'effective',
-    'work', 'working', 'environment', 'office', 'remote', 'hybrid',
-    'full', 'time', 'part', 'contract', 'permanent', 'temporary',
-    'apply', 'submit', 'resume', 'cover', 'letter', 'application',
-    'please', 'note', 'must', 'shall', 'ensure', 'provide',
-    'support', 'assist', 'help', 'maintain', 'manage', 'develop',
-    'report', 'review', 'prepare', 'coordinate', 'oversee',
-    'retail', 'location', 'travel', 'schedule', 'shift',
-    'ideal', 'looking', 'seeking', 'join', 'growing',
-    'dynamic', 'innovative', 'exciting', 'passionate', 'motivated',
-    'self', 'starter', 'driven', 'oriented', 'focused',
-    'detail', 'details', 'fast', 'paced', 'multi', 'task',
-    'independently', 'level', 'senior', 'junior', 'entry', 'mid',
-    'include', 'includes', 'including', 'involve', 'involves',
-    'perform', 'performs', 'responsible', 'various', 'multiple',
+    "position",
+    "job",
+    "role",
+    "opportunity",
+    "candidate",
+    "applicant",
+    "requirement",
+    "qualification",
+    "responsibility",
+    "duty",
+    "duties",
+    "company",
+    "organization",
+    "employer",
+    "employee",
+    "team",
+    "department",
+    "salary",
+    "compensation",
+    "benefits",
+    "package",
+    "competitive",
+    "equal",
+    "eoe",
+    "diversity",
+    "inclusion",
+    "preferred",
+    "required",
+    "desired",
+    "minimum",
+    "maximum",
+    "experience",
+    "year",
+    "years",
+    "month",
+    "months",
+    "able",
+    "ability",
+    "capable",
+    "proficient",
+    "excellent",
+    "strong",
+    "proven",
+    "demonstrated",
+    "successful",
+    "effective",
+    "work",
+    "working",
+    "environment",
+    "office",
+    "remote",
+    "hybrid",
+    "full",
+    "time",
+    "part",
+    "contract",
+    "permanent",
+    "temporary",
+    "apply",
+    "submit",
+    "resume",
+    "cover",
+    "letter",
+    "application",
+    "please",
+    "note",
+    "must",
+    "shall",
+    "ensure",
+    "provide",
+    "support",
+    "assist",
+    "help",
+    "maintain",
+    "manage",
+    "develop",
+    "report",
+    "review",
+    "prepare",
+    "coordinate",
+    "oversee",
+    "retail",
+    "location",
+    "travel",
+    "schedule",
+    "shift",
+    "ideal",
+    "looking",
+    "seeking",
+    "join",
+    "growing",
+    "dynamic",
+    "innovative",
+    "exciting",
+    "passionate",
+    "motivated",
+    "self",
+    "starter",
+    "driven",
+    "oriented",
+    "focused",
+    "detail",
+    "details",
+    "fast",
+    "paced",
+    "multi",
+    "task",
+    "independently",
+    "level",
+    "senior",
+    "junior",
+    "entry",
+    "mid",
+    "include",
+    "includes",
+    "including",
+    "involve",
+    "involves",
+    "perform",
+    "performs",
+    "responsible",
+    "various",
+    "multiple",
 }
 
 ALL_STOP_WORDS = STOP_WORDS | JD_BOILERPLATE_WORDS
 
 # Common acronyms and their expansions
 ACRONYMS = {
-    'ai': 'artificial intelligence',
-    'ml': 'machine learning',
-    'nlp': 'natural language processing',
-    'aws': 'amazon web services',
-    'gcp': 'google cloud platform',
-    'ci': 'continuous integration',
-    'cd': 'continuous deployment',
-    'api': 'application programming interface',
-    'sql': 'structured query language',
-    'html': 'hypertext markup language',
-    'css': 'cascading style sheets',
-    'js': 'javascript',
-    'ts': 'typescript',
-    'ui': 'user interface',
-    'ux': 'user experience',
-    'qa': 'quality assurance',
-    'pm': 'project manager',
-    'hr': 'human resources',
-    'kpi': 'key performance indicator',
-    'roi': 'return on investment',
-    'b2b': 'business to business',
-    'b2c': 'business to consumer',
-    'saas': 'software as a service',
-    'crm': 'customer relationship management',
-    'erp': 'enterprise resource planning',
-    'devops': 'development operations',
-    'seo': 'search engine optimization',
-    'ppc': 'pay per click',
+    "ai": "artificial intelligence",
+    "ml": "machine learning",
+    "nlp": "natural language processing",
+    "aws": "amazon web services",
+    "gcp": "google cloud platform",
+    "ci": "continuous integration",
+    "cd": "continuous deployment",
+    "api": "application programming interface",
+    "sql": "structured query language",
+    "html": "hypertext markup language",
+    "css": "cascading style sheets",
+    "js": "javascript",
+    "ts": "typescript",
+    "ui": "user interface",
+    "ux": "user experience",
+    "qa": "quality assurance",
+    "pm": "project manager",
+    "hr": "human resources",
+    "kpi": "key performance indicator",
+    "roi": "return on investment",
+    "b2b": "business to business",
+    "b2c": "business to consumer",
+    "saas": "software as a service",
+    "crm": "customer relationship management",
+    "erp": "enterprise resource planning",
+    "devops": "development operations",
+    "seo": "search engine optimization",
+    "ppc": "pay per click",
 }
 
 # Domain detection patterns
 DOMAIN_PATTERNS = {
-    'technology': {
-        'keywords': ['software', 'engineer', 'developer', 'python', 'java', 'javascript',
-                    'cloud', 'aws', 'azure', 'kubernetes', 'docker', 'api', 'microservices',
-                    'agile', 'scrum', 'devops', 'machine learning', 'data science',
-                    'frontend', 'backend', 'fullstack', 'react', 'node', 'database'],
+    "technology": {
+        "keywords": [
+            "software",
+            "engineer",
+            "developer",
+            "python",
+            "java",
+            "javascript",
+            "cloud",
+            "aws",
+            "azure",
+            "kubernetes",
+            "docker",
+            "api",
+            "microservices",
+            "agile",
+            "scrum",
+            "devops",
+            "machine learning",
+            "data science",
+            "frontend",
+            "backend",
+            "fullstack",
+            "react",
+            "node",
+            "database",
+        ],
     },
-    'finance': {
-        'keywords': ['investment', 'banking', 'private equity', 'hedge fund', 'trading',
-                    'valuation', 'financial modeling', 'portfolio', 'derivatives',
-                    'equity', 'fixed income', 'risk management', 'compliance', 'audit'],
+    "finance": {
+        "keywords": [
+            "investment",
+            "banking",
+            "private equity",
+            "hedge fund",
+            "trading",
+            "valuation",
+            "financial modeling",
+            "portfolio",
+            "derivatives",
+            "equity",
+            "fixed income",
+            "risk management",
+            "compliance",
+            "audit",
+        ],
     },
-    'marketing': {
-        'keywords': ['marketing', 'brand', 'digital marketing', 'content', 'social media',
-                    'campaign', 'analytics', 'seo', 'ppc', 'conversion', 'engagement',
-                    'growth', 'acquisition', 'retention', 'funnel'],
+    "marketing": {
+        "keywords": [
+            "marketing",
+            "brand",
+            "digital marketing",
+            "content",
+            "social media",
+            "campaign",
+            "analytics",
+            "seo",
+            "ppc",
+            "conversion",
+            "engagement",
+            "growth",
+            "acquisition",
+            "retention",
+            "funnel",
+        ],
     },
-    'healthcare': {
-        'keywords': ['healthcare', 'medical', 'clinical', 'patient', 'hospital',
-                    'nursing', 'physician', 'health system', 'hipaa', 'ehr', 'emr',
-                    'pharmaceutical', 'biotech', 'fda', 'clinical trial'],
+    "healthcare": {
+        "keywords": [
+            "healthcare",
+            "medical",
+            "clinical",
+            "patient",
+            "hospital",
+            "nursing",
+            "physician",
+            "health system",
+            "hipaa",
+            "ehr",
+            "emr",
+            "pharmaceutical",
+            "biotech",
+            "fda",
+            "clinical trial",
+        ],
     },
-    'consulting': {
-        'keywords': ['consulting', 'strategy', 'advisory', 'client engagement',
-                    'stakeholder', 'transformation', 'change management',
-                    'due diligence', 'market analysis', 'implementation'],
+    "consulting": {
+        "keywords": [
+            "consulting",
+            "strategy",
+            "advisory",
+            "client engagement",
+            "stakeholder",
+            "transformation",
+            "change management",
+            "due diligence",
+            "market analysis",
+            "implementation",
+        ],
     },
 }
 
 # Resume section patterns
 SECTION_PATTERNS = {
-    'experience': r'\b(experience|employment|work\s*history|professional\s*background|career)\b',
-    'education': r'\b(education|academic|degree|university|college|school|certification|certifications)\b',
-    'skills': r'\b(skills|technical\s*skills|core\s*competencies|competencies|expertise|technologies)\b',
-    'summary': r'\b(summary|profile|objective|about|overview|introduction)\b',
-    'projects': r'\b(projects|portfolio|achievements|accomplishments)\b',
+    "experience": r"\b(experience|employment|work\s*history|professional\s*background|career)\b",
+    "education": r"\b(education|academic|degree|university|college|school|certification|certifications)\b",
+    "skills": r"\b(skills|technical\s*skills|core\s*competencies|competencies|expertise|technologies)\b",
+    "summary": r"\b(summary|profile|objective|about|overview|introduction)\b",
+    "projects": r"\b(projects|portfolio|achievements|accomplishments)\b",
 }
 
 
@@ -143,9 +433,11 @@ SECTION_PATTERNS = {
 # DATA STRUCTURES
 # =============================================================================
 
+
 @dataclass
 class SectionAnalysis:
     """Analysis of resume sections."""
+
     sections_found: List[str] = field(default_factory=list)
     sections_missing: List[str] = field(default_factory=list)
     section_order_score: float = 0.0
@@ -155,6 +447,7 @@ class SectionAnalysis:
 @dataclass
 class FormattingAnalysis:
     """Analysis of resume formatting."""
+
     has_bullet_points: bool = False
     bullet_count: int = 0
     has_dates: bool = False
@@ -167,6 +460,7 @@ class FormattingAnalysis:
 @dataclass
 class KeywordAnalysis:
     """Analysis of keyword matching."""
+
     matched: List[str] = field(default_factory=list)
     missing: List[str] = field(default_factory=list)
     match_rate: float = 0.0
@@ -177,6 +471,7 @@ class KeywordAnalysis:
 @dataclass
 class ATSScoreResult:
     """Complete ATS scoring result."""
+
     total_score: float
     keyword_score: float
     phrase_score: float
@@ -201,22 +496,22 @@ class ATSScoreResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            'total_score': round(self.total_score, 1),
-            'keyword_score': round(self.keyword_score, 1),
-            'phrase_score': round(self.phrase_score, 1),
-            'section_score': round(self.section_score, 1),
-            'formatting_score': round(self.formatting_score, 1),
-            'density_score': round(self.density_score, 1),
-            'matched_keywords': self.matched_keywords[:15],
-            'missing_keywords': self.missing_keywords[:15],
-            'matched_phrases': self.matched_phrases,
-            'missing_phrases': self.missing_phrases,
-            'sections_found': self.sections_found,
-            'sections_missing': self.sections_missing,
-            'formatting_warnings': self.formatting_warnings,
-            'domain_detected': self.domain_detected,
-            'likelihood_rating': self.likelihood_rating,
-            'breakdown': self.breakdown,
+            "total_score": round(self.total_score, 1),
+            "keyword_score": round(self.keyword_score, 1),
+            "phrase_score": round(self.phrase_score, 1),
+            "section_score": round(self.section_score, 1),
+            "formatting_score": round(self.formatting_score, 1),
+            "density_score": round(self.density_score, 1),
+            "matched_keywords": self.matched_keywords[:15],
+            "missing_keywords": self.missing_keywords[:15],
+            "matched_phrases": self.matched_phrases,
+            "missing_phrases": self.missing_phrases,
+            "sections_found": self.sections_found,
+            "sections_missing": self.sections_missing,
+            "formatting_warnings": self.formatting_warnings,
+            "domain_detected": self.domain_detected,
+            "likelihood_rating": self.likelihood_rating,
+            "breakdown": self.breakdown,
         }
 
 
@@ -224,21 +519,22 @@ class ATSScoreResult:
 # TEXT PROCESSING
 # =============================================================================
 
+
 def clean_text(text: str) -> str:
     """Clean and normalize text for matching."""
     text = text.lower()
-    text = re.sub(r'[^\w\s\-/]', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"[^\w\s\-/]", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def lemmatize_simple(word: str) -> str:
     """Simple suffix-stripping lemmatization."""
     word = word.lower()
-    suffixes = ['ing', 'ed', 'er', 'est', 'ly', 'tion', 'ment', 's', 'es']
+    suffixes = ["ing", "ed", "er", "est", "ly", "tion", "ment", "s", "es"]
     for suffix in suffixes:
         if word.endswith(suffix) and len(word) > len(suffix) + 2:
-            return word[:-len(suffix)]
+            return word[: -len(suffix)]
     return word
 
 
@@ -248,12 +544,12 @@ def expand_acronyms(text: str) -> str:
     additions = []
 
     for acronym, expansion in ACRONYMS.items():
-        pattern = r'\b' + re.escape(acronym) + r'\b'
+        pattern = r"\b" + re.escape(acronym) + r"\b"
         if re.search(pattern, text_lower, re.IGNORECASE):
             additions.append(expansion)
 
     if additions:
-        text = text + ' ' + ' '.join(additions)
+        text = text + " " + " ".join(additions)
 
     return text
 
@@ -290,7 +586,7 @@ def extract_phrases(text: str, min_words: int = 2, max_words: int = 4) -> List[s
 
     for n in range(min_words, min(max_words + 1, len(words) + 1)):
         for i in range(len(words) - n + 1):
-            phrase = ' '.join(words[i:i+n])
+            phrase = " ".join(words[i : i + n])
             # Skip if mostly stop words
             phrase_words = phrase.split()
             non_stop = [w for w in phrase_words if w not in ALL_STOP_WORDS]
@@ -304,6 +600,7 @@ def extract_phrases(text: str, min_words: int = 2, max_words: int = 4) -> List[s
 # SCORING FUNCTIONS
 # =============================================================================
 
+
 def detect_domain(text: str) -> Tuple[str, float, Dict[str, float]]:
     """Auto-detect the industry domain from text."""
     text_lower = text.lower()
@@ -311,25 +608,22 @@ def detect_domain(text: str) -> Tuple[str, float, Dict[str, float]]:
 
     for domain, config in DOMAIN_PATTERNS.items():
         score = 0
-        for keyword in config['keywords']:
+        for keyword in config["keywords"]:
             if keyword in text_lower:
                 score += 1
-        domain_scores[domain] = round((score / len(config['keywords'])) * 100, 1)
+        domain_scores[domain] = round((score / len(config["keywords"])) * 100, 1)
 
     if domain_scores:
         primary_domain = max(domain_scores, key=domain_scores.get)
         confidence = domain_scores[primary_domain]
     else:
-        primary_domain = 'general'
+        primary_domain = "general"
         confidence = 0
 
     return primary_domain, confidence, domain_scores
 
 
-def calculate_keyword_match(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, List[str], List[str]]:
+def calculate_keyword_match(resume_text: str, jd_text: str) -> Tuple[float, List[str], List[str]]:
     """Calculate keyword match score between resume and JD."""
     # Extract keywords from JD
     jd_keywords = extract_keywords(jd_text)
@@ -376,10 +670,7 @@ def calculate_keyword_match(
     return match_rate, matched, missing
 
 
-def calculate_phrase_match(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, List[str], List[str]]:
+def calculate_phrase_match(resume_text: str, jd_text: str) -> Tuple[float, List[str], List[str]]:
     """Calculate phrase match score (multi-word terms)."""
     # Extract phrases from JD
     jd_phrases = extract_phrases(jd_text, min_words=2, max_words=4)
@@ -424,8 +715,8 @@ def analyze_sections(resume_text: str) -> SectionAnalysis:
     resume_lower = resume_text.lower()
     analysis = SectionAnalysis()
 
-    expected_sections = ['experience', 'education', 'skills']
-    optional_sections = ['summary', 'projects']
+    expected_sections = ["experience", "education", "skills"]
+    optional_sections = ["summary", "projects"]
 
     # Check for each section
     for section, pattern in SECTION_PATTERNS.items():
@@ -440,12 +731,12 @@ def analyze_sections(resume_text: str) -> SectionAnalysis:
 
     # Check if has clear structure (headers, consistent formatting)
     header_patterns = [
-        r'^[A-Z][A-Z\s]+$',  # ALL CAPS headers
-        r'^#{1,3}\s',  # Markdown headers
-        r'^\*\*[^*]+\*\*$',  # Bold text
+        r"^[A-Z][A-Z\s]+$",  # ALL CAPS headers
+        r"^#{1,3}\s",  # Markdown headers
+        r"^\*\*[^*]+\*\*$",  # Bold text
     ]
 
-    lines = resume_text.split('\n')
+    lines = resume_text.split("\n")
     header_count = 0
     for line in lines:
         line = line.strip()
@@ -462,10 +753,10 @@ def analyze_sections(resume_text: str) -> SectionAnalysis:
 def analyze_formatting(resume_text: str) -> FormattingAnalysis:
     """Analyze resume formatting quality."""
     analysis = FormattingAnalysis()
-    lines = resume_text.split('\n')
+    lines = resume_text.split("\n")
 
     # Check for bullet points
-    bullet_patterns = [r'^\s*[•\-\*\◦\▪]', r'^\s*\d+\.']
+    bullet_patterns = [r"^\s*[•\-\*\◦\▪]", r"^\s*\d+\."]
     bullet_lines = []
     for line in lines:
         for pattern in bullet_patterns:
@@ -478,10 +769,10 @@ def analyze_formatting(resume_text: str) -> FormattingAnalysis:
 
     # Check for dates
     date_patterns = [
-        r'\b(19|20)\d{2}\b',  # Year
-        r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s*(19|20)?\d{2,4}',
-        r'\b\d{1,2}/\d{2,4}\b',
-        r'\b(Present|Current)\b',
+        r"\b(19|20)\d{2}\b",  # Year
+        r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s*(19|20)?\d{2,4}",
+        r"\b\d{1,2}/\d{2,4}\b",
+        r"\b(Present|Current)\b",
     ]
 
     date_count = 0
@@ -560,8 +851,7 @@ def detect_keyword_stuffing(text: str) -> Tuple[bool, float, List[str]]:
 
     # Calculate word frequencies
     word_freq = Counter(words)
-    meaningful_words = {w: c for w, c in word_freq.items()
-                       if w not in ALL_STOP_WORDS and len(w) > 2}
+    meaningful_words = {w: c for w, c in word_freq.items() if w not in ALL_STOP_WORDS and len(w) > 2}
 
     if not meaningful_words:
         return False, 0, []
@@ -573,8 +863,7 @@ def detect_keyword_stuffing(text: str) -> Tuple[bool, float, List[str]]:
     std_dev = math.sqrt(variance) if variance > 0 else 1
 
     # Find outliers (>3 standard deviations)
-    outliers = {w: c for w, c in meaningful_words.items()
-               if c > mean_freq + 3 * std_dev}
+    outliers = {w: c for w, c in meaningful_words.items() if c > mean_freq + 3 * std_dev}
 
     flags = []
     manipulation_score = 0
@@ -585,7 +874,7 @@ def detect_keyword_stuffing(text: str) -> Tuple[bool, float, List[str]]:
 
     # Check for consecutive repeated words
     for i in range(len(words) - 2):
-        if words[i] == words[i+1] == words[i+2]:
+        if words[i] == words[i + 1] == words[i + 2]:
             manipulation_score += 15
             flags.append(f"Triple repetition found: '{words[i]}'")
             break
@@ -614,10 +903,8 @@ def get_likelihood_rating(score: float) -> str:
 # MAIN SCORING FUNCTION
 # =============================================================================
 
-def calculate_ats_score(
-    resume_text: str,
-    jd_text: str
-) -> ATSScoreResult:
+
+def calculate_ats_score(resume_text: str, jd_text: str) -> ATSScoreResult:
     """
     Calculate comprehensive ATS score for resume vs job description.
 
@@ -662,11 +949,11 @@ def calculate_ats_score(
 
     # Calculate total score with weights
     total_score = (
-        keyword_score * 0.30 +
-        phrase_score * 0.25 +
-        section_score * 0.15 +
-        formatting_score * 0.15 +
-        density_score * 0.15
+        keyword_score * 0.30
+        + phrase_score * 0.25
+        + section_score * 0.15
+        + formatting_score * 0.15
+        + density_score * 0.15
     )
 
     # Apply stuffing penalty
@@ -678,46 +965,46 @@ def calculate_ats_score(
 
     # Build breakdown
     breakdown = {
-        'weights': {
-            'keyword_match': 0.30,
-            'phrase_match': 0.25,
-            'sections': 0.15,
-            'formatting': 0.15,
-            'density': 0.15,
+        "weights": {
+            "keyword_match": 0.30,
+            "phrase_match": 0.25,
+            "sections": 0.15,
+            "formatting": 0.15,
+            "density": 0.15,
         },
-        'keyword_analysis': {
-            'total_jd_keywords': len(matched_kw) + len(missing_kw),
-            'matched': len(matched_kw),
-            'match_rate': round(keyword_score, 1),
+        "keyword_analysis": {
+            "total_jd_keywords": len(matched_kw) + len(missing_kw),
+            "matched": len(matched_kw),
+            "match_rate": round(keyword_score, 1),
         },
-        'phrase_analysis': {
-            'total_phrases': len(matched_phrases) + len(missing_phrases),
-            'matched': len(matched_phrases),
-            'match_rate': round(phrase_score, 1),
+        "phrase_analysis": {
+            "total_phrases": len(matched_phrases) + len(missing_phrases),
+            "matched": len(matched_phrases),
+            "match_rate": round(phrase_score, 1),
         },
-        'section_analysis': {
-            'found': sections.sections_found,
-            'missing': sections.sections_missing,
-            'has_clear_structure': sections.has_clear_structure,
+        "section_analysis": {
+            "found": sections.sections_found,
+            "missing": sections.sections_missing,
+            "has_clear_structure": sections.has_clear_structure,
         },
-        'formatting_analysis': {
-            'bullet_count': formatting.bullet_count,
-            'has_dates': formatting.has_dates,
-            'date_count': formatting.date_count,
+        "formatting_analysis": {
+            "bullet_count": formatting.bullet_count,
+            "has_dates": formatting.has_dates,
+            "date_count": formatting.date_count,
         },
-        'density_analysis': {
-            'score': round(density_score, 1),
-            'assessment': density_assessment,
+        "density_analysis": {
+            "score": round(density_score, 1),
+            "assessment": density_assessment,
         },
-        'stuffing_detection': {
-            'is_stuffed': is_stuffed,
-            'score': round(stuffing_score, 1),
-            'flags': stuffing_flags,
+        "stuffing_detection": {
+            "is_stuffed": is_stuffed,
+            "score": round(stuffing_score, 1),
+            "flags": stuffing_flags,
         },
-        'domain': {
-            'detected': domain,
-            'confidence': domain_confidence,
-            'all_scores': domain_scores,
+        "domain": {
+            "detected": domain,
+            "confidence": domain_confidence,
+            "all_scores": domain_scores,
         },
     }
 
@@ -745,10 +1032,8 @@ def calculate_ats_score(
 # CONVENIENCE FUNCTION
 # =============================================================================
 
-def score_resume_ats(
-    resume_text: str,
-    job_description: str
-) -> Dict[str, Any]:
+
+def score_resume_ats(resume_text: str, job_description: str) -> Dict[str, Any]:
     """
     Score a resume against a job description for ATS compatibility.
 

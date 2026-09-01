@@ -12,6 +12,7 @@ from config.settings import Config
 
 logger = logging.getLogger(__name__)
 
+
 class SeekJobScraper:
     def __init__(self, base_url=None):
         self.browser = None
@@ -24,23 +25,21 @@ class SeekJobScraper:
         """Initialize DrissionPage browser"""
         options = ChromiumOptions()
 
-        options.auto_port(True) \
-            .headless(Config.HEADLESS) \
-            .no_imgs(True) \
-            .mute(True) \
-            .incognito(True) \
-            .set_paths(browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH) \
-            .set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        options.auto_port(True).headless(Config.HEADLESS).no_imgs(True).mute(True).incognito(True).set_paths(
+            browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH
+        ).set_user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
 
         if Config.HEADLESS:
             # Chromium 149+ is more reliable in containers with the new headless backend.
-            options.set_argument('--headless=new')
+            options.set_argument("--headless=new")
 
         if Config.RUNNING_IN_DOCKER:
-            options.set_argument('--no-sandbox')
-            options.set_argument('--disable-gpu')
-            options.set_argument('--disable-crash-reporter')
-            options.set_argument('--disable-crashpad')
+            options.set_argument("--no-sandbox")
+            options.set_argument("--disable-gpu")
+            options.set_argument("--disable-crash-reporter")
+            options.set_argument("--disable-crashpad")
 
         self.browser = Chromium(options)
 
@@ -66,7 +65,7 @@ class SeekJobScraper:
                 self.random_delay(1, 2)
 
                 # Parse and extract jobs
-                soup = BeautifulSoup(tab.html, 'html.parser')
+                soup = BeautifulSoup(tab.html, "html.parser")
 
                 jobs = self._extract_jobs(soup)
                 logger.info(f"Found {len(jobs)} jobs on page {page_count}")
@@ -86,7 +85,7 @@ class SeekJobScraper:
                 page_count += 1
                 self.random_delay(2, 4)
             logger.info(f"✔️ Seek added {len(all_jobs)} new jobs")
-            return all_jobs[:self.max_jobs_to_scrape]
+            return all_jobs[: self.max_jobs_to_scrape]
         except Exception as e:
             logger.error(f"Seek scraping failed: {str(e)}")
             return []
@@ -122,17 +121,17 @@ class SeekJobScraper:
             return company_a.get_text(strip=True)
 
         # Fallback: any element with data-automation="jobCompany"
-        company = self._safe_extract(card, '[data-automation="jobCompany"]', 'text')
+        company = self._safe_extract(card, '[data-automation="jobCompany"]', "text")
         if company:
             return company
 
         # Fallback: sometimes the company might be in a different span or strong tag
-        alt_elem = card.select_one('.job-company, span.company, strong.company')
+        alt_elem = card.select_one(".job-company, span.company, strong.company")
         if alt_elem:
             return alt_elem.get_text(strip=True)
 
         # As a last resort, try to infer from job card subtitle (if present)
-        subtitle = card.select_one('.job-card__subtitle')
+        subtitle = card.select_one(".job-card__subtitle")
         if subtitle:
             return subtitle.get_text(strip=True)
 
@@ -147,28 +146,28 @@ class SeekJobScraper:
             if len(jobs) >= self.max_jobs_to_scrape:
                 break
             job = {
-                'title': self._safe_extract(card, '[data-automation="jobTitle"]', 'text'),
-                'company': self._extract_company(card),
-                'location': self._clean_location(card),
-                'salary': self._safe_extract(card, '[data-automation="jobSalary"]', 'text'),
-                'posted_date': self._safe_extract(card, '[data-automation="jobListingDate"]', 'text'),
-                'job_url': self._get_job_url(card),
-                'description': self._safe_extract(card, '[data-testid="job-card-teaser"]', 'text'),
-                'work_type': self._safe_extract(card, '[data-automation="jobWorkType"]', 'text'),
-                'classification': self._safe_extract(card, '[data-automation="jobClassification"]', 'text')
+                "title": self._safe_extract(card, '[data-automation="jobTitle"]', "text"),
+                "company": self._extract_company(card),
+                "location": self._clean_location(card),
+                "salary": self._safe_extract(card, '[data-automation="jobSalary"]', "text"),
+                "posted_date": self._safe_extract(card, '[data-automation="jobListingDate"]', "text"),
+                "job_url": self._get_job_url(card),
+                "description": self._safe_extract(card, '[data-testid="job-card-teaser"]', "text"),
+                "work_type": self._safe_extract(card, '[data-automation="jobWorkType"]', "text"),
+                "classification": self._safe_extract(card, '[data-automation="jobClassification"]', "text"),
             }
 
             # Fetch full description and potentially better company name from detail page
             if len(jobs) < self.max_jobs_for_description:
-                full_desc, company_from_detail = self._get_full_description(job['job_url'])
-                job['full_description'] = full_desc
+                full_desc, company_from_detail = self._get_full_description(job["job_url"])
+                job["full_description"] = full_desc
 
                 # Use company from detail page if list page extraction failed
-                if company_from_detail and (not job['company'] or job['company'] == "Unknown Company"):
-                    job['company'] = company_from_detail
+                if company_from_detail and (not job["company"] or job["company"] == "Unknown Company"):
+                    job["company"] = company_from_detail
                     logger.debug(f"Using company from Seek detail page: {company_from_detail}")
             else:
-                job['full_description'] = ""
+                job["full_description"] = ""
 
             jobs.append(job)
         return jobs
@@ -179,22 +178,19 @@ class SeekJobScraper:
         """Extract and validate job URL from card"""
         try:
             # Find the anchor element using multiple attributes
-            link_element = card.select_one(
-                'a[data-automation="jobTitle"][href], '
-                'a[data-testid="job-card-title"][href]'
-            )
+            link_element = card.select_one('a[data-automation="jobTitle"][href], a[data-testid="job-card-title"][href]')
 
             if not link_element:
                 logger.debug("No job title link element found")
                 return ""
 
-            raw_href = link_element.get('href', '').strip()
+            raw_href = link_element.get("href", "").strip()
             if not raw_href:
                 logger.debug("Found job title element but no href attribute")
                 return ""
 
             # Clean the URL parameters
-            clean_path = raw_href.split('?')[0].split('#')[0]
+            clean_path = raw_href.split("?")[0].split("#")[0]
 
             # Construct full URL using urljoin to handle relative/absolute paths
             full_url = urljoin("https://www.seek.com.au", clean_path)
@@ -213,7 +209,7 @@ class SeekJobScraper:
     def _clean_location(self, card):
         """Combine location elements"""
         locations = card.select('[data-type="location"]')
-        return ', '.join([loc.get_text(strip=True) for loc in locations if loc])
+        return ", ".join([loc.get_text(strip=True) for loc in locations if loc])
 
     def _get_full_description(self, job_url):
         """Fetch full description and company name from job detail page"""
@@ -231,15 +227,15 @@ class SeekJobScraper:
 
             # Get page HTML and parse with BeautifulSoup
             page_html = new_tab.html
-            soup = BeautifulSoup(page_html, 'html.parser')
+            soup = BeautifulSoup(page_html, "html.parser")
 
             # Extract company name from detail page with multiple fallbacks
             company = ""
             company_selectors = [
-                {'tag': 'span', 'attrs': {'data-automation': 'advertiser-name'}},
-                {'tag': 'a', 'attrs': {'data-automation': 'jobCompany'}},
-                {'tag': 'span', 'class_': lambda x: x and 'company' in x.lower()},
-                {'tag': 'strong', 'class_': lambda x: x and 'advertiser' in x.lower()}
+                {"tag": "span", "attrs": {"data-automation": "advertiser-name"}},
+                {"tag": "a", "attrs": {"data-automation": "jobCompany"}},
+                {"tag": "span", "class_": lambda x: x and "company" in x.lower()},
+                {"tag": "strong", "class_": lambda x: x and "advertiser" in x.lower()},
             ]
             for selector in company_selectors:
                 company_element = soup.find(**selector)
@@ -250,15 +246,17 @@ class SeekJobScraper:
                         break
 
             # Find description container with multiple fallbacks
-            desc_container = soup.find('div', {'data-automation': 'jobAdDetails'}) or \
-                             soup.find('div', class_='yvsb870') or \
-                             soup.find('div', class_=lambda x: x and 'description' in x.lower())
+            desc_container = (
+                soup.find("div", {"data-automation": "jobAdDetails"})
+                or soup.find("div", class_="yvsb870")
+                or soup.find("div", class_=lambda x: x and "description" in x.lower())
+            )
             if desc_container:
                 # Clean up unwanted elements
-                for element in desc_container(['script', 'style', 'button', 'footer']):
+                for element in desc_container(["script", "style", "button", "footer"]):
                     element.decompose()
 
-                desc = desc_container.get_text(separator='\n', strip=True)
+                desc = desc_container.get_text(separator="\n", strip=True)
             else:
                 logger.warning("Description container not found in HTML")
                 desc = ""
@@ -286,13 +284,13 @@ class SeekJobScraper:
             logger.debug("No next page button found")
         return False
 
-    def _safe_extract(self, element, selector, attr='text'):
+    def _safe_extract(self, element, selector, attr="text"):
         """Safely extract data from element"""
         elem = element.select_one(selector)
         if not elem:
             return ""
 
-        if attr == 'text':
+        if attr == "text":
             return elem.get_text(strip=True)
         return elem.get(attr, "")
 

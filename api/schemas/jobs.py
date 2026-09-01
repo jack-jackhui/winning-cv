@@ -21,8 +21,10 @@ class ApplicationStatus(str, Enum):
     OFFER = "offer"
     ARCHIVED = "archived"
 
+
 class JobConfigRequest(BaseModel):
     """Job search configuration"""
+
     search_keywords: str = Field(..., min_length=2, description="Keywords for job search")
     seek_category: str = Field(default="information communication technology")
     seek_salaryrange: Optional[str] = None
@@ -38,6 +40,7 @@ class JobConfigRequest(BaseModel):
 
 class JobConfigResponse(BaseModel):
     """Saved job search configuration"""
+
     user_email: str
     base_cv_path: Optional[str] = None
     base_cv_link: Optional[str] = None
@@ -54,6 +57,7 @@ class JobConfigResponse(BaseModel):
 
 class SearchTaskResponse(BaseModel):
     """Response when starting a job search"""
+
     task_id: str
     status: SearchStatus = SearchStatus.PENDING
     message: str = "Search task created"
@@ -61,6 +65,7 @@ class SearchTaskResponse(BaseModel):
 
 class SearchStatusResponse(BaseModel):
     """Status of a running search task"""
+
     task_id: str
     status: SearchStatus
     progress: int = Field(default=0, ge=0, le=100)
@@ -70,16 +75,20 @@ class SearchStatusResponse(BaseModel):
 
 class ScoreBreakdown(BaseModel):
     """Detailed score breakdown from ATS/HR scorers"""
+
     ats_score: Optional[float] = Field(None, ge=0, le=100, description="ATS compatibility score (0-100)")
     hr_score: Optional[float] = Field(None, ge=0, le=100, description="HR evaluation score (0-100)")
     llm_score: Optional[float] = Field(None, ge=0, le=10, description="LLM evaluation score (0-10)")
-    recommendation: Optional[str] = Field(None, description="HR recommendation: STRONG INTERVIEW, INTERVIEW, MAYBE, PASS")
+    recommendation: Optional[str] = Field(
+        None, description="HR recommendation: STRONG INTERVIEW, INTERVIEW, MAYBE, PASS"
+    )
     matched_keywords: Optional[List[str]] = Field(None, description="Keywords from JD found in resume")
     missing_keywords: Optional[List[str]] = Field(None, description="Important JD keywords missing from resume")
 
 
 class ApplicationStatusUpdate(BaseModel):
     """Update for a job application's tracking state."""
+
     application_status: ApplicationStatus = Field(..., description="Current application tracking state")
     application_notes: Optional[str] = Field(None, max_length=2000, description="Private notes about the application")
     next_action_at: Optional[date] = Field(
@@ -90,6 +99,7 @@ class ApplicationStatusUpdate(BaseModel):
 
 class ApplicationSummary(BaseModel):
     """Lightweight application data used by the overview pipeline."""
+
     id: str
     job_title: str
     company: str
@@ -102,12 +112,14 @@ class ApplicationSummary(BaseModel):
 
 class ApplicationsResponse(BaseModel):
     """Complete application overview for the authenticated user."""
+
     items: List[ApplicationSummary]
     total: int
 
 
 class JobResult(BaseModel):
     """Single job search result"""
+
     id: str
     job_title: str
     company: str
@@ -129,5 +141,6 @@ class JobResult(BaseModel):
 
 class JobResultsResponse(BaseModel):
     """List of job search results"""
+
     items: List[JobResult]
     total: int

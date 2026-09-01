@@ -9,13 +9,7 @@ class JobScheduler:
         self.logger = logging.getLogger(__name__)
 
     def add_job(self, func, interval_minutes, name=None):
-        self.scheduler.add_job(
-            func,
-            'interval',
-            minutes=interval_minutes,
-            max_instances=1,
-            name=name
-        )
+        self.scheduler.add_job(func, "interval", minutes=interval_minutes, max_instances=1, name=name)
         self.logger.info(f"Added scheduled job to run every {interval_minutes} minutes")
 
     def start(self):
@@ -28,6 +22,7 @@ class JobScheduler:
     def block(self):
         """Block the main thread so the script keeps running."""
         import time
+
         try:
             while True:
                 time.sleep(1)

@@ -26,3 +26,6 @@ CLAUDE.md
 
 # LinkedIn session cookies (synced manually to production)
 cookies/
+# Repository Index Creator (sc-index-repo)
+PROJECT_INDEX.md
+PROJECT_INDEX.json

@@ -30,10 +30,7 @@ from config.settings import Config
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 LINKEDIN_LOGIN_URL = "https://www.linkedin.com/login"
@@ -45,15 +42,12 @@ def create_visible_browser() -> Chromium:
     """Create a visible (non-headless) browser for manual login."""
     options = ChromiumOptions()
 
-    options.auto_port(True) \
-        .headless(False) \
-        .no_imgs(False) \
-        .mute(True) \
-        .set_paths(browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH) \
-        .set_user_agent(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
+    options.auto_port(True).headless(False).no_imgs(False).mute(True).set_paths(
+        browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH
+    ).set_user_agent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
 
     # Don't use incognito mode - we want to save session
     # options.incognito(False)
@@ -95,7 +89,7 @@ def wait_for_login(tab, timeout: int = 300) -> bool:
                 # Additional check - look for session indicator
                 try:
                     # Look for user's profile element or feed indicator
-                    if tab.ele('@@class=feed-identity-module', timeout=1):
+                    if tab.ele("@@class=feed-identity-module", timeout=1):
                         logger.info("Login successful! Found authenticated content.")
                         return True
                 except:
@@ -120,11 +114,7 @@ def extract_cookies(tab) -> list:
             # Convert dict format to list format
             cookie_list = []
             for name, value in cookies.items():
-                cookie_list.append({
-                    "name": name,
-                    "value": value,
-                    "domain": ".linkedin.com"
-                })
+                cookie_list.append({"name": name, "value": value, "domain": ".linkedin.com"})
             return cookie_list
         return cookies if cookies else []
     except Exception as e:
@@ -257,18 +247,10 @@ Examples:
   python -m job_sources.linkedin_login          # Open browser for login
   python -m job_sources.linkedin_login --check  # Check cookie status
   python -m job_sources.linkedin_login --clear  # Clear saved cookies
-        """
+        """,
     )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="Check saved cookie status"
-    )
-    parser.add_argument(
-        "--clear",
-        action="store_true",
-        help="Clear saved cookies"
-    )
+    parser.add_argument("--check", action="store_true", help="Check saved cookie status")
+    parser.add_argument("--clear", action="store_true", help="Clear saved cookies")
 
     args = parser.parse_args()
 

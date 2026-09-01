@@ -2,7 +2,6 @@ import logging
 
 import streamlit as st
 
-from config.settings import Config
 from data_store.storage_factory import get_data_manager
 from ui.generate_ui import show_generate_ui
 from ui.history_ui import show_history_ui
@@ -29,26 +28,26 @@ def login_dialog():
             st.login("microsoft")
             st.rerun()
 
+
 def main():
     # Initialize logging FIRST THING
     setup_logger(
         log_file="logs/web_app.log",  # Central log file path
-        level=logging.DEBUG
+        level=logging.DEBUG,
     )
     st.set_page_config(
         page_title="Winning CV - Powered by AI",
         page_icon="⚡",
         layout="wide",
-        menu_items={
-            "About": "https://jackhui.com.au"
-        }
+        menu_items={"About": "https://jackhui.com.au"},
     )
 
     # Always show sidebar
     mode = render_sidebar()
 
     # Add custom CSS for footer
-    st.markdown("""
+    st.markdown(
+        """
             <style>
             footer {
                 position: fixed;
@@ -68,7 +67,9 @@ def main():
                 margin: 0 0.5rem;
             }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Initialize Airtable manager
     airtable = get_data_manager()
@@ -101,13 +102,17 @@ def main():
         show_history_ui(user_email)
 
     # Add footer content
-    st.markdown("""
+    st.markdown(
+        """
         <footer>
             ⭐ Winning CV Powered by AI |
             <a href="https://jackhui.com.au/" target="_blank">About</a> |
             <a href="https://jackhui.com.au/" target="_blank">Contact</a>
         </footer>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -57,7 +57,7 @@ class MinIOStorage:
         access_key: Optional[str] = None,
         secret_key: Optional[str] = None,
         bucket: Optional[str] = None,
-        secure: bool = False
+        secure: bool = False,
     ):
         """
         Initialize MinIO client.
@@ -79,12 +79,7 @@ class MinIOStorage:
         # Format: "https://domain.com/storage" (with /storage prefix for nginx proxy)
         self.external_endpoint = os.getenv("MINIO_EXTERNAL_ENDPOINT", "")
 
-        self.client = Minio(
-            self.endpoint,
-            access_key=self.access_key,
-            secret_key=self.secret_key,
-            secure=self.secure
-        )
+        self.client = Minio(self.endpoint, access_key=self.access_key, secret_key=self.secret_key, secure=self.secure)
 
         # Ensure bucket exists
         self._ensure_bucket()
@@ -136,7 +131,7 @@ class MinIOStorage:
         user_id: str,
         filename: str,
         version_id: Optional[str] = None,
-        content_type: str = "application/pdf"
+        content_type: str = "application/pdf",
     ) -> str:
         """
         Upload a CV file to MinIO.
@@ -158,13 +153,7 @@ class MinIOStorage:
             file_size = os.path.getsize(file_path)
 
             with open(file_path, "rb") as file_data:
-                self.client.put_object(
-                    self.bucket,
-                    object_path,
-                    file_data,
-                    length=file_size,
-                    content_type=content_type
-                )
+                self.client.put_object(self.bucket, object_path, file_data, length=file_size, content_type=content_type)
 
             logger.info(f"Uploaded CV to MinIO: {object_path}")
             return object_path
@@ -179,7 +168,7 @@ class MinIOStorage:
         user_id: str,
         filename: str,
         version_id: Optional[str] = None,
-        content_type: str = "application/pdf"
+        content_type: str = "application/pdf",
     ) -> str:
         """
         Upload CV from bytes data.
@@ -200,13 +189,7 @@ class MinIOStorage:
 
         try:
             data_stream = BytesIO(data)
-            self.client.put_object(
-                self.bucket,
-                object_path,
-                data_stream,
-                length=len(data),
-                content_type=content_type
-            )
+            self.client.put_object(self.bucket, object_path, data_stream, length=len(data), content_type=content_type)
 
             logger.info(f"Uploaded CV bytes to MinIO: {object_path}")
             return object_path
@@ -220,7 +203,7 @@ class MinIOStorage:
         user_id: str,
         filename: str,
         version_id: Optional[str] = None,
-        expires_hours: int = DEFAULT_URL_EXPIRY_HOURS
+        expires_hours: int = DEFAULT_URL_EXPIRY_HOURS,
     ) -> str:
         """
         Get a time-limited presigned URL for downloading a CV.
@@ -237,11 +220,7 @@ class MinIOStorage:
         object_path = self._get_object_path(user_id, filename, version_id)
 
         try:
-            url = self.client.presigned_get_object(
-                self.bucket,
-                object_path,
-                expires=timedelta(hours=expires_hours)
-            )
+            url = self.client.presigned_get_object(self.bucket, object_path, expires=timedelta(hours=expires_hours))
 
             # Transform internal URL to external (browser-accessible) URL
             url = self._transform_url_for_external(url)
@@ -253,11 +232,7 @@ class MinIOStorage:
             logger.error(f"Failed to generate presigned URL: {e}")
             raise
 
-    def get_download_url_by_path(
-        self,
-        object_path: str,
-        expires_hours: int = DEFAULT_URL_EXPIRY_HOURS
-    ) -> str:
+    def get_download_url_by_path(self, object_path: str, expires_hours: int = DEFAULT_URL_EXPIRY_HOURS) -> str:
         """
         Get presigned URL using full object path.
 
@@ -269,11 +244,7 @@ class MinIOStorage:
             Presigned download URL
         """
         try:
-            url = self.client.presigned_get_object(
-                self.bucket,
-                object_path,
-                expires=timedelta(hours=expires_hours)
-            )
+            url = self.client.presigned_get_object(self.bucket, object_path, expires=timedelta(hours=expires_hours))
 
             # Transform internal URL to external (browser-accessible) URL
             url = self._transform_url_for_external(url)
@@ -297,21 +268,19 @@ class MinIOStorage:
         prefix = f"{user_id}/versions/"
 
         try:
-            objects = self.client.list_objects(
-                self.bucket,
-                prefix=prefix,
-                recursive=True
-            )
+            objects = self.client.list_objects(self.bucket, prefix=prefix, recursive=True)
 
             result = []
             for obj in objects:
-                result.append({
-                    "name": obj.object_name.replace(prefix, ""),
-                    "full_path": obj.object_name,
-                    "size": obj.size,
-                    "last_modified": obj.last_modified,
-                    "etag": obj.etag
-                })
+                result.append(
+                    {
+                        "name": obj.object_name.replace(prefix, ""),
+                        "full_path": obj.object_name,
+                        "size": obj.size,
+                        "last_modified": obj.last_modified,
+                        "etag": obj.etag,
+                    }
+                )
 
             return result
 
@@ -319,12 +288,7 @@ class MinIOStorage:
             logger.error(f"Failed to list user CVs: {e}")
             raise
 
-    def delete_cv(
-        self,
-        user_id: str,
-        filename: str,
-        version_id: Optional[str] = None
-    ) -> bool:
+    def delete_cv(self, user_id: str, filename: str, version_id: Optional[str] = None) -> bool:
         """
         Delete a CV file.
 
@@ -347,12 +311,7 @@ class MinIOStorage:
             logger.error(f"Failed to delete CV: {e}")
             raise
 
-    def cv_exists(
-        self,
-        user_id: str,
-        filename: str,
-        version_id: Optional[str] = None
-    ) -> bool:
+    def cv_exists(self, user_id: str, filename: str, version_id: Optional[str] = None) -> bool:
         """
         Check if a CV exists.
 
@@ -375,11 +334,7 @@ class MinIOStorage:
             raise
 
     def download_cv_to_local(
-        self,
-        user_id: str,
-        filename: str,
-        local_path: str,
-        version_id: Optional[str] = None
+        self, user_id: str, filename: str, local_path: str, version_id: Optional[str] = None
     ) -> bool:
         """
         Download a CV file from MinIO to local filesystem.
@@ -411,11 +366,7 @@ class MinIOStorage:
             logger.error(f"Failed to download CV from MinIO: {e}")
             return False
 
-    def download_cv_by_path(
-        self,
-        storage_path: str,
-        local_path: str
-    ) -> bool:
+    def download_cv_by_path(self, storage_path: str, local_path: str) -> bool:
         """
         Download a CV file from MinIO using the full storage path.
 
@@ -442,12 +393,7 @@ class MinIOStorage:
             logger.error(f"Failed to download CV from MinIO: {e}")
             return False
 
-    def download_cv_bytes(
-        self,
-        user_id: str,
-        filename: str,
-        version_id: Optional[str] = None
-    ) -> Optional[bytes]:
+    def download_cv_bytes(self, user_id: str, filename: str, version_id: Optional[str] = None) -> Optional[bytes]:
         """
         Download a CV file from MinIO as bytes.
 
@@ -489,11 +435,7 @@ def get_minio_storage() -> MinIOStorage:
     return _storage_instance
 
 
-def upload_pdf_to_minio(
-    file_path: str,
-    filename: str,
-    user_id: str = "default"
-) -> str:
+def upload_pdf_to_minio(file_path: str, filename: str, user_id: str = "default") -> str:
     """
     Convenience function to upload PDF to MinIO.
 
@@ -510,11 +452,7 @@ def upload_pdf_to_minio(
     storage = get_minio_storage()
 
     # Upload the file
-    object_path = storage.upload_cv(
-        file_path=file_path,
-        user_id=user_id,
-        filename=filename
-    )
+    object_path = storage.upload_cv(file_path=file_path, user_id=user_id, filename=filename)
 
     # Return a presigned URL valid for 24 hours
     return storage.get_download_url_by_path(object_path, expires_hours=24)

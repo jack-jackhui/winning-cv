@@ -26,11 +26,11 @@ def test_config():
 @pytest.fixture
 def mock_airtable():
     """Mock Airtable manager with proper table method mocking"""
-    with mock.patch('pyairtable.Api') as mock_api:
+    with mock.patch("pyairtable.Api") as mock_api:
         # Create mock table instance
         mock_table = mock.Mock()
         mock_table.all.return_value = []
-        mock_table.create.return_value = {'id': 'rec_test'}
+        mock_table.create.return_value = {"id": "rec_test"}
 
         # Configure API mock
         mock_api_instance = mock_api.return_value
@@ -44,12 +44,16 @@ def mock_airtable():
 @pytest.fixture
 def sample_job_entry():
     """Sample job entry for testing"""
-    return type('Entry', (), {
-        'title': "Senior Python Developer",
-        'description': "<p>Python, Django, REST APIs</p>",
-        'published': "Wed, 01 Jan 2024 00:00:00 GMT",
-        'link': "https://example.com/job/123"
-    })
+    return type(
+        "Entry",
+        (),
+        {
+            "title": "Senior Python Developer",
+            "description": "<p>Python, Django, REST APIs</p>",
+            "published": "Wed, 01 Jan 2024 00:00:00 GMT",
+            "link": "https://example.com/job/123",
+        },
+    )
 
 
 def test_full_workflow(test_config, mock_airtable, sample_job_entry):
@@ -58,7 +62,7 @@ def test_full_workflow(test_config, mock_airtable, sample_job_entry):
     mock_table = mock_airtable.table
 
     # Mock feedparser response
-    with mock.patch('feedparser.parse') as mock_parse:
+    with mock.patch("feedparser.parse") as mock_parse:
         mock_parse.return_value.entries = [sample_job_entry]
 
         # Initialize components
@@ -74,29 +78,17 @@ def test_full_workflow(test_config, mock_airtable, sample_job_entry):
 
         # Process entry
         job_data = feed_processor.process_entry(entries[0])
-        cleaned_desc = content_cleaner.clean_html(job_data['description'])
+        cleaned_desc = content_cleaner.clean_html(job_data["description"])
 
         # Mock score calculation
-        with mock.patch('utils.matcher.JobMatcher.calculate_match_score') as mock_score:
-            mock_score.return_value = (8.5, {
-                'score': 8.5,
-                'reasons': ["Python experience"],
-                'suggestions': []
-            })
+        with mock.patch("utils.matcher.JobMatcher.calculate_match_score") as mock_score:
+            mock_score.return_value = (8.5, {"score": 8.5, "reasons": ["Python experience"], "suggestions": []})
 
             # Create job record
-            assert mock_airtable.create_job_record({
-                **job_data,
-                'description': cleaned_desc
-            })
+            assert mock_airtable.create_job_record({**job_data, "description": cleaned_desc})
 
             # Mock unprocessed jobs response
-            mock_table.all.return_value = [{
-                'fields': {
-                    'Job Description': cleaned_desc,
-                    'Job Link': job_data['url']
-                }
-            }]
+            mock_table.all.return_value = [{"fields": {"Job Description": cleaned_desc, "Job Link": job_data["url"]}}]
 
             # Test matching process
             test_cv = "Python developer with 5 years experience..."
@@ -128,7 +120,7 @@ def test_error_handling(test_config, mock_airtable):
     """Test error scenarios"""
     mock_table = mock_airtable.table
     # Test feed fetch failure
-    with mock.patch('feedparser.parse') as mock_parse:
+    with mock.patch("feedparser.parse") as mock_parse:
         mock_parse.side_effect = Exception("Feed error")
         feed_processor = LinkedInFeedProcessor(test_config.RSS_FEED_URL)
         entries = feed_processor.fetch_jobs()

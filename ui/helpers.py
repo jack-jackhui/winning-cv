@@ -23,7 +23,7 @@ def upload_pdf(
     user_id: str = "default",
     wp_site: str = None,
     wp_user: str = None,
-    wp_app_password: str = None
+    wp_app_password: str = None,
 ) -> str:
     """
     Upload PDF to configured storage backend.
@@ -47,6 +47,7 @@ def upload_pdf(
     if backend == "minio":
         try:
             from utils.minio_storage import upload_pdf_to_minio
+
             return upload_pdf_to_minio(file_path, filename, user_id)
         except ImportError:
             logger.warning("MinIO storage not available, falling back to WordPress")
@@ -67,22 +68,17 @@ def format_job_description(desc: str) -> str:
     if not desc:
         return ""
     # Replace bullet characters with markdown bullets
-    desc = re.sub(r'^[\-\*\u2022]\s*', '- ', desc, flags=re.MULTILINE)
+    desc = re.sub(r"^[\-\*\u2022]\s*", "- ", desc, flags=re.MULTILINE)
     # Add a newline before bullets if missing
-    desc = re.sub(r'([^\n])(\n[\-\*])', r'\1\n\2', desc)
+    desc = re.sub(r"([^\n])(\n[\-\*])", r"\1\n\2", desc)
     # Ensure double newlines after periods (for paragraphs)
-    desc = re.sub(r'([a-z0-9])\. ([A-Z])', r'\1.\n\n\2', desc)
+    desc = re.sub(r"([a-z0-9])\. ([A-Z])", r"\1.\n\n\2", desc)
     # Optional: collapse excessive linebreaks
-    desc = re.sub(r'\n{3,}', '\n\n', desc)
+    desc = re.sub(r"\n{3,}", "\n\n", desc)
     return desc.strip()
 
-def upload_pdf_to_wordpress(
-        file_path: str,
-        filename: str,
-        wp_site: str,
-        wp_user: str,
-        wp_app_password: str
-) -> str:
+
+def upload_pdf_to_wordpress(file_path: str, filename: str, wp_site: str, wp_user: str, wp_app_password: str) -> str:
     """
     Upload a PDF to WordPress Media Library and return its public URL.
 
@@ -103,16 +99,8 @@ def upload_pdf_to_wordpress(
     # Basic Auth with username:application_password
     auth = (wp_user, wp_app_password)
     with open(file_path, "rb") as pdf_file:
-        files = {
-            "file": (filename, pdf_file, "application/pdf")
-        }
-        resp = requests.post(
-            media_endpoint,
-            headers=headers,
-            auth=auth,
-            files=files,
-            timeout=30
-        )
+        files = {"file": (filename, pdf_file, "application/pdf")}
+        resp = requests.post(media_endpoint, headers=headers, auth=auth, files=files, timeout=30)
     resp.raise_for_status()
     data = resp.json()
     # WP returns a JSON blob like:
@@ -122,6 +110,7 @@ def upload_pdf_to_wordpress(
     #    …
     #  }
     return data["source_url"]
+
 
 def extract_title_from_jd(text: str) -> str:
     """
@@ -145,20 +134,14 @@ def extract_title_from_jd(text: str) -> str:
     ]
 
     # 1. Try to find the "About the Role" section
-    role_section = re.search(
-        r'(?i)(About the Role|Role Overview|Position Description)[\s\S]*?(?=\n\s*\n|$)',
-        text
-    )
+    role_section = re.search(r"(?i)(About the Role|Role Overview|Position Description)[\s\S]*?(?=\n\s*\n|$)", text)
 
     if role_section:
         # 2. Look in first 3 lines of role section
         role_content = role_section.group(0)
-        for line in role_content.split('\n')[:3]:
+        for line in role_content.split("\n")[:3]:
             # 3. Match title patterns with validation
-            title_match = re.search(
-                r'(?i)(?:looking|seeking|hiring)\s+(?:for|a|an)?\s*([^.:?]+)',
-                line
-            )
+            title_match = re.search(r"(?i)(?:looking|seeking|hiring)\s+(?:for|a|an)?\s*([^.:?]+)", line)
             if title_match:
                 candidate = title_match.group(1).strip()
                 if is_valid_title(candidate):
@@ -186,54 +169,53 @@ def extract_title_from_jd(text: str) -> str:
 
     return "Untitled_Job"
 
+
 def is_valid_title(candidate: str) -> bool:
     """Validate title heuristics"""
     return (
-        len(candidate.split()) >= 2 and  # At least 2 words
-        any(c.isupper() for c in candidate) and  # Contains uppercase
-        not re.search(r'\b(?:join|apply|click|http)\b', candidate, re.I) and
-        not re.search(r'[.!?]$', candidate)  # Doesn't end with punctuation
+        len(candidate.split()) >= 2  # At least 2 words
+        and any(c.isupper() for c in candidate)  # Contains uppercase
+        and not re.search(r"\b(?:join|apply|click|http)\b", candidate, re.I)
+        and not re.search(r"[.!?]$", candidate)  # Doesn't end with punctuation
     )
+
+
 def format_title(title: str) -> str:
     """Clean up title formatting"""
-    title = re.sub(r'^\W+|\W+$', '', title)  # Trim edge non-words
-    title = re.sub(r'\s+', ' ', title)  # Collapse whitespace
+    title = re.sub(r"^\W+|\W+$", "", title)  # Trim edge non-words
+    title = re.sub(r"\s+", " ", title)  # Collapse whitespace
     return title[:80]
+
 
 def clean_llm_output(content: str) -> str:
     # Do NOT strip content before first header!
     # Convert ALL headers to ## level
-    cleaned = re.sub(r'^#{1,6}\s+', '## ', content, flags=re.MULTILINE)
+    cleaned = re.sub(r"^#{1,6}\s+", "## ", content, flags=re.MULTILINE)
 
     # If no headers exist, add one for "PROFESSIONAL EXPERIENCE"
-    if not re.search(r'^## ', cleaned, flags=re.MULTILINE):
-        cleaned = '## PROFESSIONAL EXPERIENCE\n\n' + cleaned
+    if not re.search(r"^## ", cleaned, flags=re.MULTILINE):
+        cleaned = "## PROFESSIONAL EXPERIENCE\n\n" + cleaned
 
     # Fix lines that start with "** " instead of "**"
-    cleaned = re.sub(r'\*\*\s+(\w+:)', r'**\1', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\*\*\s+(\w+:)", r"**\1", cleaned, flags=re.MULTILINE)
 
     # Remove leading spaces before bolded sub‑headers in KEY ACHIEVEMENTS
-    cleaned = re.sub(r'^\s+\*\*', '**', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s+\*\*", "**", cleaned, flags=re.MULTILINE)
+
     def _add_pipe(m):
         company = m.group(1).strip()
-        rest    = m.group(2).strip()
+        rest = m.group(2).strip()
         return f"**{company}** \\| {rest}"
+
     # Only lines with years or date range get the pipe (EMPLOYMENT HISTORY)
     cleaned = re.sub(
-        r'^\*\*(.+?)\*\*\s+(?!\\\|)(.*?\(\d{4}[\u2013\-–]\d{4,}|Present\))',
-        _add_pipe,
-        cleaned,
-        flags=re.MULTILINE
+        r"^\*\*(.+?)\*\*\s+(?!\\\|)(.*?\(\d{4}[\u2013\-–]\d{4,}|Present\))", _add_pipe, cleaned, flags=re.MULTILINE
     )
     # KEY ACHIEVEMENTS: Split subheader | - Bullet to subheader\n- Bullet
-    cleaned = re.sub(
-        r"^(.*?)\s*\|\s*(- .+)$",
-        r"\1\n\2",
-        cleaned,
-        flags=re.MULTILINE
-    )
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = re.sub(r"^(.*?)\s*\|\s*(- .+)$", r"\1\n\2", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
 
 def strip_llm_contact_block(md, contact):
     """
@@ -241,27 +223,28 @@ def strip_llm_contact_block(md, contact):
     [NAME] [ADDRESS] [PHONE]
     **
     """
-    if not contact.get('name'):
+    if not contact.get("name"):
         return md
 
     # Escape special regex characters in contact info
-    name = re.escape(contact['name'])
-    address = re.escape(contact.get('address', ''))
-    phone = re.escape(contact.get('phone', ''))
+    name = re.escape(contact["name"])
+    address = re.escape(contact.get("address", ""))
+    phone = re.escape(contact.get("phone", ""))
 
     # Build pattern to match: Name + Address + Phone + newline + **
     pattern = (
-        r'^'  # Start of line
-        rf'{name}.*?'  # Name + any characters
-        rf'({address}.*?)?'  # Optional address
-        rf'({phone}.*?)?'  # Optional phone
-        r'\n'  # Newline
-        r'\*\*'  # Double asterisks
-        r'\s*'  # Optional whitespace
-        r'\n'  # Newline
+        r"^"  # Start of line
+        rf"{name}.*?"  # Name + any characters
+        rf"({address}.*?)?"  # Optional address
+        rf"({phone}.*?)?"  # Optional phone
+        r"\n"  # Newline
+        r"\*\*"  # Double asterisks
+        r"\s*"  # Optional whitespace
+        r"\n"  # Newline
     )
 
-    return re.sub(pattern, '', md, flags=re.MULTILINE)
+    return re.sub(pattern, "", md, flags=re.MULTILINE)
+
 
 def extract_contact_info(cv_text: str) -> dict:
     """
@@ -273,21 +256,21 @@ def extract_contact_info(cv_text: str) -> dict:
     if not lines:
         return info
     # 1) Full name is line #1
-    info['name'] = lines[0]
+    info["name"] = lines[0]
     # 2) Scan next few lines for the other pieces
     for line in lines[1:10]:
         # Email
-        if '://' not in line and '@' in line:
-            m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', line)
+        if "://" not in line and "@" in line:
+            m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", line)
             if m:
-                info['email'] = m.group(0)
+                info["email"] = m.group(0)
         # Phone (approximate)
-        if re.search(r'\+?\d[\d\-\s\(\)]{7,}\d', line):
-            info['phone'] = line
+        if re.search(r"\+?\d[\d\-\s\(\)]{7,}\d", line):
+            info["phone"] = line
         # GitHub
-        if 'github.com' in line.lower():
-            info['github'] = line
+        if "github.com" in line.lower():
+            info["github"] = line
         # Address (comma + number)
-        if ',' in line and re.search(r'\d{1,5}\s+\w+', line):
-            info['address'] = line
+        if "," in line and re.search(r"\d{1,5}\s+\w+", line):
+            info["address"] = line
     return info

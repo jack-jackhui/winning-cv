@@ -1,6 +1,7 @@
 """
 Notification preferences schemas for WinningCV API.
 """
+
 from typing import Optional
 
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 class NotificationPreferences(BaseModel):
     """User notification preferences"""
+
     email_alerts: bool = True
     telegram_alerts: bool = False
     wechat_alerts: bool = False
@@ -19,6 +21,7 @@ class NotificationPreferences(BaseModel):
 
 class NotificationPreferencesUpdate(BaseModel):
     """Update notification preferences request"""
+
     email_alerts: Optional[bool] = None
     telegram_alerts: Optional[bool] = None
     wechat_alerts: Optional[bool] = None
@@ -31,6 +34,7 @@ class NotificationPreferencesUpdate(BaseModel):
 
 class NotificationPreferencesResponse(BaseModel):
     """Notification preferences response with user email"""
+
     user_email: str
     email_alerts: bool
     telegram_alerts: bool
@@ -44,11 +48,13 @@ class NotificationPreferencesResponse(BaseModel):
 
 class TestNotificationRequest(BaseModel):
     """Request to send a test notification"""
+
     channel: str  # 'email', 'telegram', or 'wechat'
 
 
 class TestNotificationResponse(BaseModel):
     """Response from test notification"""
+
     success: bool
     channel: str
     message: str

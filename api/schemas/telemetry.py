@@ -1,6 +1,7 @@
 """
 Pydantic schemas for product telemetry API.
 """
+
 from datetime import datetime
 from typing import Any, Optional
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class TelemetryEvent(BaseModel):
     """Single telemetry event from frontend."""
+
     event_name: str = Field(..., max_length=100, description="Event name (e.g. 'cv_upload')")
     funnel_step: Optional[int] = Field(None, ge=1, le=20, description="Funnel step number")
     entity_type: Optional[str] = Field(None, max_length=50, description="Entity type (e.g. 'cv', 'job')")
@@ -22,17 +24,20 @@ class TelemetryEvent(BaseModel):
 
 class TelemetryBatch(BaseModel):
     """Batch of telemetry events."""
+
     events: list[TelemetryEvent] = Field(..., max_length=50, description="List of events (max 50)")
 
 
 class TelemetryResponse(BaseModel):
     """Response after recording events."""
+
     recorded: int = Field(..., description="Number of events recorded")
     errors: int = Field(default=0, description="Number of events that failed")
 
 
 class FunnelStepMetrics(BaseModel):
     """Metrics for a single funnel step."""
+
     funnel_step: int
     event_name: str
     event_count: int
@@ -42,6 +47,7 @@ class FunnelStepMetrics(BaseModel):
 
 class FunnelAnalytics(BaseModel):
     """Complete funnel analytics response."""
+
     period_start: datetime
     period_end: datetime
     steps: list[FunnelStepMetrics]
@@ -50,6 +56,7 @@ class FunnelAnalytics(BaseModel):
 
 class TopEvent(BaseModel):
     """Aggregated event metrics."""
+
     event_name: str
     event_count: int
     unique_users: int
@@ -58,6 +65,7 @@ class TopEvent(BaseModel):
 
 class ErrorEvent(BaseModel):
     """Error event summary."""
+
     event_name: str
     error_count: int
     affected_users: int
@@ -67,6 +75,7 @@ class ErrorEvent(BaseModel):
 
 class ActivitySummary(BaseModel):
     """Activity summary for a period."""
+
     period_start: datetime
     period_end: datetime
     total_events: int
@@ -80,6 +89,7 @@ class ActivitySummary(BaseModel):
 
 class AnalyticsDashboard(BaseModel):
     """Complete analytics dashboard response."""
+
     summary: ActivitySummary
     funnel: list[FunnelStepMetrics]
     top_events: list[TopEvent]

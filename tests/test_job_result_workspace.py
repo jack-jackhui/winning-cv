@@ -1,4 +1,5 @@
 """Focused tests for the application workspace job-result routes."""
+
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from unittest.mock import Mock
@@ -75,9 +76,7 @@ def test_applications_route_is_user_scoped_and_not_truncated(monkeypatch):
     monkeypatch.setattr(jobs, "get_data_manager", lambda: manager)
     monkeypatch.setattr(jobs, "get_history_manager", fail_history_dependency)
 
-    response = make_test_client(make_user("o'connor@example.com")).get(
-        "/api/v1/jobs/applications"
-    )
+    response = make_test_client(make_user("o'connor@example.com")).get("/api/v1/jobs/applications")
 
     assert response.status_code == 200
     assert response.json()["total"] == 101
@@ -300,6 +299,7 @@ def test_postgres_list_jobs_parameterizes_apostrophe_email():
     assert "WHERE user_email = %s" in query
     assert params == ("o'connor@example.com",)
 
+
 def test_postgres_application_list_is_projected_owner_scoped_and_ordered():
     cursor = Mock()
     cursor.fetchall.return_value = [
@@ -493,9 +493,7 @@ def test_airtable_application_update_persists_for_exact_owner():
         }
     )
 
-    result = manager.update_application_status(
-        "job-123", "owner@example.com", "applied", "Submitted today"
-    )
+    result = manager.update_application_status("job-123", "owner@example.com", "applied", "Submitted today")
 
     assert result["fields"]["Application Status"] == "applied"
     updated_id, fields = manager.table.update.call_args.args
@@ -568,9 +566,7 @@ def test_airtable_application_update_denies_cross_user():
     manager.logger = Mock()
     manager.table.get.return_value = make_record()
 
-    assert manager.update_application_status(
-        "job-123", "foreign@example.com", "applied", "Should not save"
-    ) is None
+    assert manager.update_application_status("job-123", "foreign@example.com", "applied", "Should not save") is None
     manager.table.update.assert_not_called()
 
 
@@ -614,9 +610,7 @@ def test_dual_write_application_update_uses_airtable_primary_and_postgres_shadow
     airtable.update_application_status.return_value = make_record()
     manager = DualWriteDataManager(airtable, postgres)
 
-    result = manager.update_application_status(
-        "job-123", "owner@example.com", "interviewing", "Phone screen"
-    )
+    result = manager.update_application_status("job-123", "owner@example.com", "interviewing", "Phone screen")
 
     assert result["id"] == "job-123"
     airtable.update_application_status.assert_called_once_with(
@@ -645,9 +639,7 @@ def test_dual_write_application_update_reports_shadow_failure(shadow_result, cap
     manager = DualWriteDataManager(airtable, postgres)
 
     with pytest.raises(ShadowWriteError):
-        manager.update_application_status(
-            "job-123", "owner@example.com", "saved", None
-        )
+        manager.update_application_status("job-123", "owner@example.com", "saved", None)
 
     assert "Postgres shadow write" in caplog.text
 

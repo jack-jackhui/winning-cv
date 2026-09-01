@@ -10,9 +10,9 @@ Supports:
 
 import logging
 import re
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
-from utils.llm_client import get_llm_client, LLMResponse
+from utils.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -121,32 +121,27 @@ class CVGeneratorV2:
     """
     CV Generator using Responses API for stateful generation and refinement.
     """
-    
+
     def __init__(self):
         self.client = get_llm_client()
-    
-    def _build_system_prompt(
-        self,
-        job_desc: str,
-        instructions: str = "",
-        is_refinement: bool = False
-    ) -> str:
+
+    def _build_system_prompt(self, job_desc: str, instructions: str = "", is_refinement: bool = False) -> str:
         """Build complete system prompt"""
         parts = []
-        
+
         if is_refinement:
             parts.append(CV_REFINEMENT_PROMPT)
         else:
             parts.append(CV_OPTIMIZATION_SYSTEM_PROMPT)
-        
+
         parts.append(CV_FORMAT_REQUIREMENTS)
         parts.append(f"\n## Target Job Description\n{job_desc}")
-        
+
         if instructions:
             parts.append(f"\n## Additional Instructions\n{instructions}")
-        
+
         return "\n".join(parts)
-    
+
     def generate(
         self,
         cv_content: str,
@@ -156,21 +151,21 @@ class CVGeneratorV2:
     ) -> Tuple[str, str]:
         """
         Generate initial optimized CV.
-        
+
         Args:
             cv_content: Original CV content
             job_desc: Job description to optimize for
             instructions: Optional additional instructions
             max_tokens: Maximum output tokens
-            
+
         Returns:
             Tuple of (optimized_cv, response_id)
         """
         if not cv_content.strip():
             raise ValueError("Empty CV content")
-        
+
         system_prompt = self._build_system_prompt(job_desc, instructions)
-        
+
         user_prompt = f"""Optimize the following CV for the job description provided.
 
 ## Original CV
@@ -180,22 +175,19 @@ class CVGeneratorV2:
 ---
 
 Return ONLY the optimized CV in Markdown format."""
-        
+
         response = self.client.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=max_tokens,
         )
-        
+
         cleaned_cv = clean_cv_output(response.content)
-        
-        logger.info(
-            f"Generated CV: {response.total_tokens} tokens, "
-            f"response_id={response.response_id}"
-        )
-        
+
+        logger.info(f"Generated CV: {response.total_tokens} tokens, response_id={response.response_id}")
+
         return cleaned_cv, response.response_id
-    
+
     def refine(
         self,
         job_desc: str,
@@ -205,50 +197,47 @@ Return ONLY the optimized CV in Markdown format."""
     ) -> Tuple[str, str]:
         """
         Refine a previously generated CV based on user feedback.
-        
+
         Uses response chaining (previous_response_id) to maintain full context.
-        
+
         Args:
             job_desc: Original job description
             refinement_instructions: User's specific improvement requests
             previous_response_id: Response ID from previous generation
             max_tokens: Maximum output tokens
-            
+
         Returns:
             Tuple of (refined_cv, new_response_id)
         """
         if not refinement_instructions.strip():
             raise ValueError("Refinement instructions required")
-        
-        system_prompt = self._build_system_prompt(
-            job_desc,
-            is_refinement=True
-        )
-        
+
+        system_prompt = self._build_system_prompt(job_desc, is_refinement=True)
+
         user_prompt = f"""Please refine the CV based on these specific instructions:
 
 {refinement_instructions}
 
 Apply these changes while maintaining all previous optimizations.
 Return ONLY the refined CV in Markdown format."""
-        
+
         response = self.client.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=max_tokens,
             previous_response_id=previous_response_id,
         )
-        
+
         cleaned_cv = clean_cv_output(response.content)
-        
+
         logger.info(
             f"Refined CV: {response.total_tokens} tokens, "
             f"response_id={response.response_id}, "
             f"chained from={previous_response_id}"
         )
-        
+
         return cleaned_cv, response.response_id
-    
+
     def regenerate_with_improvements(
         self,
         cv_content: str,
@@ -259,27 +248,27 @@ Return ONLY the refined CV in Markdown format."""
     ) -> Tuple[str, str]:
         """
         Regenerate CV incorporating analysis improvement suggestions.
-        
+
         Args:
             cv_content: Original CV content (for context)
             job_desc: Job description
             analysis_suggestions: List of improvements from CV analysis
             previous_response_id: Optional response ID to chain from
             max_tokens: Maximum output tokens
-            
+
         Returns:
             Tuple of (improved_cv, new_response_id)
         """
         suggestions_text = "\n".join(f"- {s}" for s in analysis_suggestions)
-        
+
         instructions = f"""Apply these specific improvements from CV-JD analysis:
 
 {suggestions_text}
 
 Incorporate all suggestions while maintaining professional tone and accurate content."""
-        
+
         system_prompt = self._build_system_prompt(job_desc, instructions)
-        
+
         user_prompt = f"""Regenerate the CV with the specified improvements.
 
 ## Original CV
@@ -289,53 +278,37 @@ Incorporate all suggestions while maintaining professional tone and accurate con
 ---
 
 Apply all improvement suggestions and return ONLY the improved CV in Markdown format."""
-        
+
         response = self.client.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=max_tokens,
             previous_response_id=previous_response_id,
         )
-        
+
         cleaned_cv = clean_cv_output(response.content)
-        
-        logger.info(
-            f"Regenerated CV with {len(analysis_suggestions)} improvements: "
-            f"{response.total_tokens} tokens"
-        )
-        
+
+        logger.info(f"Regenerated CV with {len(analysis_suggestions)} improvements: {response.total_tokens} tokens")
+
         return cleaned_cv, response.response_id
 
 
 # Convenience functions
-def generate_cv(
-    cv_content: str,
-    job_desc: str,
-    instructions: str = ""
-) -> Tuple[str, str]:
+def generate_cv(cv_content: str, job_desc: str, instructions: str = "") -> Tuple[str, str]:
     """Generate optimized CV. Returns (cv_markdown, response_id)."""
     generator = CVGeneratorV2()
     return generator.generate(cv_content, job_desc, instructions)
 
 
-def refine_cv(
-    job_desc: str,
-    refinement_instructions: str,
-    previous_response_id: str
-) -> Tuple[str, str]:
+def refine_cv(job_desc: str, refinement_instructions: str, previous_response_id: str) -> Tuple[str, str]:
     """Refine CV based on user feedback. Returns (cv_markdown, response_id)."""
     generator = CVGeneratorV2()
     return generator.refine(job_desc, refinement_instructions, previous_response_id)
 
 
 def regenerate_cv_with_improvements(
-    cv_content: str,
-    job_desc: str,
-    analysis_suggestions: List[str],
-    previous_response_id: Optional[str] = None
+    cv_content: str, job_desc: str, analysis_suggestions: List[str], previous_response_id: Optional[str] = None
 ) -> Tuple[str, str]:
     """Regenerate CV with analysis suggestions. Returns (cv_markdown, response_id)."""
     generator = CVGeneratorV2()
-    return generator.regenerate_with_improvements(
-        cv_content, job_desc, analysis_suggestions, previous_response_id
-    )
+    return generator.regenerate_with_improvements(cv_content, job_desc, analysis_suggestions, previous_response_id)

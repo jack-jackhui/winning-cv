@@ -16,12 +16,9 @@ No SBERT/semantic similarity - pure rule-based scoring.
 """
 
 import re
-import math
-from datetime import datetime, date
 from dataclasses import dataclass, field
-from collections import defaultdict
-from typing import Dict, List, Tuple, Optional, Any
-
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
@@ -30,111 +27,249 @@ from typing import Dict, List, Tuple, Optional, Any
 # Title hierarchy mapping for trajectory scoring (1-9 scale)
 TITLE_HIERARCHY = {
     # Entry Level (1-2)
-    'intern': 1, 'trainee': 1, 'apprentice': 1,
-    'assistant': 2, 'associate': 2, 'junior': 2, 'entry': 2,
-    'coordinator': 2, 'administrator': 2,
-
+    "intern": 1,
+    "trainee": 1,
+    "apprentice": 1,
+    "assistant": 2,
+    "associate": 2,
+    "junior": 2,
+    "entry": 2,
+    "coordinator": 2,
+    "administrator": 2,
     # Mid Level (3-4)
-    'analyst': 3, 'specialist': 3, 'engineer': 3, 'developer': 3,
-    'consultant': 3, 'officer': 3, 'representative': 3,
-    'senior analyst': 4, 'senior specialist': 4, 'senior engineer': 4,
-    'senior': 4, 'lead': 4, 'principal': 4, 'staff': 4,
-
+    "analyst": 3,
+    "specialist": 3,
+    "engineer": 3,
+    "developer": 3,
+    "consultant": 3,
+    "officer": 3,
+    "representative": 3,
+    "senior analyst": 4,
+    "senior specialist": 4,
+    "senior engineer": 4,
+    "senior": 4,
+    "lead": 4,
+    "principal": 4,
+    "staff": 4,
     # Management (5-6)
-    'supervisor': 5, 'team lead': 5, 'manager': 5, 'program manager': 5,
-    'project manager': 5, 'product manager': 5,
-    'senior manager': 6, 'associate director': 6, 'director': 6,
-    'head': 6, 'head of': 6,
-
+    "supervisor": 5,
+    "team lead": 5,
+    "manager": 5,
+    "program manager": 5,
+    "project manager": 5,
+    "product manager": 5,
+    "senior manager": 6,
+    "associate director": 6,
+    "director": 6,
+    "head": 6,
+    "head of": 6,
     # Executive (7-9)
-    'senior director': 7, 'vice president': 7, 'vp': 7,
-    'senior vice president': 8, 'svp': 8, 'evp': 8,
-    'chief': 9, 'ceo': 9, 'cfo': 9, 'cto': 9, 'coo': 9, 'cmo': 9,
-    'president': 9, 'partner': 8, 'managing director': 8,
+    "senior director": 7,
+    "vice president": 7,
+    "vp": 7,
+    "senior vice president": 8,
+    "svp": 8,
+    "evp": 8,
+    "chief": 9,
+    "ceo": 9,
+    "cfo": 9,
+    "cto": 9,
+    "coo": 9,
+    "cmo": 9,
+    "president": 9,
+    "partner": 8,
+    "managing director": 8,
 }
 
 # Strong action verbs by category (Bloom's Taxonomy inspired)
 STRONG_ACTION_VERBS = {
-    'leadership': [
-        'led', 'directed', 'managed', 'headed', 'spearheaded', 'oversaw',
-        'supervised', 'orchestrated', 'championed', 'pioneered', 'established',
-        'founded', 'launched', 'initiated', 'drove', 'transformed'
+    "leadership": [
+        "led",
+        "directed",
+        "managed",
+        "headed",
+        "spearheaded",
+        "oversaw",
+        "supervised",
+        "orchestrated",
+        "championed",
+        "pioneered",
+        "established",
+        "founded",
+        "launched",
+        "initiated",
+        "drove",
+        "transformed",
     ],
-    'achievement': [
-        'achieved', 'exceeded', 'surpassed', 'delivered', 'generated',
-        'increased', 'improved', 'reduced', 'saved', 'accelerated',
-        'optimized', 'maximized', 'doubled', 'tripled', 'grew'
+    "achievement": [
+        "achieved",
+        "exceeded",
+        "surpassed",
+        "delivered",
+        "generated",
+        "increased",
+        "improved",
+        "reduced",
+        "saved",
+        "accelerated",
+        "optimized",
+        "maximized",
+        "doubled",
+        "tripled",
+        "grew",
     ],
-    'technical': [
-        'developed', 'designed', 'engineered', 'built', 'created',
-        'implemented', 'deployed', 'architected', 'automated', 'integrated',
-        'programmed', 'coded', 'configured', 'migrated', 'scaled'
+    "technical": [
+        "developed",
+        "designed",
+        "engineered",
+        "built",
+        "created",
+        "implemented",
+        "deployed",
+        "architected",
+        "automated",
+        "integrated",
+        "programmed",
+        "coded",
+        "configured",
+        "migrated",
+        "scaled",
     ],
-    'analytical': [
-        'analyzed', 'evaluated', 'assessed', 'investigated', 'researched',
-        'identified', 'discovered', 'diagnosed', 'validated', 'verified',
-        'quantified', 'measured', 'tracked', 'monitored', 'audited'
+    "analytical": [
+        "analyzed",
+        "evaluated",
+        "assessed",
+        "investigated",
+        "researched",
+        "identified",
+        "discovered",
+        "diagnosed",
+        "validated",
+        "verified",
+        "quantified",
+        "measured",
+        "tracked",
+        "monitored",
+        "audited",
     ],
-    'collaborative': [
-        'collaborated', 'partnered', 'coordinated', 'facilitated', 'negotiated',
-        'liaised', 'aligned', 'unified', 'bridged', 'integrated'
-    ]
+    "collaborative": [
+        "collaborated",
+        "partnered",
+        "coordinated",
+        "facilitated",
+        "negotiated",
+        "liaised",
+        "aligned",
+        "unified",
+        "bridged",
+        "integrated",
+    ],
 }
 
 # Weak/passive verbs to penalize
 WEAK_VERBS = [
-    'responsible for', 'duties included', 'helped', 'assisted', 'participated',
-    'was involved', 'worked on', 'handled', 'dealt with', 'tasked with'
+    "responsible for",
+    "duties included",
+    "helped",
+    "assisted",
+    "participated",
+    "was involved",
+    "worked on",
+    "handled",
+    "dealt with",
+    "tasked with",
 ]
 
 # AI cliché verbs (overused in AI-generated resumes)
 AI_CLICHE_VERBS = {
-    'spearheaded', 'leveraged', 'utilized', 'facilitated', 'ensured',
-    'demonstrated', 'streamlined', 'championed', 'fostered', 'harnessed',
-    'navigated', 'liaised', 'interfaced',
-    'spearhead', 'leverage', 'utilize', 'facilitate', 'ensure',
-    'demonstrate', 'streamline', 'champion', 'foster', 'harness',
-    'spearheading', 'leveraging', 'utilizing', 'facilitating', 'ensuring',
+    "spearheaded",
+    "leveraged",
+    "utilized",
+    "facilitated",
+    "ensured",
+    "demonstrated",
+    "streamlined",
+    "championed",
+    "fostered",
+    "harnessed",
+    "navigated",
+    "liaised",
+    "interfaced",
+    "spearhead",
+    "leverage",
+    "utilize",
+    "facilitate",
+    "ensure",
+    "demonstrate",
+    "streamline",
+    "champion",
+    "foster",
+    "harness",
+    "spearheading",
+    "leveraging",
+    "utilizing",
+    "facilitating",
+    "ensuring",
 }
 
 # Gap explanations that reduce penalty
 GAP_EXPLANATIONS = [
-    'parental leave', 'maternity leave', 'paternity leave', 'family leave',
-    'sabbatical', 'caregiving', 'caregiver', 'medical leave', 'health',
-    'relocation', 'immigration', 'visa', 'travel', 'study', 'education',
-    'graduate school', 'mba', 'certification', 'training', 'bootcamp',
-    'startup', 'entrepreneur', 'freelance', 'consulting', 'contract'
+    "parental leave",
+    "maternity leave",
+    "paternity leave",
+    "family leave",
+    "sabbatical",
+    "caregiving",
+    "caregiver",
+    "medical leave",
+    "health",
+    "relocation",
+    "immigration",
+    "visa",
+    "travel",
+    "study",
+    "education",
+    "graduate school",
+    "mba",
+    "certification",
+    "training",
+    "bootcamp",
+    "startup",
+    "entrepreneur",
+    "freelance",
+    "consulting",
+    "contract",
 ]
 
 # Weight profiles based on seniority
 WEIGHT_PROFILES = {
-    'junior': {
-        'experience': 0.15,
-        'skills': 0.30,
-        'trajectory': 0.10,
-        'impact': 0.20,
-        'title_match': 0.25,
+    "junior": {
+        "experience": 0.15,
+        "skills": 0.30,
+        "trajectory": 0.10,
+        "impact": 0.20,
+        "title_match": 0.25,
     },
-    'mid': {
-        'experience': 0.20,
-        'skills': 0.25,
-        'trajectory': 0.15,
-        'impact': 0.20,
-        'title_match': 0.20,
+    "mid": {
+        "experience": 0.20,
+        "skills": 0.25,
+        "trajectory": 0.15,
+        "impact": 0.20,
+        "title_match": 0.20,
     },
-    'senior': {
-        'experience': 0.25,
-        'skills': 0.20,
-        'trajectory': 0.15,
-        'impact': 0.20,
-        'title_match': 0.20,
+    "senior": {
+        "experience": 0.25,
+        "skills": 0.20,
+        "trajectory": 0.15,
+        "impact": 0.20,
+        "title_match": 0.20,
     },
-    'executive': {
-        'experience': 0.20,
-        'skills': 0.15,
-        'trajectory': 0.20,
-        'impact': 0.25,
-        'title_match': 0.20,
+    "executive": {
+        "experience": 0.20,
+        "skills": 0.15,
+        "trajectory": 0.20,
+        "impact": 0.25,
+        "title_match": 0.20,
     },
 }
 
@@ -143,9 +278,11 @@ WEIGHT_PROFILES = {
 # DATA STRUCTURES
 # =============================================================================
 
+
 @dataclass
 class JobEntry:
     """Represents a single job/position from resume."""
+
     title: str
     company: str
     start_date: Optional[date] = None
@@ -159,6 +296,7 @@ class JobEntry:
 @dataclass
 class ExperienceAnalysis:
     """Analysis of candidate experience."""
+
     total_years: float
     required_years: float
     alignment_score: float
@@ -168,6 +306,7 @@ class ExperienceAnalysis:
 @dataclass
 class TrajectoryAnalysis:
     """Analysis of career trajectory."""
+
     score: float
     direction: str  # 'ascending', 'stable', 'descending'
     annual_slope: float
@@ -177,6 +316,7 @@ class TrajectoryAnalysis:
 @dataclass
 class ImpactAnalysis:
     """Analysis of impact/achievement signals."""
+
     score: float
     metrics_count: int
     strong_verbs_count: int
@@ -188,6 +328,7 @@ class ImpactAnalysis:
 @dataclass
 class SkillsCoverage:
     """Analysis of skills coverage."""
+
     score: float
     matched: List[str]
     missing: List[str]
@@ -197,6 +338,7 @@ class SkillsCoverage:
 @dataclass
 class TitleMatchAnalysis:
     """Analysis of role title similarity."""
+
     score: float
     resume_level: int
     target_level: int
@@ -206,6 +348,7 @@ class TitleMatchAnalysis:
 @dataclass
 class HRScoreResult:
     """Complete HR scoring result."""
+
     overall_score: float
     recommendation: str  # INTERVIEW, MAYBE, PASS
     rating_label: str
@@ -228,29 +371,30 @@ class HRScoreResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            'overall_score': round(self.overall_score, 1),
-            'recommendation': self.recommendation,
-            'rating_label': self.rating_label,
-            'confidence': self.confidence,
-            'factor_breakdown': {
-                'experience': round(self.experience_score, 1),
-                'skills': round(self.skills_score, 1),
-                'trajectory': round(self.trajectory_score, 1),
-                'impact': round(self.impact_score, 1),
-                'title_match': round(self.title_match_score, 1),
+            "overall_score": round(self.overall_score, 1),
+            "recommendation": self.recommendation,
+            "rating_label": self.rating_label,
+            "confidence": self.confidence,
+            "factor_breakdown": {
+                "experience": round(self.experience_score, 1),
+                "skills": round(self.skills_score, 1),
+                "trajectory": round(self.trajectory_score, 1),
+                "impact": round(self.impact_score, 1),
+                "title_match": round(self.title_match_score, 1),
             },
-            'strengths': self.strengths[:5],
-            'concerns': self.concerns[:5],
-            'suggested_questions': self.suggested_questions[:4],
-            'penalties_applied': self.penalties_applied,
-            'weights_used': {k: round(v, 2) for k, v in self.weights_used.items()},
-            'breakdown': self.breakdown,
+            "strengths": self.strengths[:5],
+            "concerns": self.concerns[:5],
+            "suggested_questions": self.suggested_questions[:4],
+            "penalties_applied": self.penalties_applied,
+            "weights_used": {k: round(v, 2) for k, v in self.weights_used.items()},
+            "breakdown": self.breakdown,
         }
 
 
 # =============================================================================
 # TEXT PROCESSING & PARSING
 # =============================================================================
+
 
 def parse_date(date_str: str) -> Optional[date]:
     """Parse various date formats to date object."""
@@ -260,22 +404,22 @@ def parse_date(date_str: str) -> Optional[date]:
     date_str = date_str.strip().lower()
 
     # Handle "Present", "Current", etc.
-    if any(word in date_str for word in ['present', 'current', 'now', 'ongoing']):
+    if any(word in date_str for word in ["present", "current", "now", "ongoing"]):
         return None  # None represents "Present"
 
     # Common date patterns
     patterns = [
-        (r'(\w+)\s+(\d{4})', '%B %Y'),  # "January 2024"
-        (r'(\w{3})\s+(\d{4})', '%b %Y'),  # "Jan 2024"
-        (r'(\d{1,2})/(\d{4})', '%m/%Y'),  # "01/2024"
-        (r'(\d{4})', '%Y'),  # "2024"
+        (r"(\w+)\s+(\d{4})", "%B %Y"),  # "January 2024"
+        (r"(\w{3})\s+(\d{4})", "%b %Y"),  # "Jan 2024"
+        (r"(\d{1,2})/(\d{4})", "%m/%Y"),  # "01/2024"
+        (r"(\d{4})", "%Y"),  # "2024"
     ]
 
     for pattern, fmt in patterns:
         match = re.search(pattern, date_str, re.IGNORECASE)
         if match:
             try:
-                if fmt == '%Y':
+                if fmt == "%Y":
                     return date(int(match.group(1)), 6, 1)  # Assume mid-year
                 else:
                     parsed = datetime.strptime(match.group(0), fmt)
@@ -289,10 +433,10 @@ def parse_date(date_str: str) -> Optional[date]:
 def extract_years_from_text(text: str) -> Optional[float]:
     """Extract years of experience from text like '5+ years'."""
     patterns = [
-        r'minimum\s*(?:of\s+)?(\d+)\s*(?:years?|yrs?)',
-        r'at\s+least\s+(\d+)\s*(?:years?|yrs?)',
-        r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)',
-        r'(\d+)\+?\s*(?:years?|yrs?)',
+        r"minimum\s*(?:of\s+)?(\d+)\s*(?:years?|yrs?)",
+        r"at\s+least\s+(\d+)\s*(?:years?|yrs?)",
+        r"(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)",
+        r"(\d+)\+?\s*(?:years?|yrs?)",
     ]
 
     for pattern in patterns:
@@ -309,29 +453,29 @@ def determine_seniority_level(text: str) -> str:
     """Determine job seniority level from text."""
     text_lower = text.lower()
 
-    if any(term in text_lower for term in ['chief', 'vp', 'vice president', 'c-level', 'executive']):
-        return 'executive'
+    if any(term in text_lower for term in ["chief", "vp", "vice president", "c-level", "executive"]):
+        return "executive"
 
-    if any(term in text_lower for term in ['director', 'senior manager', 'head of', 'principal']):
-        return 'senior'
+    if any(term in text_lower for term in ["director", "senior manager", "head of", "principal"]):
+        return "senior"
 
-    if any(term in text_lower for term in ['senior', 'lead', 'sr.', 'experienced']):
-        return 'mid'
+    if any(term in text_lower for term in ["senior", "lead", "sr.", "experienced"]):
+        return "mid"
 
-    if any(term in text_lower for term in ['entry', 'junior', 'associate', 'graduate', 'trainee']):
-        return 'junior'
+    if any(term in text_lower for term in ["entry", "junior", "associate", "graduate", "trainee"]):
+        return "junior"
 
     # Default based on years required
     years = extract_years_from_text(text)
     if years:
         if years >= 10:
-            return 'senior'
+            return "senior"
         elif years >= 5:
-            return 'mid'
+            return "mid"
         else:
-            return 'junior'
+            return "junior"
 
-    return 'mid'
+    return "mid"
 
 
 def get_title_hierarchy_level(title: str) -> int:
@@ -349,9 +493,9 @@ def get_title_hierarchy_level(title: str) -> int:
 def extract_bullets_from_text(text: str) -> List[str]:
     """Extract bullet points from resume text."""
     bullets = []
-    lines = text.split('\n')
+    lines = text.split("\n")
 
-    bullet_patterns = [r'^\s*[•\-\*\◦\▪]\s*(.+)', r'^\s*\d+\.\s*(.+)']
+    bullet_patterns = [r"^\s*[•\-\*\◦\▪]\s*(.+)", r"^\s*\d+\.\s*(.+)"]
 
     for line in lines:
         line = line.strip()
@@ -365,7 +509,9 @@ def extract_bullets_from_text(text: str) -> List[str]:
     if len(bullets) < 5:
         for line in lines:
             line = line.strip()
-            if len(line) > 30 and any(verb in line.lower() for category in STRONG_ACTION_VERBS.values() for verb in category):
+            if len(line) > 30 and any(
+                verb in line.lower() for category in STRONG_ACTION_VERBS.values() for verb in category
+            ):
                 if line not in bullets:
                     bullets.append(line)
 
@@ -375,17 +521,17 @@ def extract_bullets_from_text(text: str) -> List[str]:
 def extract_jobs_from_text(text: str) -> List[JobEntry]:
     """Extract job entries from resume text (simplified parsing)."""
     jobs = []
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     # Pattern for job titles/companies
     title_pattern = re.compile(
-        r'^([A-Z][A-Za-z\s]+(?:Manager|Engineer|Developer|Analyst|Director|Specialist|Lead|Coordinator|Consultant|Associate|Intern|Officer|Executive|President|Head|VP|Chief))',
-        re.IGNORECASE
+        r"^([A-Z][A-Za-z\s]+(?:Manager|Engineer|Developer|Analyst|Director|Specialist|Lead|Coordinator|Consultant|Associate|Intern|Officer|Executive|President|Head|VP|Chief))",
+        re.IGNORECASE,
     )
 
     date_range_pattern = re.compile(
-        r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s*\d{4}|(?:\d{4}))\s*(?:-|–|to)\s*(Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s*\d{4}|\d{4})',
-        re.IGNORECASE
+        r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s*\d{4}|(?:\d{4}))\s*(?:-|–|to)\s*(Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s*\d{4}|\d{4})",
+        re.IGNORECASE,
     )
 
     current_job = None
@@ -417,7 +563,7 @@ def extract_jobs_from_text(text: str) -> List[JobEntry]:
             if date_match:
                 start_date = parse_date(date_match.group(1))
                 end_str = date_match.group(2)
-                if 'present' in end_str.lower() or 'current' in end_str.lower():
+                if "present" in end_str.lower() or "current" in end_str.lower():
                     end_date = None
                     is_current = True
                 else:
@@ -436,13 +582,15 @@ def extract_jobs_from_text(text: str) -> List[JobEntry]:
                 end_date=end_date,
                 duration_months=duration,
                 hierarchy_level=get_title_hierarchy_level(title),
-                is_current=is_current
+                is_current=is_current,
             )
 
-        elif current_job and (line_stripped.startswith(('•', '-', '*', '◦', '▪')) or
-                              (len(line_stripped) > 20 and line_stripped[0].isupper())):
+        elif current_job and (
+            line_stripped.startswith(("•", "-", "*", "◦", "▪"))
+            or (len(line_stripped) > 20 and line_stripped[0].isupper())
+        ):
             # This looks like a bullet point
-            bullet = re.sub(r'^[•\-\*\◦\▪]\s*', '', line_stripped)
+            bullet = re.sub(r"^[•\-\*\◦\▪]\s*", "", line_stripped)
             if len(bullet) > 15:
                 current_bullets.append(bullet)
 
@@ -460,24 +608,24 @@ def extract_skills_from_jd(text: str) -> List[str]:
 
     # Pattern matching for skills
     skill_patterns = [
-        r'(?:experience\s+(?:with|in)|knowledge\s+of|proficiency\s+in|expertise\s+in)\s+([A-Za-z\s,/]+)',
-        r'(?:skills?|requirements?|qualifications?):\s*([A-Za-z\s,/•\-]+)',
+        r"(?:experience\s+(?:with|in)|knowledge\s+of|proficiency\s+in|expertise\s+in)\s+([A-Za-z\s,/]+)",
+        r"(?:skills?|requirements?|qualifications?):\s*([A-Za-z\s,/•\-]+)",
     ]
 
     for pattern in skill_patterns:
         matches = re.findall(pattern, text, re.IGNORECASE)
         for m in matches:
             # Split by common delimiters
-            parts = re.split(r'[,;•\-\n]', m)
+            parts = re.split(r"[,;•\-\n]", m)
             for part in parts:
                 part = part.strip()
                 if 3 < len(part) < 50:
                     skills.append(part)
 
     # Also extract capitalized technical terms
-    tech_terms = re.findall(r'\b([A-Z][a-z]*(?:\.[A-Za-z]+)?(?:\s+[A-Z][a-z]+)?)\b', text)
+    tech_terms = re.findall(r"\b([A-Z][a-z]*(?:\.[A-Za-z]+)?(?:\s+[A-Z][a-z]+)?)\b", text)
     for term in tech_terms:
-        if 2 < len(term) < 30 and term not in ['The', 'This', 'You', 'Our', 'Your', 'We', 'They']:
+        if 2 < len(term) < 30 and term not in ["The", "This", "You", "Our", "Your", "We", "They"]:
             skills.append(term)
 
     return list(set(skills))[:30]
@@ -487,10 +635,8 @@ def extract_skills_from_jd(text: str) -> List[str]:
 # SCORING FUNCTIONS
 # =============================================================================
 
-def score_experience_alignment(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, ExperienceAnalysis]:
+
+def score_experience_alignment(resume_text: str, jd_text: str) -> Tuple[float, ExperienceAnalysis]:
     """
     Score experience alignment using trapezoidal function.
 
@@ -523,33 +669,27 @@ def score_experience_alignment(
 
     if C < 0.5 * R:
         score = max(10, (C / (0.5 * R)) * 50)
-        assessment = f"Below minimum: {C:.1f} years < {0.5*R:.1f} years minimum"
+        assessment = f"Below minimum: {C:.1f} years < {0.5 * R:.1f} years minimum"
     elif C < R:
         score = 50 + ((C - 0.5 * R) / (0.5 * R)) * 50
         assessment = f"Approaching target: {C:.1f} years vs {R:.1f} required"
     elif C <= 1.5 * R:
         score = 100
-        assessment = f"Sweet spot: {C:.1f} years in ideal range ({R:.1f}-{1.5*R:.1f})"
+        assessment = f"Sweet spot: {C:.1f} years in ideal range ({R:.1f}-{1.5 * R:.1f})"
     else:
         # Overqualified decay
         decay = 10 * (C - 1.5 * R)
         score = max(70, 100 - decay)
-        assessment = f"Overqualified: {C:.1f} years > {1.5*R:.1f} years (flight risk)"
+        assessment = f"Overqualified: {C:.1f} years > {1.5 * R:.1f} years (flight risk)"
 
     analysis = ExperienceAnalysis(
-        total_years=candidate_years,
-        required_years=required_years,
-        alignment_score=score,
-        assessment=assessment
+        total_years=candidate_years, required_years=required_years, alignment_score=score, assessment=assessment
     )
 
     return score, analysis
 
 
-def score_skills_coverage(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, SkillsCoverage]:
+def score_skills_coverage(resume_text: str, jd_text: str) -> Tuple[float, SkillsCoverage]:
     """Score skills coverage - how well resume covers JD requirements."""
     jd_skills = extract_skills_from_jd(jd_text)
 
@@ -558,7 +698,7 @@ def score_skills_coverage(
 
     resume_lower = resume_text.lower()
     bullets = extract_bullets_from_text(resume_text)
-    bullets_text = ' '.join(bullets).lower()
+    bullets_text = " ".join(bullets).lower()
 
     matched = []
     missing = []
@@ -595,12 +735,7 @@ def score_skills_coverage(
     coverage_rate = len(matched) / len(jd_skills) if jd_skills else 0
     score = (total_score / max_score) * 100 if max_score > 0 else 50
 
-    analysis = SkillsCoverage(
-        score=min(100, score),
-        matched=matched,
-        missing=missing,
-        coverage_rate=coverage_rate
-    )
+    analysis = SkillsCoverage(score=min(100, score), matched=matched, missing=missing, coverage_rate=coverage_rate)
 
     return min(100, score), analysis
 
@@ -612,16 +747,13 @@ def score_career_trajectory(resume_text: str) -> Tuple[float, TrajectoryAnalysis
     jobs = extract_jobs_from_text(resume_text)
 
     if len(jobs) < 2:
-        return 75, TrajectoryAnalysis(75, 'stable', 0, "Insufficient data for trajectory analysis")
+        return 75, TrajectoryAnalysis(75, "stable", 0, "Insufficient data for trajectory analysis")
 
     # Sort by start date
-    sorted_jobs = sorted(
-        [j for j in jobs if j.start_date],
-        key=lambda x: x.start_date
-    )
+    sorted_jobs = sorted([j for j in jobs if j.start_date], key=lambda x: x.start_date)
 
     if len(sorted_jobs) < 2:
-        return 75, TrajectoryAnalysis(75, 'stable', 0, "Insufficient dated positions")
+        return 75, TrajectoryAnalysis(75, "stable", 0, "Insufficient dated positions")
 
     # Create time series
     x_values = []
@@ -636,7 +768,7 @@ def score_career_trajectory(resume_text: str) -> Tuple[float, TrajectoryAnalysis
     # Simple linear regression
     n = len(x_values)
     if n < 2:
-        return 75, TrajectoryAnalysis(75, 'stable', 0, "Not enough data points")
+        return 75, TrajectoryAnalysis(75, "stable", 0, "Not enough data points")
 
     sum_x = sum(x_values)
     sum_y = sum(y_values)
@@ -654,23 +786,23 @@ def score_career_trajectory(resume_text: str) -> Tuple[float, TrajectoryAnalysis
     # Convert slope to score
     if annual_slope > 0.3:
         score = 100
-        direction = 'ascending'
+        direction = "ascending"
         narrative = f"Fast Track: Rapid progression ({annual_slope:.2f} levels/year)"
     elif annual_slope > 0.1:
         score = 90
-        direction = 'ascending'
+        direction = "ascending"
         narrative = f"Strong Growth: Consistent upward trajectory ({annual_slope:.2f} levels/year)"
     elif annual_slope >= 0:
         score = 80
-        direction = 'stable'
+        direction = "stable"
         narrative = f"Stable: Steady career ({annual_slope:.2f} levels/year)"
     elif annual_slope > -0.1:
         score = 60
-        direction = 'stable'
+        direction = "stable"
         narrative = f"Stagnant: Limited progression ({annual_slope:.2f} levels/year)"
     else:
         score = 40
-        direction = 'descending'
+        direction = "descending"
         narrative = f"Concerning: Apparent regression ({annual_slope:.2f} levels/year)"
 
     return score, TrajectoryAnalysis(score, direction, annual_slope, narrative)
@@ -696,11 +828,11 @@ def score_impact_density(resume_text: str) -> Tuple[float, ImpactAnalysis]:
 
     # Metric patterns
     metric_patterns = [
-        r'(\d+)%',  # Percentages
-        r'\$[\d,.]+[MBK]?',  # Dollar amounts
-        r'\b\d{1,3}(?:,\d{3})+\b',  # Large numbers
-        r'\b\d+\s*(?:x|times)\b',  # Multipliers
-        r'\b(?:doubled|tripled|quadrupled)\b',  # Word multipliers
+        r"(\d+)%",  # Percentages
+        r"\$[\d,.]+[MBK]?",  # Dollar amounts
+        r"\b\d{1,3}(?:,\d{3})+\b",  # Large numbers
+        r"\b\d+\s*(?:x|times)\b",  # Multipliers
+        r"\b(?:doubled|tripled|quadrupled)\b",  # Word multipliers
     ]
 
     # Flatten strong verbs
@@ -717,7 +849,7 @@ def score_impact_density(resume_text: str) -> Tuple[float, ImpactAnalysis]:
             metrics_count += 1
 
         # Check for strong verbs at start
-        first_word = bullet.split()[0].lower().rstrip('ed').rstrip('ing') if bullet.split() else ''
+        first_word = bullet.split()[0].lower().rstrip("ed").rstrip("ing") if bullet.split() else ""
         if any(verb in bullet_lower[:50] for verb in all_strong_verbs):
             strong_verbs_count += 1
 
@@ -758,16 +890,13 @@ def score_impact_density(resume_text: str) -> Tuple[float, ImpactAnalysis]:
         strong_verbs_count=strong_verbs_count,
         weak_verbs_count=weak_verbs_count,
         metrics_density=round(metrics_density * 100, 1),
-        verb_power_index=round(verb_power_index, 1)
+        verb_power_index=round(verb_power_index, 1),
     )
 
     return max(0, min(100, score)), analysis
 
 
-def score_title_match(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, TitleMatchAnalysis]:
+def score_title_match(resume_text: str, jd_text: str) -> Tuple[float, TitleMatchAnalysis]:
     """Score role title similarity between resume and JD."""
     # Extract target level from JD
     jd_lower = jd_text.lower()
@@ -802,17 +931,11 @@ def score_title_match(
         assessment = f"Stretch role: Candidate is {level_diff} levels below target"
 
     return max(40, min(100, score)), TitleMatchAnalysis(
-        score=max(40, min(100, score)),
-        resume_level=resume_level,
-        target_level=target_level,
-        assessment=assessment
+        score=max(40, min(100, score)), resume_level=resume_level, target_level=target_level, assessment=assessment
     )
 
 
-def calculate_penalties(
-    resume_text: str,
-    jd_text: str
-) -> Tuple[float, Dict[str, float], List[str]]:
+def calculate_penalties(resume_text: str, jd_text: str) -> Tuple[float, Dict[str, float], List[str]]:
     """Calculate risk penalties for job hopping, gaps, etc."""
     penalties = {}
     concerns = []
@@ -827,15 +950,15 @@ def calculate_penalties(
             avg_tenure = sum(tenures) / len(tenures)
 
             # Check for contract/temp roles
-            contract_keywords = {'contract', 'temporary', 'interim', 'consultant', 'freelance'}
+            contract_keywords = {"contract", "temporary", "interim", "consultant", "freelance"}
             contract_count = sum(1 for j in jobs if any(kw in j.title.lower() for kw in contract_keywords))
             penalty_mult = 0.5 if contract_count >= len(jobs) * 0.4 else 1.0
 
             if avg_tenure < 12:
-                penalties['job_hopping'] = round(15 * penalty_mult)
+                penalties["job_hopping"] = round(15 * penalty_mult)
                 concerns.append(f"High turnover: Avg tenure {avg_tenure:.0f} months")
             elif avg_tenure < 18:
-                penalties['job_hopping'] = round(8 * penalty_mult)
+                penalties["job_hopping"] = round(8 * penalty_mult)
                 concerns.append(f"Moderate turnover: Avg tenure {avg_tenure:.0f} months")
 
     # Gap detection
@@ -854,10 +977,10 @@ def calculate_penalties(
 
                 if not has_explanation:
                     if gap_months > 24:
-                        penalties['unexplained_gap'] = 15
+                        penalties["unexplained_gap"] = 15
                         concerns.append(f"Major unexplained gap: {gap_months} months")
                     elif gap_months > 12:
-                        penalties['unexplained_gap'] = 10
+                        penalties["unexplained_gap"] = 10
                         concerns.append(f"Unexplained gap: {gap_months} months")
                     break
 
@@ -876,7 +999,7 @@ def detect_ai_writing(resume_text: str) -> Tuple[float, List[str]]:
     # Check for AI cliché verbs
     cliche_count = 0
     for bullet in bullets:
-        first_word = bullet.split()[0].lower().rstrip('.,;:') if bullet.split() else ''
+        first_word = bullet.split()[0].lower().rstrip(".,;:") if bullet.split() else ""
         if first_word in AI_CLICHE_VERBS:
             cliche_count += 1
 
@@ -902,10 +1025,8 @@ def detect_ai_writing(resume_text: str) -> Tuple[float, List[str]]:
 # MAIN SCORING FUNCTION
 # =============================================================================
 
-def calculate_hr_score(
-    resume_text: str,
-    jd_text: str
-) -> HRScoreResult:
+
+def calculate_hr_score(resume_text: str, jd_text: str) -> HRScoreResult:
     """
     Calculate comprehensive HR score for resume vs job description.
 
@@ -921,7 +1042,7 @@ def calculate_hr_score(
 
     # Determine seniority for weight selection
     seniority = determine_seniority_level(jd_text)
-    weights = WEIGHT_PROFILES.get(seniority, WEIGHT_PROFILES['mid'])
+    weights = WEIGHT_PROFILES.get(seniority, WEIGHT_PROFILES["mid"])
 
     # 1. Experience Score
     exp_score, exp_analysis = score_experience_alignment(resume_text, jd_text)
@@ -960,11 +1081,11 @@ def calculate_hr_score(
 
     # Calculate raw score
     raw_score = (
-        exp_score * weights['experience'] +
-        skills_score * weights['skills'] +
-        traj_score * weights['trajectory'] +
-        impact_score * weights['impact'] +
-        title_score * weights['title_match']
+        exp_score * weights["experience"]
+        + skills_score * weights["skills"]
+        + traj_score * weights["trajectory"]
+        + impact_score * weights["impact"]
+        + title_score * weights["title_match"]
     )
 
     # Apply penalties
@@ -974,7 +1095,7 @@ def calculate_hr_score(
     # AI writing detection
     ai_penalty, ai_warnings = detect_ai_writing(resume_text)
     if ai_warnings:
-        penalties['ai_writing'] = ai_penalty
+        penalties["ai_writing"] = ai_penalty
         concerns.extend(ai_warnings)
         penalty_total += ai_penalty
 
@@ -996,9 +1117,9 @@ def calculate_hr_score(
 
     # Generate interview questions
     questions = []
-    if 'unexplained_gap' in penalties:
+    if "unexplained_gap" in penalties:
         questions.append("Can you walk me through the gap in your employment history?")
-    if 'job_hopping' in penalties:
+    if "job_hopping" in penalties:
         questions.append("What's driving your interest in a longer-term opportunity?")
     if impact_score < 60:
         questions.append("Can you quantify the impact of your work at your most recent role?")
@@ -1011,42 +1132,42 @@ def calculate_hr_score(
     jobs = extract_jobs_from_text(resume_text)
     bullets = extract_bullets_from_text(resume_text)
     data_completeness = min(100, len(jobs) * 15 + len(bullets) * 2)
-    confidence = 'High' if data_completeness > 70 else 'Medium' if data_completeness > 40 else 'Low'
+    confidence = "High" if data_completeness > 70 else "Medium" if data_completeness > 40 else "Low"
 
     # Build breakdown
     breakdown = {
-        'experience': {
-            'score': round(exp_score, 1),
-            'total_years': exp_analysis.total_years,
-            'required_years': exp_analysis.required_years,
-            'assessment': exp_analysis.assessment,
+        "experience": {
+            "score": round(exp_score, 1),
+            "total_years": exp_analysis.total_years,
+            "required_years": exp_analysis.required_years,
+            "assessment": exp_analysis.assessment,
         },
-        'skills': {
-            'score': round(skills_score, 1),
-            'matched': skills_analysis.matched[:10],
-            'missing': skills_analysis.missing[:10],
-            'coverage_rate': round(skills_analysis.coverage_rate * 100, 1),
+        "skills": {
+            "score": round(skills_score, 1),
+            "matched": skills_analysis.matched[:10],
+            "missing": skills_analysis.missing[:10],
+            "coverage_rate": round(skills_analysis.coverage_rate * 100, 1),
         },
-        'trajectory': {
-            'score': round(traj_score, 1),
-            'direction': traj_analysis.direction,
-            'annual_slope': round(traj_analysis.annual_slope, 3),
-            'narrative': traj_analysis.narrative,
+        "trajectory": {
+            "score": round(traj_score, 1),
+            "direction": traj_analysis.direction,
+            "annual_slope": round(traj_analysis.annual_slope, 3),
+            "narrative": traj_analysis.narrative,
         },
-        'impact': {
-            'score': round(impact_score, 1),
-            'metrics_count': impact_analysis.metrics_count,
-            'strong_verbs': impact_analysis.strong_verbs_count,
-            'weak_verbs': impact_analysis.weak_verbs_count,
-            'metrics_density': impact_analysis.metrics_density,
+        "impact": {
+            "score": round(impact_score, 1),
+            "metrics_count": impact_analysis.metrics_count,
+            "strong_verbs": impact_analysis.strong_verbs_count,
+            "weak_verbs": impact_analysis.weak_verbs_count,
+            "metrics_density": impact_analysis.metrics_density,
         },
-        'title_match': {
-            'score': round(title_score, 1),
-            'resume_level': title_analysis.resume_level,
-            'target_level': title_analysis.target_level,
-            'assessment': title_analysis.assessment,
+        "title_match": {
+            "score": round(title_score, 1),
+            "resume_level": title_analysis.resume_level,
+            "target_level": title_analysis.target_level,
+            "assessment": title_analysis.assessment,
         },
-        'seniority_detected': seniority,
+        "seniority_detected": seniority,
     }
 
     return HRScoreResult(
@@ -1072,10 +1193,8 @@ def calculate_hr_score(
 # CONVENIENCE FUNCTION
 # =============================================================================
 
-def score_resume_hr(
-    resume_text: str,
-    job_description: str
-) -> Dict[str, Any]:
+
+def score_resume_hr(resume_text: str, job_description: str) -> Dict[str, Any]:
     """
     Score a resume from an HR perspective.
 

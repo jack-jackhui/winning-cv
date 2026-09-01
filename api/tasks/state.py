@@ -6,7 +6,6 @@ supporting the transition from file-based to Postgres-based task storage.
 """
 
 from enum import Enum
-from typing import Optional
 
 
 class TaskState(str, Enum):
@@ -108,10 +107,13 @@ def get_task_config(task_type: TaskType) -> dict:
     Returns:
         Configuration dict with timeout_seconds and max_retries
     """
-    return TASK_CONFIG.get(task_type, {
-        "timeout_seconds": 300,
-        "max_retries": 3,
-    })
+    return TASK_CONFIG.get(
+        task_type,
+        {
+            "timeout_seconds": 300,
+            "max_retries": 3,
+        },
+    )
 
 
 def validate_state_transition(current: TaskState, target: TaskState) -> bool:

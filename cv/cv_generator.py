@@ -1,6 +1,5 @@
 # cv/cv_generator.py
 import logging
-import os
 import re
 
 from utils.llm_client import get_llm_client
@@ -182,10 +181,12 @@ class CVGenerator:
         ]
 
         if instructions and instructions.strip():
-            prompt_parts.extend([
-                "\n\n## Additional User Instructions\n",
-                instructions,
-            ])
+            prompt_parts.extend(
+                [
+                    "\n\n## Additional User Instructions\n",
+                    instructions,
+                ]
+            )
 
         return "\n".join(prompt_parts)
 
@@ -213,11 +214,7 @@ class CVGenerator:
             system_prompt = self._build_system_prompt(job_desc, instructions)
             user_message = f"Please optimize this CV:\n\n{cv_content}"
 
-            response = self.llm_client.generate(
-                system_prompt=system_prompt,
-                user_prompt=user_message,
-                max_tokens=16384
-            )
+            response = self.llm_client.generate(system_prompt=system_prompt, user_prompt=user_message, max_tokens=16384)
 
             raw_cv = response.content
             cleaned_cv = remove_think_blocks(raw_cv)
@@ -229,12 +226,7 @@ class CVGenerator:
             raise Exception(f"CV generation failed: {str(e)}")
 
 
-def generate_cv_with_knowledge_base(
-    cv_content: str,
-    job_desc: str,
-    instructions: str,
-    unified_experience: dict
-) -> str:
+def generate_cv_with_knowledge_base(cv_content: str, job_desc: str, instructions: str, unified_experience: dict) -> str:
     """
     Generate CV using knowledge base of previous CV versions.
 
@@ -254,11 +246,7 @@ def generate_cv_with_knowledge_base(
         knowledge_context = _build_knowledge_context(unified_experience)
 
         # Build enhanced system prompt
-        enhanced_prompt = _build_enhanced_system_prompt(
-            job_desc,
-            instructions,
-            knowledge_context
-        )
+        enhanced_prompt = _build_enhanced_system_prompt(job_desc, instructions, knowledge_context)
 
         user_message = f"""## Current CV (Base Version)
 {cv_content}
@@ -273,9 +261,7 @@ and the knowledge base that matches the target job description.
 """
 
         response = generator.llm_client.generate(
-            system_prompt=enhanced_prompt,
-            user_prompt=user_message,
-            max_tokens=16384
+            system_prompt=enhanced_prompt, user_prompt=user_message, max_tokens=16384
         )
 
         raw_cv = response.content
@@ -292,23 +278,21 @@ def _build_knowledge_context(unified: dict) -> str:
     sections = []
 
     # Add summaries
-    if unified['summaries']:
+    if unified["summaries"]:
         sections.append("### Previous Professional Summaries")
-        for i, s in enumerate(unified['summaries'][:5], 1):
+        for i, s in enumerate(unified["summaries"][:5], 1):
             sections.append(f"\n**Version: {s['version_name'] or 'Unnamed'}**")
-            sections.append(s['content'])
+            sections.append(s["content"])
 
     # Add experience bullets grouped by relevance
-    if unified['experience_bullets']:
+    if unified["experience_bullets"]:
         sections.append("\n### Experience Achievements (from all CV versions)")
-        sections.append(
-            "Select the most relevant achievements that match the job requirements:\n"
-        )
+        sections.append("Select the most relevant achievements that match the job requirements:\n")
 
         # Group by job title for better organization
         by_title = {}
-        for b in unified['experience_bullets']:
-            title = b['job_title'] or 'Other Experience'
+        for b in unified["experience_bullets"]:
+            title = b["job_title"] or "Other Experience"
             if title not in by_title:
                 by_title[title] = []
             by_title[title].append(b)
@@ -316,23 +300,19 @@ def _build_knowledge_context(unified: dict) -> str:
         for title, bullets in by_title.items():
             sections.append(f"\n**{title}**")
             for b in bullets[:10]:  # Limit bullets per title
-                company = f" ({b['company_name']})" if b['company_name'] else ""
+                company = f" ({b['company_name']})" if b["company_name"] else ""
                 sections.append(f"* {b['bullet_text']}{company}")
 
     # Add skills sections
-    if unified['skills_sections']:
+    if unified["skills_sections"]:
         sections.append("\n### Technical Skills (consolidated)")
-        for s in unified['skills_sections'][:3]:
-            sections.append(s['content'])
+        for s in unified["skills_sections"][:3]:
+            sections.append(s["content"])
 
     return "\n".join(sections)
 
 
-def _build_enhanced_system_prompt(
-    job_desc: str,
-    instructions: str,
-    knowledge_context: str
-) -> str:
+def _build_enhanced_system_prompt(job_desc: str, instructions: str, knowledge_context: str) -> str:
     """Build system prompt enhanced for knowledge-based generation."""
     enhanced_instructions = """
 ## KNOWLEDGE-BASED CV GENERATION MODE
@@ -365,9 +345,11 @@ the best content that matches the target job description.
     ]
 
     if instructions and instructions.strip():
-        prompt_parts.extend([
-            "\n\n## Additional User Instructions\n",
-            instructions,
-        ])
+        prompt_parts.extend(
+            [
+                "\n\n## Additional User Instructions\n",
+                instructions,
+            ]
+        )
 
     return "\n".join(prompt_parts)

@@ -1,4 +1,5 @@
 """Real PostgreSQL persistence tests for user-owned application records."""
+
 import os
 import uuid
 from datetime import date
@@ -140,9 +141,7 @@ def test_dual_write_shadow_miss_is_observable_with_real_postgres(postgres_manage
 
     manager = DualWriteDataManager(AirtablePrimary(), postgres_manager)
     with pytest.raises(ShadowWriteError, match="did not persist"):
-        manager.update_application_status(
-            "airtable-record", "owner@example.com", "applied", "Submitted"
-        )
+        manager.update_application_status("airtable-record", "owner@example.com", "applied", "Submitted")
 
     assert "Postgres shadow write missed" in caplog.text
 
@@ -153,9 +152,7 @@ def test_next_action_migration_is_idempotent_and_replaces_old_index():
         pytest.skip("TEST_POSTGRES_DSN is required for PostgreSQL integration tests")
 
     schema = f"test_next_action_migration_{uuid.uuid4().hex}"
-    migration_sql = (
-        Path(__file__).parent.parent / "init-db" / "07-jobs-next-action.sql"
-    ).read_text()
+    migration_sql = (Path(__file__).parent.parent / "init-db" / "07-jobs-next-action.sql").read_text()
     conn = psycopg2.connect(base_dsn)
     conn.autocommit = True
     try:
@@ -170,10 +167,7 @@ def test_next_action_migration_is_idempotent_and_replaces_old_index():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
-            cursor.execute(
-                "CREATE INDEX idx_jobs_user_next_action "
-                "ON jobs(user_email, next_action_at, id)"
-            )
+            cursor.execute("CREATE INDEX idx_jobs_user_next_action ON jobs(user_email, next_action_at, id)")
             cursor.execute(
                 "INSERT INTO jobs (user_email, next_action_at) VALUES (%s, %s)",
                 ("owner@example.com", "2026-07-30T23:30:00-05:00"),
@@ -182,22 +176,28 @@ def test_next_action_migration_is_idempotent_and_replaces_old_index():
             cursor.execute(migration_sql)
             cursor.execute(migration_sql)
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT data_type
                 FROM information_schema.columns
                 WHERE table_schema = %s
                   AND table_name = 'jobs'
                   AND column_name = 'next_action_at'
-            """, (schema,))
+            """,
+                (schema,),
+            )
             assert cursor.fetchone()[0] == "date"
             cursor.execute("SELECT next_action_at FROM jobs")
             assert cursor.fetchone()[0] == date(2026, 7, 31)
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT indexdef
                 FROM pg_indexes
                 WHERE schemaname = %s
                   AND indexname = 'idx_jobs_user_next_action'
-            """, (schema,))
+            """,
+                (schema,),
+            )
             assert "(user_email, next_action_at, created_at DESC, id)" in cursor.fetchone()[0]
     finally:
         with conn.cursor() as cursor:
@@ -211,9 +211,7 @@ def test_user_link_migration_is_idempotent_on_existing_postgres():
         pytest.skip("TEST_POSTGRES_DSN is required for PostgreSQL integration tests")
 
     schema = f"test_migration_{uuid.uuid4().hex}"
-    migration_sql = (
-        Path(__file__).parent.parent / "init-db" / "06-jobs-user-link-uniqueness.sql"
-    ).read_text()
+    migration_sql = (Path(__file__).parent.parent / "init-db" / "06-jobs-user-link-uniqueness.sql").read_text()
     conn = psycopg2.connect(base_dsn)
     conn.autocommit = True
     try:

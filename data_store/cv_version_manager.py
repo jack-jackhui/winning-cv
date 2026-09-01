@@ -3,6 +3,7 @@ CV Version Manager - Handles CV version persistence and queries.
 
 Uses Airtable for metadata storage and MinIO for file storage.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -62,10 +63,7 @@ class CVVersionManager:
     def __init__(self):
         # Use robust API client with timeouts and retries
         self.api = get_airtable_api()
-        self.table = self.api.table(
-            Config.AIRTABLE_BASE_ID,
-            Config.AIRTABLE_TABLE_ID_CV_VERSIONS
-        )
+        self.table = self.api.table(Config.AIRTABLE_BASE_ID, Config.AIRTABLE_TABLE_ID_CV_VERSIONS)
         self._minio: Optional[MinIOStorage] = None
 
     @property
@@ -133,8 +131,9 @@ class CVVersionManager:
             version_id=version_id,
             content_type=(
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                if primary_is_docx else "application/pdf"
-            )
+                if primary_is_docx
+                else "application/pdf"
+            ),
         )
 
         docx_storage_path = None
@@ -148,7 +147,7 @@ class CVVersionManager:
                 user_id=user_email,
                 filename=f"{version_id}.docx",
                 version_id=version_id,
-                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 
         # Create Airtable record
@@ -214,10 +213,7 @@ class CVVersionManager:
     def get_version(self, version_id: str, user_email: str) -> Optional[Dict[str, Any]]:
         """Get a specific CV version by ID."""
         try:
-            formula = AND(
-                EQ(Field("version_id"), version_id),
-                EQ(Field("user_email"), user_email)
-            )
+            formula = AND(EQ(Field("version_id"), version_id), EQ(Field("user_email"), user_email))
             records = self.table.all(formula=str(formula), max_records=1)
             if records:
                 return self._record_to_dict(records[0])
@@ -233,7 +229,7 @@ class CVVersionManager:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         List CV versions for a user with optional filtering.
@@ -266,63 +262,54 @@ class CVVersionManager:
                 filtered = []
                 for r in records:
                     # user_tags is multipleSelects - returns as array
-                    record_tags = r['fields'].get('user_tags', [])
+                    record_tags = r["fields"].get("user_tags", [])
                     if isinstance(record_tags, str):
-                        record_tags = [t.strip() for t in record_tags.split(',') if t.strip()]
+                        record_tags = [t.strip() for t in record_tags.split(",") if t.strip()]
                     if any(tag in record_tags for tag in tags):
                         filtered.append(r)
                 records = filtered
 
             # Sort by created_at descending (newest first)
-            records.sort(
-                key=lambda x: x.get('createdTime', ''),
-                reverse=True
-            )
+            records.sort(key=lambda x: x.get("createdTime", ""), reverse=True)
 
             # Apply pagination
-            paginated = records[offset:offset + limit]
+            paginated = records[offset : offset + limit]
 
             return [self._record_to_dict(r) for r in paginated]
         except Exception as e:
             logger.error(f"Failed to list versions for {user_email}: {e}")
             return []
 
-    def update_version(
-        self,
-        version_id: str,
-        user_email: str,
-        updates: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def update_version(self, version_id: str, user_email: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Update CV version metadata.
 
         Allowed updates: version_name, user_tags, auto_category, is_archived
         """
-        allowed_fields = {'version_name', 'user_tags', 'auto_category', 'is_archived'}
+        allowed_fields = {"version_name", "user_tags", "auto_category", "is_archived"}
         filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
 
         if not filtered_updates:
             return None
 
         # user_tags is a multipleSelects field - keep as array
-        if 'user_tags' in filtered_updates:
-            if isinstance(filtered_updates['user_tags'], str):
+        if "user_tags" in filtered_updates:
+            if isinstance(filtered_updates["user_tags"], str):
                 # Convert comma-separated string to array
-                filtered_updates['user_tags'] = [t.strip() for t in filtered_updates['user_tags'].split(',') if t.strip()]
-            elif not isinstance(filtered_updates['user_tags'], list):
-                filtered_updates['user_tags'] = [filtered_updates['user_tags']] if filtered_updates['user_tags'] else []
+                filtered_updates["user_tags"] = [
+                    t.strip() for t in filtered_updates["user_tags"].split(",") if t.strip()
+                ]
+            elif not isinstance(filtered_updates["user_tags"], list):
+                filtered_updates["user_tags"] = [filtered_updates["user_tags"]] if filtered_updates["user_tags"] else []
 
         try:
-            formula = AND(
-                EQ(Field("version_id"), version_id),
-                EQ(Field("user_email"), user_email)
-            )
+            formula = AND(EQ(Field("version_id"), version_id), EQ(Field("user_email"), user_email))
             record = self.table.first(formula=str(formula))
 
             if not record:
                 return None
 
-            updated = self.table.update(record['id'], filtered_updates)
+            updated = self.table.update(record["id"], filtered_updates)
             logger.info(f"Updated CV version: {version_id}")
             return self._record_to_dict(updated)
         except Exception as e:
@@ -346,17 +333,14 @@ class CVVersionManager:
         Warning: This removes both metadata and file storage.
         """
         try:
-            formula = AND(
-                EQ(Field("version_id"), version_id),
-                EQ(Field("user_email"), user_email)
-            )
+            formula = AND(EQ(Field("version_id"), version_id), EQ(Field("user_email"), user_email))
             record = self.table.first(formula=str(formula))
 
             if not record:
                 return False
 
             # Delete from MinIO
-            storage_path = record['fields'].get('storage_path', '')
+            storage_path = record["fields"].get("storage_path", "")
             if storage_path:
                 try:
                     filename = f"{version_id}.pdf"
@@ -365,7 +349,7 @@ class CVVersionManager:
                     logger.warning(f"Failed to delete MinIO file: {e}")
 
             # Delete from Airtable
-            self.table.delete(record['id'])
+            self.table.delete(record["id"])
             logger.info(f"Deleted CV version: {version_id}")
             return True
         except Exception as e:
@@ -373,11 +357,7 @@ class CVVersionManager:
             return False
 
     def fork_version(
-        self,
-        source_version_id: str,
-        user_email: str,
-        new_name: str,
-        new_file_path: Optional[str] = None
+        self, source_version_id: str, user_email: str, new_name: str, new_file_path: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Fork an existing version to create a new one.
@@ -401,7 +381,8 @@ class CVVersionManager:
 
             # Download to temp file
             import requests
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 resp = requests.get(download_url, timeout=30)
                 resp.raise_for_status()
                 tmp.write(resp.content)
@@ -413,25 +394,21 @@ class CVVersionManager:
                 user_email=user_email,
                 file_path=new_file_path,
                 version_name=new_name,
-                auto_category=source.get('auto_category'),
-                user_tags=self._parse_tags(source.get('user_tags')),
-                parent_version_id=source_version_id
+                auto_category=source.get("auto_category"),
+                user_tags=self._parse_tags(source.get("user_tags")),
+                parent_version_id=source_version_id,
             )
             return new_version
         finally:
             # Cleanup temp file if we created one
-            if new_file_path and new_file_path.startswith('/tmp'):
+            if new_file_path and new_file_path.startswith("/tmp"):
                 try:
                     os.unlink(new_file_path)
                 except Exception:
                     pass
 
     def get_download_url(
-        self,
-        version_id: str,
-        user_email: str,
-        expires_hours: int = 1,
-        file_format: str = "pdf"
+        self, version_id: str, user_email: str, expires_hours: int = 1, file_format: str = "pdf"
     ) -> Optional[str]:
         """Get a presigned download URL for a CV version.
 
@@ -442,8 +419,8 @@ class CVVersionManager:
         if not version:
             return None
 
-        storage_path = version.get('docx_storage_path') if file_format == "docx" else None
-        storage_path = storage_path or version.get('storage_path')
+        storage_path = version.get("docx_storage_path") if file_format == "docx" else None
+        storage_path = storage_path or version.get("storage_path")
         if not storage_path:
             return None
 
@@ -456,17 +433,14 @@ class CVVersionManager:
     def increment_usage(self, version_id: str, user_email: str) -> bool:
         """Increment usage count when CV is used for an application."""
         try:
-            formula = AND(
-                EQ(Field("version_id"), version_id),
-                EQ(Field("user_email"), user_email)
-            )
+            formula = AND(EQ(Field("version_id"), version_id), EQ(Field("user_email"), user_email))
             record = self.table.first(formula=str(formula))
 
             if not record:
                 return False
 
-            current_count = record['fields'].get('usage_count', 0)
-            self.table.update(record['id'], {'usage_count': current_count + 1})
+            current_count = record["fields"].get("usage_count", 0)
+            self.table.update(record["id"], {"usage_count": current_count + 1})
             return True
         except Exception as e:
             logger.error(f"Failed to increment usage for {version_id}: {e}")
@@ -475,17 +449,14 @@ class CVVersionManager:
     def increment_response(self, version_id: str, user_email: str) -> bool:
         """Increment response count when user gets a callback/interview."""
         try:
-            formula = AND(
-                EQ(Field("version_id"), version_id),
-                EQ(Field("user_email"), user_email)
-            )
+            formula = AND(EQ(Field("version_id"), version_id), EQ(Field("user_email"), user_email))
             record = self.table.first(formula=str(formula))
 
             if not record:
                 return False
 
-            current_count = record['fields'].get('response_count', 0)
-            self.table.update(record['id'], {'response_count': current_count + 1})
+            current_count = record["fields"].get("response_count", 0)
+            self.table.update(record["id"], {"response_count": current_count + 1})
             return True
         except Exception as e:
             logger.error(f"Failed to increment response for {version_id}: {e}")
@@ -499,7 +470,7 @@ class CVVersionManager:
 
             categories = set()
             for r in records:
-                cat = r['fields'].get('auto_category', '').strip()
+                cat = r["fields"].get("auto_category", "").strip()
                 if cat:
                     categories.add(cat)
 
@@ -517,9 +488,9 @@ class CVVersionManager:
             tags = set()
             for r in records:
                 # user_tags is multipleSelects - returns as array
-                tag_list = r['fields'].get('user_tags', [])
+                tag_list = r["fields"].get("user_tags", [])
                 if isinstance(tag_list, str):
-                    tag_list = [t.strip() for t in tag_list.split(',') if t.strip()]
+                    tag_list = [t.strip() for t in tag_list.split(",") if t.strip()]
                 for tag in tag_list:
                     if tag:
                         tags.add(tag)
@@ -536,7 +507,7 @@ class CVVersionManager:
         if isinstance(tags_value, list):
             return [t.strip() for t in tags_value if t and str(t).strip()]
         if isinstance(tags_value, str):
-            return [t.strip() for t in tags_value.split(',') if t.strip()]
+            return [t.strip() for t in tags_value.split(",") if t.strip()]
         return None
 
     def get_analytics(self, user_email: str) -> Dict[str, Any]:
@@ -549,11 +520,11 @@ class CVVersionManager:
             versions = self.list_versions(user_email, include_archived=True, limit=1000)
 
             total = len(versions)
-            archived = sum(1 for v in versions if v.get('is_archived'))
+            archived = sum(1 for v in versions if v.get("is_archived"))
             active = total - archived
 
-            total_usage = sum(v.get('usage_count', 0) for v in versions)
-            total_responses = sum(v.get('response_count', 0) for v in versions)
+            total_usage = sum(v.get("usage_count", 0) for v in versions)
+            total_responses = sum(v.get("response_count", 0) for v in versions)
 
             # Calculate response rate
             response_rate = (total_responses / total_usage * 100) if total_usage > 0 else 0
@@ -565,19 +536,19 @@ class CVVersionManager:
             tags_set = set()
 
             for v in versions:
-                usage = v.get('usage_count', 0)
-                responses = v.get('response_count', 0)
+                usage = v.get("usage_count", 0)
+                responses = v.get("response_count", 0)
 
                 # Collect categories
-                cat = v.get('auto_category', '').strip() if v.get('auto_category') else ''
+                cat = v.get("auto_category", "").strip() if v.get("auto_category") else ""
                 if cat:
                     categories_set.add(cat)
 
                 # Collect tags
-                tags_raw = v.get('user_tags', '')
+                tags_raw = v.get("user_tags", "")
                 if tags_raw:
                     if isinstance(tags_raw, str):
-                        for tag in tags_raw.split(','):
+                        for tag in tags_raw.split(","):
                             tag = tag.strip()
                             if tag:
                                 tags_set.add(tag)
@@ -588,26 +559,28 @@ class CVVersionManager:
 
                 if usage >= 3:  # Minimum usage threshold
                     rate = responses / usage * 100
-                    performing.append({
-                        'version_id': v['version_id'],
-                        'version_name': v['version_name'],
-                        'usage_count': usage,
-                        'response_count': responses,
-                        'response_rate': round(rate, 1)
-                    })
+                    performing.append(
+                        {
+                            "version_id": v["version_id"],
+                            "version_name": v["version_name"],
+                            "usage_count": usage,
+                            "response_count": responses,
+                            "response_rate": round(rate, 1),
+                        }
+                    )
 
-            performing.sort(key=lambda x: x['response_rate'], reverse=True)
+            performing.sort(key=lambda x: x["response_rate"], reverse=True)
 
             return {
-                'total_versions': total,
-                'active_versions': active,
-                'archived_versions': archived,
-                'total_usage': total_usage,
-                'total_responses': total_responses,
-                'overall_response_rate': round(response_rate, 1),
-                'top_performing': performing[:5],
-                'categories': sorted(list(categories_set)),
-                'tags': sorted(list(tags_set))
+                "total_versions": total,
+                "active_versions": active,
+                "archived_versions": archived,
+                "total_usage": total_usage,
+                "total_responses": total_responses,
+                "overall_response_rate": round(response_rate, 1),
+                "top_performing": performing[:5],
+                "categories": sorted(list(categories_set)),
+                "tags": sorted(list(tags_set)),
             }
         except Exception as e:
             logger.error(f"Failed to get analytics for {user_email}: {e}")
@@ -642,11 +615,11 @@ class CVVersionManager:
 
         import requests
 
-        fields = history_record.get('fields', {})
-        job_title = fields.get('job_title', 'Generated CV')
-        cv_pdf_url = fields.get('cv_pdf_url', '')
-        cv_docx_url = fields.get('cv_docx_url', '')
-        history_id = history_record.get('id', '')
+        fields = history_record.get("fields", {})
+        job_title = fields.get("job_title", "Generated CV")
+        cv_pdf_url = fields.get("cv_pdf_url", "")
+        cv_docx_url = fields.get("cv_docx_url", "")
+        history_id = history_record.get("id", "")
 
         if not cv_pdf_url:
             raise ValueError("History record has no PDF URL")
@@ -661,21 +634,21 @@ class CVVersionManager:
         # reliably fetch the browser-facing /storage proxy URL.
         def _object_path_from_presigned_url(url: str) -> Optional[str]:
             parsed = urlparse(url)
-            path = unquote(parsed.path or "").lstrip('/')
+            path = unquote(parsed.path or "").lstrip("/")
 
             # External browser URL shape: /storage/<bucket>/<object_path>
             storage_prefix = f"storage/{self.minio.bucket}/"
             if path.startswith(storage_prefix):
-                return path[len(storage_prefix):]
+                return path[len(storage_prefix) :]
 
             # Internal MinIO URL shape: /<bucket>/<object_path>
             bucket_prefix = f"{self.minio.bucket}/"
             if path.startswith(bucket_prefix):
-                return path[len(bucket_prefix):]
+                return path[len(bucket_prefix) :]
 
             return None
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp_path = tmp.name
 
         object_path = _object_path_from_presigned_url(cv_pdf_url)
@@ -686,12 +659,12 @@ class CVVersionManager:
             logger.info("Fetching history PDF from URL fallback")
             resp = requests.get(cv_pdf_url, timeout=60)
             resp.raise_for_status()
-            with open(tmp_path, 'wb') as f:
+            with open(tmp_path, "wb") as f:
                 f.write(resp.content)
 
         docx_tmp_path = None
         if cv_docx_url:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_docx:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
                 docx_tmp_path = tmp_docx.name
 
             docx_object_path = _object_path_from_presigned_url(cv_docx_url)
@@ -702,7 +675,7 @@ class CVVersionManager:
                 logger.info("Fetching history DOCX from URL fallback")
                 resp = requests.get(cv_docx_url, timeout=60)
                 resp.raise_for_status()
-                with open(docx_tmp_path, 'wb') as f:
+                with open(docx_tmp_path, "wb") as f:
                     f.write(resp.content)
 
         try:
@@ -734,30 +707,30 @@ class CVVersionManager:
 
     def _record_to_dict(self, record: Dict) -> Dict[str, Any]:
         """Convert Airtable record to clean dictionary."""
-        fields = record.get('fields', {})
+        fields = record.get("fields", {})
         # user_tags is a multipleSelects field - Airtable returns array, convert to comma-separated
-        user_tags_raw = fields.get('user_tags', [])
-        user_tags = ','.join(user_tags_raw) if isinstance(user_tags_raw, list) else user_tags_raw
+        user_tags_raw = fields.get("user_tags", [])
+        user_tags = ",".join(user_tags_raw) if isinstance(user_tags_raw, list) else user_tags_raw
         return {
-            'id': record.get('id'),
-            'version_id': fields.get('version_id', ''),
-            'user_email': fields.get('user_email', ''),
-            'version_name': fields.get('version_name', ''),
-            'auto_category': fields.get('auto_category', ''),
-            'user_tags': user_tags,
-            'storage_path': fields.get('storage_path', ''),
-            'docx_storage_path': fields.get('docx_storage_path', ''),
-            'parent_version_id': fields.get('parent_version_id', ''),
-            'is_archived': fields.get('is_archived', False),
-            'usage_count': fields.get('usage_count', 0),
-            'response_count': fields.get('response_count', 0),
-            'source_job_link': fields.get('source_job_link', ''),
-            'source_job_title': fields.get('source_job_title', ''),
-            'file_size': fields.get('file_size', 0),
-            'docx_file_size': fields.get('docx_file_size', 0),
-            'content_hash': fields.get('content_hash', ''),
-            'docx_content_hash': fields.get('docx_content_hash', ''),
-            'created_at': record.get('createdTime', ''),
+            "id": record.get("id"),
+            "version_id": fields.get("version_id", ""),
+            "user_email": fields.get("user_email", ""),
+            "version_name": fields.get("version_name", ""),
+            "auto_category": fields.get("auto_category", ""),
+            "user_tags": user_tags,
+            "storage_path": fields.get("storage_path", ""),
+            "docx_storage_path": fields.get("docx_storage_path", ""),
+            "parent_version_id": fields.get("parent_version_id", ""),
+            "is_archived": fields.get("is_archived", False),
+            "usage_count": fields.get("usage_count", 0),
+            "response_count": fields.get("response_count", 0),
+            "source_job_link": fields.get("source_job_link", ""),
+            "source_job_title": fields.get("source_job_title", ""),
+            "file_size": fields.get("file_size", 0),
+            "docx_file_size": fields.get("docx_file_size", 0),
+            "content_hash": fields.get("content_hash", ""),
+            "docx_content_hash": fields.get("docx_content_hash", ""),
+            "created_at": record.get("createdTime", ""),
         }
 
 

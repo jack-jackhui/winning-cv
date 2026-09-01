@@ -2,6 +2,7 @@
 Telemetry routes for product analytics.
 Records user events for funnel analysis and provides admin dashboards.
 """
+
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -126,6 +127,7 @@ async def record_single_event(
 # Admin Analytics Endpoints (require staff/superuser)
 # =============================================================================
 
+
 def _require_admin(user: UserInfo):
     """Check if user has admin access."""
     if not user.is_staff and not user.is_superuser:
@@ -161,13 +163,15 @@ async def get_funnel_analytics(
             if prev_users and prev_users > 0:
                 conversion_rate = round(row["unique_users"] / prev_users * 100, 1)
 
-            steps.append(FunnelStepMetrics(
-                funnel_step=row["funnel_step"],
-                event_name=row["event_name"],
-                event_count=row["event_count"],
-                unique_users=row["unique_users"],
-                conversion_rate=conversion_rate,
-            ))
+            steps.append(
+                FunnelStepMetrics(
+                    funnel_step=row["funnel_step"],
+                    event_name=row["event_name"],
+                    event_count=row["event_count"],
+                    unique_users=row["unique_users"],
+                    conversion_rate=conversion_rate,
+                )
+            )
             prev_users = row["unique_users"]
 
         # Calculate overall conversion (first to last step)
@@ -377,13 +381,15 @@ async def get_analytics_dashboard(
             conversion_rate = None
             if prev_users and prev_users > 0:
                 conversion_rate = round(row["unique_users"] / prev_users * 100, 1)
-            funnel.append(FunnelStepMetrics(
-                funnel_step=row["funnel_step"],
-                event_name=row["event_name"],
-                event_count=row["event_count"],
-                unique_users=row["unique_users"],
-                conversion_rate=conversion_rate,
-            ))
+            funnel.append(
+                FunnelStepMetrics(
+                    funnel_step=row["funnel_step"],
+                    event_name=row["event_name"],
+                    event_count=row["event_count"],
+                    unique_users=row["unique_users"],
+                    conversion_rate=conversion_rate,
+                )
+            )
             prev_users = row["unique_users"]
 
         # Build top events

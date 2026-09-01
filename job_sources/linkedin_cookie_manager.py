@@ -62,11 +62,7 @@ class LinkedInCookieManager:
             True if saved successfully, False otherwise.
         """
         try:
-            cookie_data = {
-                "cookies": cookies,
-                "saved_at": datetime.now().isoformat(),
-                "domain": "linkedin.com"
-            }
+            cookie_data = {"cookies": cookies, "saved_at": datetime.now().isoformat(), "domain": "linkedin.com"}
             with open(self.cookie_file, "w") as f:
                 json.dump(cookie_data, f, indent=2)
             logger.info(f"Saved {len(cookies)} LinkedIn cookies to {self.cookie_file}")
@@ -124,7 +120,7 @@ class LinkedInCookieManager:
             return {
                 "saved_at": cookie_data.get("saved_at"),
                 "cookie_count": len(cookie_data.get("cookies", [])),
-                "domain": cookie_data.get("domain")
+                "domain": cookie_data.get("domain"),
             }
         except Exception as e:
             logger.error(f"Failed to get cookie info: {e}")

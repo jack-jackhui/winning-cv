@@ -7,6 +7,7 @@ from pathlib import Path
 # Add initialization flag
 _LOGGER_INITIALIZED = False
 
+
 def setup_logger(log_file=None, level=logging.DEBUG):
     """Configure root logger with handlers and third-party log levels"""
     global _LOGGER_INITIALIZED
@@ -22,10 +23,7 @@ def setup_logger(log_file=None, level=logging.DEBUG):
         for handler in root_logger.handlers:
             root_logger.removeHandler(handler)
 
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
     # File handler with rotation
     if log_file:
@@ -36,7 +34,7 @@ def setup_logger(log_file=None, level=logging.DEBUG):
             filename=log_path,
             maxBytes=5 * 1024 * 1024,  # 5MB
             backupCount=3,
-            encoding='utf-8'
+            encoding="utf-8",
         )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.DEBUG)
@@ -49,9 +47,9 @@ def setup_logger(log_file=None, level=logging.DEBUG):
 
     # Configure third-party loggers centrally here
     third_party_loggers = {
-        'azure': logging.WARNING,
-        'fontTools.subset': logging.WARNING,
-        'fontTools.ttLib': logging.WARNING
+        "azure": logging.WARNING,
+        "fontTools.subset": logging.WARNING,
+        "fontTools.ttLib": logging.WARNING,
     }
 
     for logger_name, log_level in third_party_loggers.items():

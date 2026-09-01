@@ -22,16 +22,13 @@ def show_generate_ui(user_email: str):
     # 1) Job Description input
     st.subheader("Job Description")
     job_desc = st.text_area("Paste job description here", height=200)
-    jd_file = st.file_uploader("…or upload job description (PDF/DOCX/TXT)",
-                               type=["pdf", "docx", "txt"])
+    jd_file = st.file_uploader("…or upload job description (PDF/DOCX/TXT)", type=["pdf", "docx", "txt"])
     if jd_file:
         job_desc = extract_text_from_file(jd_file)
     # 2) CV upload & instructions
     st.subheader("Your Current CV & Instructions")
-    cv_file = st.file_uploader("Upload your CV (PDF/DOCX/TXT)",
-                               type=["pdf", "docx", "txt"])
-    instructions = st.text_area("Any special instructions?",
-                                placeholder="e.g. Emphasize Python skills…")
+    cv_file = st.file_uploader("Upload your CV (PDF/DOCX/TXT)", type=["pdf", "docx", "txt"])
+    instructions = st.text_area("Any special instructions?", placeholder="e.g. Emphasize Python skills…")
     # Validate presence of both JD and CV
     if st.button("Generate CV", disabled=not user_email):
         # Final auth check
@@ -88,7 +85,7 @@ def show_generate_ui(user_email: str):
         """
         # 8) Show a live preview
         st.subheader("Live Preview")
-        #st.markdown(final_md)
+        # st.markdown(final_md)
         st.markdown(raw_md)
 
         # 9) Render to PDF
@@ -100,17 +97,14 @@ def show_generate_ui(user_email: str):
         # 10) Compute a filename: YYYY‑MM‑DD_<job‑title>.pdf
         #    Take the first line of the job desc, slugify lightly
         job_title = extract_title_from_jd(job_desc)
-        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        safe_title = re.sub(r"[^\w]+", "_", job_title)[:30].strip("_")
         today = datetime.now().strftime("%Y-%m-%d")
         download_name = f"{today}_{safe_title}.pdf"
 
         # 11.a) Download button
         with open(pdf_path, "rb") as f:
             st.download_button(
-                label="📥 Download Your Tailored CV",
-                data=f,
-                file_name=download_name,
-                mime="application/pdf"
+                label="📥 Download Your Tailored CV", data=f, file_name=download_name, mime="application/pdf"
             )
 
         # 11.b) upload to web server
@@ -120,7 +114,7 @@ def show_generate_ui(user_email: str):
                 filename=download_name,
                 wp_site=Config.WORDPRESS_SITE,
                 wp_user=Config.WORDPRESS_USERNAME,
-                wp_app_password=Config.WORDPRESS_APP_PASSWORD
+                wp_app_password=Config.WORDPRESS_APP_PASSWORD,
             )
         except Exception as e:
             st.error(f"Failed to push PDF to WordPress: {e}")

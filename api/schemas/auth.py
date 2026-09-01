@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr
 
 class UserInfo(BaseModel):
     """User information from auth service"""
+
     auth_user_id: int
     email: EmailStr
     display_name: str
@@ -19,10 +20,12 @@ class UserInfo(BaseModel):
 
 class AuthStatus(BaseModel):
     """Authentication status response"""
+
     is_authenticated: bool
     user: Optional[UserInfo] = None
 
 
 class CSRFToken(BaseModel):
     """CSRF token response"""
+
     csrf_token: str

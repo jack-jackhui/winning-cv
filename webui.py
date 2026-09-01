@@ -13,16 +13,19 @@ load_dotenv()
 # Initialize logger
 logger = setup_logger(__name__)
 
+
 def st_normal():
     """Create a centered container for normal-width content"""
     _, col, _ = st.columns([1, 4, 1])  # Adjust middle number for width (4 = wider than 2)
     return col
 
+
 def main():
     st.set_page_config(layout="wide")
 
     # Add markdown css
-    st.markdown("""
+    st.markdown(
+        """
         <style>
             div[data-testid="stMarkdown"] {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -38,7 +41,9 @@ def main():
                 color: #1a237e;
             }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     with st_normal():
         st.title("Winning CV - Your AI CV Builder")
@@ -58,23 +63,23 @@ def main():
     cv_generator = CVGenerator()
 
     # Initialize session state
-    if 'modified_cv' not in st.session_state:
+    if "modified_cv" not in st.session_state:
         st.session_state.modified_cv = None
 
     # Step 1: Job Description Input
     with st_normal():
         with st.expander("1. Provide Job Description", expanded=True):
             job_desc = st.text_area("Paste job description here", height=200)
-            job_file = st.file_uploader("Or upload job description (PDF/DOCX/TXT)",
-                                        type=["pdf", "docx", "txt"])
+            job_file = st.file_uploader("Or upload job description (PDF/DOCX/TXT)", type=["pdf", "docx", "txt"])
 
     # Step 2: CV and Instructions
     with st_normal():
         with st.expander("2. Upload Your CV", expanded=True):
-            cv_file = st.file_uploader("Upload your CV (PDF/DOCX/TXT)",
-                                       type=["pdf", "docx", "txt"])
-            instructions = st.text_area("Additional customization instructions",
-                                        placeholder="e.g. Emphasize Python skills, reduce focus on retail experience")
+            cv_file = st.file_uploader("Upload your CV (PDF/DOCX/TXT)", type=["pdf", "docx", "txt"])
+            instructions = st.text_area(
+                "Additional customization instructions",
+                placeholder="e.g. Emphasize Python skills, reduce focus on retail experience",
+            )
 
     # Process inputs
     if job_file:
@@ -84,7 +89,6 @@ def main():
     if cv_file:
         original_cv = extract_text_from_file(cv_file)
         with st_normal():
-
             # Debug preview
             # with st.expander("Debug: View Extracted Content", expanded=False):
             #    st.code(original_cv[:2000] + "...")  # Show first 2000 characters
@@ -113,9 +117,7 @@ def main():
 
                 with st.spinner("Customizing your CV..."):
                     try:
-                        st.session_state.modified_cv = cv_generator.generate_cv(
-                            original_cv, job_desc, instructions
-                        )
+                        st.session_state.modified_cv = cv_generator.generate_cv(original_cv, job_desc, instructions)
                     except Exception as e:
                         st.error(str(e))
 
@@ -138,7 +140,7 @@ def main():
             modification_instructions = st.text_area(
                 "Enter your modification requests:",
                 placeholder="e.g. 'Add more metrics to project section', 'Emphasize leadership experience'",
-                height=100
+                height=100,
             )
             col1, col2 = st.columns(2)
             with col1:
@@ -152,7 +154,7 @@ def main():
                                 st.session_state.modified_cv = cv_generator.generate_cv(
                                     st.session_state.modified_cv,  # Use current CV as base
                                     job_desc,
-                                    updated_instructions
+                                    updated_instructions,
                                 )
                                 st.rerun()
                             except Exception as e:
@@ -172,31 +174,33 @@ def main():
                                         data=f,
                                         file_name="customised_cv/customized_cv.pdf",
                                         mime="application/octet-stream",
-                                        key="download_pdf"
+                                        key="download_pdf",
                                     )
                             else:
                                 st.error("Failed to generate PDF")
                         else:
                             st.warning("No content to generate PDF from")
 
+
 # Clean the output before preview
 def clean_llm_output(content):
     # Remove any leading non-markdown text
-    cleaned = re.sub(r'^.*?(?=# )', '', content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"^.*?(?=# )", "", content, flags=re.DOTALL | re.IGNORECASE)
 
     # Fix markdown syntax
-    cleaned = re.sub(r'-\s*\*\*([A-Za-z]+):\*\*\s*', r'**\1:** ', cleaned)  # Fix contact info formatting
-    cleaned = re.sub(r'\*{2}([A-Za-z ]+?)\*{2}', r'**\1**', cleaned)  # Fix bold formatting
-    cleaned = re.sub(r'##\s+([A-Z& ]+?)\*', r'## \1', cleaned)  # Remove asterisks in headers
+    cleaned = re.sub(r"-\s*\*\*([A-Za-z]+):\*\*\s*", r"**\1:** ", cleaned)  # Fix contact info formatting
+    cleaned = re.sub(r"\*{2}([A-Za-z ]+?)\*{2}", r"**\1**", cleaned)  # Fix bold formatting
+    cleaned = re.sub(r"##\s+([A-Z& ]+?)\*", r"## \1", cleaned)  # Remove asterisks in headers
 
     # Remove code blocks if any
-    cleaned = re.sub(r'```markdown', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'```', '', cleaned)
+    cleaned = re.sub(r"```markdown", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"```", "", cleaned)
 
     # Standardize line breaks
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     return cleaned.strip()
+
 
 if __name__ == "__main__":
     main()

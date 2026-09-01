@@ -2,6 +2,7 @@
 Authentication routes for WinningCV API.
 Proxies auth requests to external auth service.
 """
+
 import logging
 import os
 from typing import Optional
@@ -20,23 +21,16 @@ AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "https://ai-video-backend.jackh
 
 
 @router.get("/me", response_model=AuthStatus)
-async def get_auth_status(
-    user: Optional[UserInfo] = Depends(get_optional_user)
-) -> AuthStatus:
+async def get_auth_status(user: Optional[UserInfo] = Depends(get_optional_user)) -> AuthStatus:
     """
     Get current authentication status.
     Returns user info if authenticated, or is_authenticated=False otherwise.
     """
-    return AuthStatus(
-        is_authenticated=user is not None,
-        user=user
-    )
+    return AuthStatus(is_authenticated=user is not None, user=user)
 
 
 @router.get("/user", response_model=UserInfo)
-async def get_user_info(
-    user: UserInfo = Depends(get_current_user)
-) -> UserInfo:
+async def get_user_info(user: UserInfo = Depends(get_current_user)) -> UserInfo:
     """
     Get current user information.
     Requires authentication.
@@ -55,32 +49,20 @@ async def get_csrf_token(request: Request) -> CSRFToken:
             # Forward cookies to auth service
             cookies = dict(request.cookies)
 
-            response = await client.get(
-                f"{AUTH_SERVICE_URL}/api/csrf/",
-                cookies=cookies
-            )
+            response = await client.get(f"{AUTH_SERVICE_URL}/api/csrf/", cookies=cookies)
 
             if response.status_code == 200:
                 data = response.json()
                 return CSRFToken(csrf_token=data.get("csrfToken", ""))
             else:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail="Failed to get CSRF token"
-                )
+                raise HTTPException(status_code=response.status_code, detail="Failed to get CSRF token")
     except httpx.RequestError as e:
         logger.error(f"Failed to get CSRF token: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Auth service unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
 
 
 @router.get("/login-url")
-async def get_login_url(
-    provider: str = "google",
-    redirect_uri: Optional[str] = None
-) -> dict:
+async def get_login_url(provider: str = "google", redirect_uri: Optional[str] = None) -> dict:
     """
     Get the OAuth login URL for the specified provider.
 
@@ -102,25 +84,15 @@ async def get_login_url(
     }
 
     if provider not in provider_endpoints:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid provider. Supported: {list(provider_endpoints.keys())}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid provider. Supported: {list(provider_endpoints.keys())}")
 
     login_url = f"{base_url}{provider_endpoints[provider]}"
 
-    return {
-        "provider": provider,
-        "login_url": login_url,
-        "auth_service_url": base_url
-    }
+    return {"provider": provider, "login_url": login_url, "auth_service_url": base_url}
 
 
 @router.post("/logout")
-async def logout(
-    request: Request,
-    user: UserInfo = Depends(get_current_user)
-) -> dict:
+async def logout(request: Request, user: UserInfo = Depends(get_current_user)) -> dict:
     """
     Logout the current user by invalidating the session.
     Proxies the logout request to the auth service.
@@ -135,10 +107,7 @@ async def logout(
             response = await client.post(
                 f"{AUTH_SERVICE_URL}/api/dj-rest-auth/logout/",
                 cookies=cookies,
-                headers={
-                    "X-CSRFToken": csrf_token,
-                    "Content-Type": "application/json"
-                }
+                headers={"X-CSRFToken": csrf_token, "Content-Type": "application/json"},
             )
 
             if response.status_code in [200, 204]:

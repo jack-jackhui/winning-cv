@@ -27,16 +27,16 @@ class LinkedInFeedProcessor:
     def process_entry(self, entry):
         """Map RSS entry to Airtable columns"""
         try:
-            published = entry.get('published', entry.get('updated', ''))
+            published = entry.get("published", entry.get("updated", ""))
             if published:
                 published = self._format_date(published)
             else:
-                published = datetime.now().strftime('%Y-%m-%d')  # Fallback to current date
+                published = datetime.now().strftime("%Y-%m-%d")  # Fallback to current date
             return {
-                'title': entry.get('title', 'No Title'),
-                'description': entry.get('description', ''),
-                'url': entry.get('link', ''),
-                'published': published
+                "title": entry.get("title", "No Title"),
+                "description": entry.get("description", ""),
+                "url": entry.get("link", ""),
+                "published": published,
             }
         except Exception as e:
             self.logger.error(f"Failed to process entry: {str(e)}")
@@ -44,16 +44,11 @@ class LinkedInFeedProcessor:
 
     def _format_date(self, date_str):
         """Ensure Airtable-compatible ISO format without microseconds"""
-        formats = [
-            '%a, %d %b %Y %H:%M:%S %Z',
-            '%Y-%m-%dT%H:%M:%S.%fZ',
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d'
-        ]
+        formats = ["%a, %d %b %Y %H:%M:%S %Z", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str, fmt)
-                return dt.strftime('%Y-%m-%d')  # Ensure ISO format
+                return dt.strftime("%Y-%m-%d")  # Ensure ISO format
             except (ValueError, TypeError):
                 continue
-        return datetime.now().strftime('%Y-%m-%d')
+        return datetime.now().strftime("%Y-%m-%d")

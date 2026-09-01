@@ -34,11 +34,11 @@ logger = logging.getLogger(__name__)
 # Database connection - prefer settings, fallback to env
 try:
     from config.settings_v2 import settings
+
     DATABASE_URL = os.getenv("DATABASE_URL", settings.postgres_dsn)
 except ImportError:
     DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        os.getenv("POSTGRES_URL", "postgresql://winningcv:winningcv_secret@postgres:5432/winningcv")
+        "DATABASE_URL", os.getenv("POSTGRES_URL", "postgresql://winningcv:winningcv_secret@postgres:5432/winningcv")
     )
 
 
@@ -124,25 +124,28 @@ class PostgresManager:
     def create_job_record(self, job_data: Dict, user_email: str = "system") -> Optional[Dict]:
         """Create a job; duplicate URLs are allowed across different users."""
         with self.get_cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO jobs (
                     user_email, job_title, job_description, job_date, job_link,
                     company, location, matching_score, cv_link, application_status
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_email, job_link) DO NOTHING
                 RETURNING id, created_at
-            """, (
-                user_email,
-                job_data.get("Job Title"),
-                job_data.get("Job Description"),
-                self._format_date(job_data.get("Job Date")),
-                job_data.get("Job Link"),
-                job_data.get("Company"),
-                job_data.get("Location"),
-                job_data.get("score", 0),
-                job_data.get("cv_url", ""),
-                job_data.get("Application Status", "saved"),
-            ))
+            """,
+                (
+                    user_email,
+                    job_data.get("Job Title"),
+                    job_data.get("Job Description"),
+                    self._format_date(job_data.get("Job Date")),
+                    job_data.get("Job Link"),
+                    job_data.get("Company"),
+                    job_data.get("Location"),
+                    job_data.get("score", 0),
+                    job_data.get("cv_url", ""),
+                    job_data.get("Application Status", "saved"),
+                ),
+            )
             result = cursor.fetchone()
             if result is None:
                 self.logger.info("Job already exists for user: %s", user_email)
@@ -171,7 +174,8 @@ class PostgresManager:
         try:
             with self.get_cursor() as cursor:
                 owner_clause = " AND user_email = %s" if user_email is not None else ""
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                     UPDATE jobs SET
                         matching_score = %s,
                         cv_link = %s,
@@ -187,20 +191,22 @@ class PostgresManager:
                         updated_at = NOW()
                     WHERE job_link = %s{owner_clause}
                     RETURNING id
-                """, (
-                    score,
-                    cv_url,
-                    "\n".join(reasons) if isinstance(reasons, list) else reasons,
-                    "\n".join(suggestions) if isinstance(suggestions, list) else suggestions,
-                    ats_score,
-                    hr_score,
-                    llm_score,
-                    recommendation,
-                    ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords,
-                    ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords,
-                    job_link,
-                    *([user_email] if user_email is not None else []),
-                ))
+                """,
+                    (
+                        score,
+                        cv_url,
+                        "\n".join(reasons) if isinstance(reasons, list) else reasons,
+                        "\n".join(suggestions) if isinstance(suggestions, list) else suggestions,
+                        ats_score,
+                        hr_score,
+                        llm_score,
+                        recommendation,
+                        ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords,
+                        ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords,
+                        job_link,
+                        *([user_email] if user_email is not None else []),
+                    ),
+                )
                 result = cursor.fetchone()
                 return {"id": str(result["id"])} if result else None
         except Exception as e:
@@ -212,7 +218,8 @@ class PostgresManager:
         try:
             with self.get_cursor() as cursor:
                 owner_clause = " AND user_email = %s" if user_email is not None else ""
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                     SELECT id, job_title as "Job Title", job_description as "Job Description",
                            job_link as "Job Link", company as "Company"
                     FROM jobs
@@ -220,7 +227,9 @@ class PostgresManager:
                       AND job_description IS NOT NULL AND job_description != ''
                       {owner_clause}
                     ORDER BY created_at DESC
-                """, (user_email,) if user_email is not None else ())
+                """,
+                    (user_email,) if user_email is not None else (),
+                )
                 results = []
                 for row in cursor.fetchall():
                     fields = dict(row)
@@ -241,22 +250,25 @@ class PostgresManager:
         """Create a history record and return the record ID."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO cv_history (
                         user_email, job_title, job_description, instructions,
                         cv_markdown, cv_pdf_url, cv_docx_url, analysis_status
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (
-                    data.get("user_email"),
-                    data.get("job_title"),
-                    data.get("job_description"),
-                    data.get("instructions"),
-                    data.get("cv_markdown"),
-                    data.get("cv_pdf_url"),
-                    data.get("cv_docx_url"),
-                    data.get("analysis_status", "pending"),
-                ))
+                """,
+                    (
+                        data.get("user_email"),
+                        data.get("job_title"),
+                        data.get("job_description"),
+                        data.get("instructions"),
+                        data.get("cv_markdown"),
+                        data.get("cv_pdf_url"),
+                        data.get("cv_docx_url"),
+                        data.get("analysis_status", "pending"),
+                    ),
+                )
                 result = cursor.fetchone()
                 record_id = str(result["id"])
                 self.logger.info(f"History record created: {record_id}")
@@ -269,13 +281,16 @@ class PostgresManager:
         """Update history record with CV-JD fit analysis."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE cv_history SET
                         cv_analysis = %s::jsonb,
                         analysis_status = %s,
                         updated_at = NOW()
                     WHERE id = %s
-                """, (analysis_json, status, record_id))
+                """,
+                    (analysis_json, status, record_id),
+                )
                 self.logger.info(f"History analysis updated: {record_id} status={status}")
                 return True
         except Exception as e:
@@ -286,11 +301,14 @@ class PostgresManager:
         """Get a single history record by ID."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT id, user_email, job_title, job_description, instructions,
                            cv_markdown, cv_pdf_url, cv_docx_url, cv_analysis, analysis_status, created_at
                     FROM cv_history WHERE id = %s
-                """, (record_id,))
+                """,
+                    (record_id,),
+                )
                 row = cursor.fetchone()
                 if row:
                     return {"id": str(row["id"]), "fields": dict(row)}
@@ -303,13 +321,16 @@ class PostgresManager:
         """Get all history records for a user."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT id, user_email, job_title, job_description, instructions,
                            cv_markdown, cv_pdf_url, cv_docx_url, cv_analysis, analysis_status, created_at
                     FROM cv_history
                     WHERE user_email = %s
                     ORDER BY created_at DESC
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 results = []
                 for row in cursor.fetchall():
                     fields = dict(row)
@@ -330,9 +351,12 @@ class PostgresManager:
         """Retrieve user's saved configuration."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM user_configs WHERE user_email = %s
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 row = cursor.fetchone()
                 return dict(row) if row else {}
         except Exception as e:
@@ -343,7 +367,8 @@ class PostgresManager:
         """Store/update user configuration (upsert)."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO user_configs (
                         user_email, base_cv_path, base_cv_link, linkedin_job_url,
                         seek_job_url, max_jobs_to_scrape, additional_search_term,
@@ -362,20 +387,22 @@ class PostgresManager:
                         results_wanted = EXCLUDED.results_wanted,
                         country = EXCLUDED.country,
                         updated_at = NOW()
-                """, (
-                    config_data["user_email"],
-                    config_data.get("base_cv_path"),
-                    config_data.get("base_cv_link", ""),
-                    config_data.get("linkedin_job_url"),
-                    config_data.get("seek_job_url"),
-                    config_data.get("max_jobs_to_scrape", 50),
-                    config_data.get("additional_search_term"),
-                    config_data.get("google_search_term"),
-                    config_data.get("location"),
-                    config_data.get("hours_old", 168),
-                    config_data.get("results_wanted", 10),
-                    config_data.get("country", "Australia"),
-                ))
+                """,
+                    (
+                        config_data["user_email"],
+                        config_data.get("base_cv_path"),
+                        config_data.get("base_cv_link", ""),
+                        config_data.get("linkedin_job_url"),
+                        config_data.get("seek_job_url"),
+                        config_data.get("max_jobs_to_scrape", 50),
+                        config_data.get("additional_search_term"),
+                        config_data.get("google_search_term"),
+                        config_data.get("location"),
+                        config_data.get("hours_old", 168),
+                        config_data.get("results_wanted", 10),
+                        config_data.get("country", "Australia"),
+                    ),
+                )
                 return True
         except Exception as e:
             self.logger.error(f"Config save failed: {e}")
@@ -389,11 +416,14 @@ class PostgresManager:
         """Retrieve user's notification preferences."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT email_alerts, telegram_alerts, wechat_alerts, weekly_digest,
                            telegram_chat_id, wechat_id, notification_email
                     FROM user_configs WHERE user_email = %s
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 row = cursor.fetchone()
                 if row:
                     return {
@@ -420,7 +450,8 @@ class PostgresManager:
 
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO user_configs (user_email, email_alerts, telegram_alerts,
                         wechat_alerts, weekly_digest, telegram_chat_id, wechat_id, notification_email)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -433,16 +464,18 @@ class PostgresManager:
                         wechat_id = EXCLUDED.wechat_id,
                         notification_email = EXCLUDED.notification_email,
                         updated_at = NOW()
-                """, (
-                    user_email,
-                    prefs_data.get("email_alerts", True),
-                    prefs_data.get("telegram_alerts", False),
-                    prefs_data.get("wechat_alerts", False),
-                    prefs_data.get("weekly_digest", True),
-                    prefs_data.get("telegram_chat_id") or "",
-                    prefs_data.get("wechat_id") or prefs_data.get("wechat_openid") or "",
-                    prefs_data.get("notification_email") or "",
-                ))
+                """,
+                    (
+                        user_email,
+                        prefs_data.get("email_alerts", True),
+                        prefs_data.get("telegram_alerts", False),
+                        prefs_data.get("wechat_alerts", False),
+                        prefs_data.get("weekly_digest", True),
+                        prefs_data.get("telegram_chat_id") or "",
+                        prefs_data.get("wechat_id") or prefs_data.get("wechat_openid") or "",
+                        prefs_data.get("notification_email") or "",
+                    ),
+                )
                 self.logger.info(f"Notification preferences saved for {user_email}")
                 return True
         except Exception as e:
@@ -477,11 +510,11 @@ class PostgresManager:
             self.logger.error(f"Failed to get users with notifications: {e}")
             return []
 
-
     def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
         """Return one job owned by the user using parameterized SQL."""
         with self.get_cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, user_email, job_title, job_description,
                        job_date, job_link, company, location, matching_score,
                        cv_link, match_reasons, match_suggestions,
@@ -491,7 +524,9 @@ class PostgresManager:
                 FROM jobs
                 WHERE id::text = %s AND user_email = %s
                 LIMIT 1
-            """, (job_id, user_email))
+            """,
+                (job_id, user_email),
+            )
             row = cursor.fetchone()
             return self._job_row_to_record(row) if row else None
 
@@ -550,7 +585,8 @@ class PostgresManager:
     def get_jobs_by_user(self, user_email: str) -> List[Dict]:
         """Return jobs owned by a user without parsing an Airtable formula."""
         with self.get_cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, user_email, job_title, job_description,
                        job_date, job_link, company, location, matching_score,
                        cv_link, match_reasons, match_suggestions,
@@ -560,19 +596,24 @@ class PostgresManager:
                 FROM jobs
                 WHERE user_email = %s
                 ORDER BY created_at DESC
-            """, (user_email,))
+            """,
+                (user_email,),
+            )
             return [self._job_row_to_record(row) for row in cursor.fetchall()]
 
     def get_applications_by_user(self, user_email: str) -> List[Dict]:
         """Return projected owned applications in deterministic next-action order."""
         with self.get_cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, job_title, company, location, application_status,
                        application_notes, applied_at, next_action_at, created_at
                 FROM jobs
                 WHERE user_email = %s
                 ORDER BY next_action_at ASC NULLS LAST, created_at DESC, id ASC
-            """, (user_email,))
+            """,
+                (user_email,),
+            )
             return [self._application_row_to_record(row) for row in cursor.fetchall()]
 
     def get_records_by_filter(self, formula: str) -> List[Dict]:
@@ -613,7 +654,8 @@ class PostgresManager:
 
         try:
             with self.get_cursor() as cursor:
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                     SELECT id, user_email, job_title, job_description,
                            job_date, job_link, company, location, matching_score,
                            cv_link, match_reasons, match_suggestions,
@@ -623,7 +665,9 @@ class PostgresManager:
                     FROM jobs
                     WHERE {column_name} = %s
                     ORDER BY created_at DESC
-                """, (field_value,))
+                """,
+                    (field_value,),
+                )
 
                 rows = cursor.fetchall()
 
@@ -648,7 +692,8 @@ class PostgresManager:
         lookup_column = "job_link" if job_link else "id::text"
         lookup_value = job_link or job_id
         with self.get_cursor() as cursor:
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 UPDATE jobs SET
                     application_status = %s,
                     application_notes = %s,
@@ -660,15 +705,17 @@ class PostgresManager:
                     updated_at = NOW()
                 WHERE {lookup_column} = %s AND user_email = %s
                 RETURNING id
-            """, (
-                application_status,
-                application_notes,
-                application_status,
-                update_next_action,
-                next_action_at,
-                lookup_value,
-                user_email,
-            ))
+            """,
+                (
+                    application_status,
+                    application_notes,
+                    application_status,
+                    update_next_action,
+                    next_action_at,
+                    lookup_value,
+                    user_email,
+                ),
+            )
             result = cursor.fetchone()
             return {"id": str(result["id"])} if result else None
 
@@ -680,24 +727,20 @@ class PostgresManager:
         """Ensure PostgreSQL-compatible date format."""
         if not date_str:
             return None
-        formats = [
-            '%a, %d %b %Y %H:%M:%S %Z',
-            '%Y-%m-%dT%H:%M:%S.%fZ',
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d'
-        ]
+        formats = ["%a, %d %b %Y %H:%M:%S %Z", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str, fmt)
-                return dt.strftime('%Y-%m-%d')
+                return dt.strftime("%Y-%m-%d")
             except (ValueError, TypeError):
                 continue
-        return datetime.now().strftime('%Y-%m-%d')
+        return datetime.now().strftime("%Y-%m-%d")
 
 
 # ============================================================================
 # CV VERSION MANAGER (PostgreSQL version)
 # ============================================================================
+
 
 class PostgresCVVersionManager:
     """
@@ -715,6 +758,7 @@ class PostgresCVVersionManager:
         """Lazy initialization of MinIO storage."""
         if self._minio is None:
             from utils.minio_storage import get_minio_storage
+
             self._minio = get_minio_storage()
         return self._minio
 
@@ -775,8 +819,9 @@ class PostgresCVVersionManager:
             version_id=version_id,
             content_type=(
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                if primary_is_docx else "application/pdf"
-            )
+                if primary_is_docx
+                else "application/pdf"
+            ),
         )
 
         docx_storage_path = None
@@ -790,12 +835,13 @@ class PostgresCVVersionManager:
                 user_id=user_email,
                 filename=f"{version_id}.docx",
                 version_id=version_id,
-                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO cv_versions (
                         version_id, user_email, version_name, auto_category, user_tags,
                         storage_path, docx_storage_path, file_size, docx_file_size,
@@ -804,12 +850,27 @@ class PostgresCVVersionManager:
                         source_job_link, source_job_title
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, created_at
-                """, (
-                    version_id, user_email, version_name, auto_category,
-                    user_tags or [], storage_path, docx_storage_path, file_size,
-                    docx_file_size, content_hash, docx_content_hash,
-                    parent_version_id, False, 0, 0, source_job_link, source_job_title
-                ))
+                """,
+                    (
+                        version_id,
+                        user_email,
+                        version_name,
+                        auto_category,
+                        user_tags or [],
+                        storage_path,
+                        docx_storage_path,
+                        file_size,
+                        docx_file_size,
+                        content_hash,
+                        docx_content_hash,
+                        parent_version_id,
+                        False,
+                        0,
+                        0,
+                        source_job_link,
+                        source_job_title,
+                    ),
+                )
                 result = cursor.fetchone()
                 self.logger.info(f"Created CV version: {version_id} for {user_email}")
 
@@ -843,10 +904,13 @@ class PostgresCVVersionManager:
         """Get a specific CV version by ID."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM cv_versions
                     WHERE version_id = %s AND user_email = %s
-                """, (version_id, user_email))
+                """,
+                    (version_id, user_email),
+                )
                 row = cursor.fetchone()
                 return self._row_to_dict(row) if row else None
         except Exception as e:
@@ -860,7 +924,7 @@ class PostgresCVVersionManager:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """List CV versions for a user."""
         try:
@@ -888,12 +952,7 @@ class PostgresCVVersionManager:
             self.logger.error(f"Failed to list versions for {user_email}: {e}")
             return []
 
-    def update_version(
-        self,
-        version_id: str,
-        user_email: str,
-        updates: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def update_version(self, version_id: str, user_email: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update CV version metadata."""
         allowed = {"version_name", "user_tags", "auto_category", "is_archived"}
         filtered = {k: v for k, v in updates.items() if k in allowed}
@@ -933,11 +992,14 @@ class PostgresCVVersionManager:
         """Permanently delete a CV version."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     DELETE FROM cv_versions
                     WHERE version_id = %s AND user_email = %s
                     RETURNING storage_path
-                """, (version_id, user_email))
+                """,
+                    (version_id, user_email),
+                )
                 row = cursor.fetchone()
 
                 if row and row["storage_path"]:
@@ -956,10 +1018,13 @@ class PostgresCVVersionManager:
         """Increment usage count."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE cv_versions SET usage_count = usage_count + 1
                     WHERE version_id = %s AND user_email = %s
-                """, (version_id, user_email))
+                """,
+                    (version_id, user_email),
+                )
                 return True
         except Exception as e:
             self.logger.error(f"Failed to increment usage: {e}")
@@ -969,10 +1034,13 @@ class PostgresCVVersionManager:
         """Increment response count."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE cv_versions SET response_count = response_count + 1
                     WHERE version_id = %s AND user_email = %s
-                """, (version_id, user_email))
+                """,
+                    (version_id, user_email),
+                )
                 return True
         except Exception as e:
             self.logger.error(f"Failed to increment response: {e}")
@@ -986,16 +1054,22 @@ class PostgresCVVersionManager:
                 row = cursor.fetchone()
 
                 # Get categories and tags
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT DISTINCT auto_category FROM cv_versions
                     WHERE user_email = %s AND auto_category IS NOT NULL
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 categories = [r["auto_category"] for r in cursor.fetchall()]
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT DISTINCT unnest(user_tags) as tag FROM cv_versions
                     WHERE user_email = %s
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 tags = sorted([r["tag"] for r in cursor.fetchall()])
 
                 return {
@@ -1044,7 +1118,7 @@ class PostgresCVVersionManager:
         if isinstance(tags_value, list):
             return [t.strip() for t in tags_value if t and str(t).strip()]
         if isinstance(tags_value, str):
-            return [t.strip() for t in tags_value.split(',') if t.strip()]
+            return [t.strip() for t in tags_value.split(",") if t.strip()]
         return None
 
     # =========================================================================
@@ -1052,11 +1126,7 @@ class PostgresCVVersionManager:
     # =========================================================================
 
     def get_download_url(
-        self,
-        version_id: str,
-        user_email: str,
-        expires_hours: int = 1,
-        file_format: str = "pdf"
+        self, version_id: str, user_email: str, expires_hours: int = 1, file_format: str = "pdf"
     ) -> Optional[str]:
         """Get a presigned download URL for a CV version.
 
@@ -1067,8 +1137,8 @@ class PostgresCVVersionManager:
         if not version:
             return None
 
-        storage_path = version.get('docx_storage_path') if file_format == "docx" else None
-        storage_path = storage_path or version.get('storage_path')
+        storage_path = version.get("docx_storage_path") if file_format == "docx" else None
+        storage_path = storage_path or version.get("storage_path")
         if not storage_path:
             return None
 
@@ -1082,10 +1152,13 @@ class PostgresCVVersionManager:
         """Get all unique categories for a user's CVs."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT DISTINCT auto_category FROM cv_versions
                     WHERE user_email = %s AND auto_category IS NOT NULL AND auto_category != ''
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 return sorted([r["auto_category"] for r in cursor.fetchall()])
         except Exception as e:
             self.logger.error(f"Failed to get categories for {user_email}: {e}")
@@ -1095,21 +1168,20 @@ class PostgresCVVersionManager:
         """Get all unique tags used by a user."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT DISTINCT unnest(user_tags) as tag FROM cv_versions
                     WHERE user_email = %s
-                """, (user_email,))
+                """,
+                    (user_email,),
+                )
                 return sorted([r["tag"] for r in cursor.fetchall()])
         except Exception as e:
             self.logger.error(f"Failed to get tags for {user_email}: {e}")
             return []
 
     def fork_version(
-        self,
-        source_version_id: str,
-        user_email: str,
-        new_name: str,
-        new_file_path: Optional[str] = None
+        self, source_version_id: str, user_email: str, new_name: str, new_file_path: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Fork an existing version to create a new one.
@@ -1134,7 +1206,7 @@ class PostgresCVVersionManager:
                 return None
 
             # Download to temp file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 resp = requests.get(download_url, timeout=30)
                 resp.raise_for_status()
                 tmp.write(resp.content)
@@ -1146,16 +1218,17 @@ class PostgresCVVersionManager:
                 user_email=user_email,
                 file_path=new_file_path,
                 version_name=new_name,
-                auto_category=source.get('auto_category') or None,
-                user_tags=self._parse_tags(source.get('user_tags')),
-                parent_version_id=source_version_id
+                auto_category=source.get("auto_category") or None,
+                user_tags=self._parse_tags(source.get("user_tags")),
+                parent_version_id=source_version_id,
             )
             return new_version
         finally:
             # Cleanup temp file if we created one
-            if new_file_path and new_file_path.startswith('/tmp'):
+            if new_file_path and new_file_path.startswith("/tmp"):
                 try:
                     import os
+
                     os.unlink(new_file_path)
                 except Exception:
                     pass
@@ -1179,9 +1252,9 @@ class PostgresCVVersionManager:
 
         import requests
 
-        fields = history_record.get('fields', history_record)
-        pdf_url = fields.get('cv_pdf_url')
-        docx_url = fields.get('cv_docx_url')
+        fields = history_record.get("fields", history_record)
+        pdf_url = fields.get("cv_pdf_url")
+        docx_url = fields.get("cv_docx_url")
 
         if not pdf_url:
             self.logger.error("No PDF URL in history record")
@@ -1189,28 +1262,30 @@ class PostgresCVVersionManager:
 
         # Generate version name if not provided
         if not version_name:
-            job_title = fields.get('job_title', 'Unknown Job')
+            job_title = fields.get("job_title", "Unknown Job")
             from datetime import datetime
-            date_str = datetime.now().strftime('%b %Y')
+
+            date_str = datetime.now().strftime("%b %Y")
             version_name = f"{job_title} ({date_str})"
 
         # Download PDF to temp file
         try:
+
             def _object_path_from_presigned_url(url: str) -> Optional[str]:
                 parsed = urlparse(url)
-                path = unquote(parsed.path or "").lstrip('/')
+                path = unquote(parsed.path or "").lstrip("/")
 
                 storage_prefix = f"storage/{self.minio.bucket}/"
                 if path.startswith(storage_prefix):
-                    return path[len(storage_prefix):]
+                    return path[len(storage_prefix) :]
 
                 bucket_prefix = f"{self.minio.bucket}/"
                 if path.startswith(bucket_prefix):
-                    return path[len(bucket_prefix):]
+                    return path[len(bucket_prefix) :]
 
                 return None
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 temp_path = tmp.name
 
             object_path = _object_path_from_presigned_url(pdf_url)
@@ -1221,12 +1296,12 @@ class PostgresCVVersionManager:
                 self.logger.info("Fetching history PDF from URL fallback")
                 resp = requests.get(pdf_url, timeout=30)
                 resp.raise_for_status()
-                with open(temp_path, 'wb') as f:
+                with open(temp_path, "wb") as f:
                     f.write(resp.content)
 
             docx_temp_path = None
             if docx_url:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_docx:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
                     docx_temp_path = tmp_docx.name
 
                 docx_object_path = _object_path_from_presigned_url(docx_url)
@@ -1237,7 +1312,7 @@ class PostgresCVVersionManager:
                     self.logger.info("Fetching history DOCX from URL fallback")
                     resp = requests.get(docx_url, timeout=30)
                     resp.raise_for_status()
-                    with open(docx_temp_path, 'wb') as f:
+                    with open(docx_temp_path, "wb") as f:
                         f.write(resp.content)
 
             # Create version
@@ -1247,8 +1322,8 @@ class PostgresCVVersionManager:
                 version_name=version_name,
                 auto_category=auto_category,
                 user_tags=user_tags,
-                source_job_link=fields.get('source_job_link'),
-                source_job_title=fields.get('job_title'),
+                source_job_link=fields.get("source_job_link"),
+                source_job_title=fields.get("job_title"),
                 docx_file_path=docx_temp_path,
             )
             return new_version
@@ -1257,12 +1332,12 @@ class PostgresCVVersionManager:
             return None
         finally:
             # Cleanup
-            if 'temp_path' in locals():
+            if "temp_path" in locals():
                 try:
                     os.unlink(temp_path)
                 except Exception:
                     pass
-            if 'docx_temp_path' in locals() and docx_temp_path:
+            if "docx_temp_path" in locals() and docx_temp_path:
                 try:
                     os.unlink(docx_temp_path)
                 except Exception:
@@ -1272,6 +1347,7 @@ class PostgresCVVersionManager:
 # ============================================================================
 # SEARCH TASK MANAGER (PostgreSQL version)
 # ============================================================================
+
 
 class PostgresTaskManager:
     """
@@ -1301,20 +1377,19 @@ class PostgresTaskManager:
             conn.close()
 
     def create_task(
-        self,
-        task_id: str,
-        user_email: str,
-        status: str = "pending",
-        message: str = "Task created"
+        self, task_id: str, user_email: str, status: str = "pending", message: str = "Task created"
     ) -> Dict[str, Any]:
         """Create a new search task."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO search_tasks (task_id, user_email, status, progress, message)
                     VALUES (%s, %s, %s, 0, %s)
                     RETURNING id, created_at
-                """, (task_id, user_email, status, message))
+                """,
+                    (task_id, user_email, status, message),
+                )
                 result = cursor.fetchone()
                 self.logger.info(f"Created task: {task_id} for {user_email}")
                 return {
@@ -1333,11 +1408,14 @@ class PostgresTaskManager:
         """Get task by ID."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT task_id, user_email, status, progress, message,
                            results_count, error_details, created_at, updated_at, completed_at
                     FROM search_tasks WHERE task_id = %s
-                """, (task_id,))
+                """,
+                    (task_id,),
+                )
                 row = cursor.fetchone()
                 if row:
                     return {
@@ -1364,7 +1442,7 @@ class PostgresTaskManager:
         progress: Optional[int] = None,
         message: Optional[str] = None,
         results_count: Optional[int] = None,
-        error_details: Optional[str] = None
+        error_details: Optional[str] = None,
     ) -> bool:
         """Update task fields."""
         updates = []
@@ -1399,21 +1477,19 @@ class PostgresTaskManager:
 
         try:
             with self.get_cursor() as cursor:
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                     UPDATE search_tasks SET {", ".join(updates)}
                     WHERE task_id = %s
-                """, params)
+                """,
+                    params,
+                )
                 return True
         except Exception as e:
             self.logger.error(f"Failed to update task {task_id}: {e}")
             return False
 
-    def get_user_tasks(
-        self,
-        user_email: str,
-        limit: int = 10,
-        include_completed: bool = False
-    ) -> List[Dict[str, Any]]:
+    def get_user_tasks(self, user_email: str, limit: int = 10, include_completed: bool = False) -> List[Dict[str, Any]]:
         """Get recent tasks for a user."""
         try:
             with self.get_cursor() as cursor:
@@ -1446,11 +1522,14 @@ class PostgresTaskManager:
         """Remove completed/failed tasks older than max_age_hours."""
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     DELETE FROM search_tasks
                     WHERE status IN ('completed', 'failed')
                       AND created_at < NOW() - INTERVAL '%s hours'
-                """, (max_age_hours,))
+                """,
+                    (max_age_hours,),
+                )
                 deleted = cursor.rowcount
                 if deleted > 0:
                     self.logger.info(f"Cleaned up {deleted} old tasks")
@@ -1520,23 +1599,26 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO task_queue
                         (task_id, task_type, payload, priority, max_attempts,
                          run_after, user_email, correlation_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, task_id, task_type, state, priority,
                               attempts, max_attempts, created_at
-                """, (
-                    task_id,
-                    task_type,
-                    Json(payload or {}),
-                    priority,
-                    max_attempts,
-                    run_after,
-                    user_email,
-                    correlation_id,
-                ))
+                """,
+                    (
+                        task_id,
+                        task_type,
+                        Json(payload or {}),
+                        priority,
+                        max_attempts,
+                        run_after,
+                        user_email,
+                        correlation_id,
+                    ),
+                )
                 row = cursor.fetchone()
                 self.logger.info(f"Enqueued task {task_id} (type={task_type}, priority={priority})")
                 return dict(row)
@@ -1544,11 +1626,7 @@ class PostgresTaskQueue:
             self.logger.error(f"Failed to enqueue task {task_id}: {e}")
             raise
 
-    def claim_task(
-        self,
-        worker_id: str,
-        task_types: List[str] = None
-    ) -> Optional[Dict[str, Any]]:
+    def claim_task(self, worker_id: str, task_types: List[str] = None) -> Optional[Dict[str, Any]]:
         """
         Atomically claim the next available task.
 
@@ -1564,9 +1642,12 @@ class PostgresTaskQueue:
         try:
             with self.get_cursor() as cursor:
                 # Use the database function for atomic claim
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM claim_next_task(%s, %s)
-                """, (worker_id, task_types))
+                """,
+                    (worker_id, task_types),
+                )
                 row = cursor.fetchone()
 
                 if row and row.get("task_id"):
@@ -1577,12 +1658,7 @@ class PostgresTaskQueue:
             self.logger.error(f"Failed to claim task for worker {worker_id}: {e}")
             return None
 
-    def complete_task(
-        self,
-        task_id: str,
-        worker_id: str,
-        result: Dict[str, Any] = None
-    ) -> bool:
+    def complete_task(self, task_id: str, worker_id: str, result: Dict[str, Any] = None) -> bool:
         """
         Mark a task as completed.
 
@@ -1596,9 +1672,12 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor(dict_cursor=False) as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT complete_task(%s, %s, %s)
-                """, (task_id, worker_id, Json(result) if result else None))
+                """,
+                    (task_id, worker_id, Json(result) if result else None),
+                )
                 success = cursor.fetchone()[0]
                 if success:
                     self.logger.info(f"Task {task_id} completed by {worker_id}")
@@ -1607,13 +1686,7 @@ class PostgresTaskQueue:
             self.logger.error(f"Failed to complete task {task_id}: {e}")
             return False
 
-    def fail_task(
-        self,
-        task_id: str,
-        worker_id: str,
-        error: str,
-        retry_after: datetime = None
-    ) -> bool:
+    def fail_task(self, task_id: str, worker_id: str, error: str, retry_after: datetime = None) -> bool:
         """
         Mark a task as failed, optionally scheduling retry.
 
@@ -1628,9 +1701,12 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor(dict_cursor=False) as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT fail_task(%s, %s, %s, %s)
-                """, (task_id, worker_id, error, retry_after))
+                """,
+                    (task_id, worker_id, error, retry_after),
+                )
                 success = cursor.fetchone()[0]
                 if success:
                     if retry_after:
@@ -1657,9 +1733,12 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor(dict_cursor=False) as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT heartbeat_task(%s, %s)
-                """, (task_id, worker_id))
+                """,
+                    (task_id, worker_id),
+                )
                 return cursor.fetchone()[0]
         except Exception as e:
             self.logger.error(f"Failed to heartbeat task {task_id}: {e}")
@@ -1679,11 +1758,14 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE task_queue
                     SET state = 'cancelled', completed_at = NOW(), updated_at = NOW()
                     WHERE task_id = %s AND state = 'pending'
-                """, (task_id,))
+                """,
+                    (task_id,),
+                )
                 cancelled = cursor.rowcount > 0
                 if cancelled:
                     self.logger.info(f"Task {task_id} cancelled")
@@ -1704,13 +1786,16 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT task_id, task_type, state, priority, payload, result, error,
                            attempts, max_attempts, run_after, locked_by, locked_at,
                            user_email, correlation_id, created_at, updated_at, completed_at
                     FROM task_queue
                     WHERE task_id = %s
-                """, (task_id,))
+                """,
+                    (task_id,),
+                )
                 row = cursor.fetchone()
                 return dict(row) if row else None
         except Exception as e:
@@ -1753,9 +1838,12 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor(dict_cursor=False) as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT release_stale_locks(%s)
-                """, (timeout_minutes,))
+                """,
+                    (timeout_minutes,),
+                )
                 released = cursor.fetchone()[0]
                 if released > 0:
                     self.logger.warning(f"Released {released} stale task locks")
@@ -1776,9 +1864,12 @@ class PostgresTaskQueue:
         """
         try:
             with self.get_cursor(dict_cursor=False) as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT cleanup_old_queue_tasks(%s)
-                """, (max_age_hours,))
+                """,
+                    (max_age_hours,),
+                )
                 deleted = cursor.fetchone()[0]
                 if deleted > 0:
                     self.logger.info(f"Cleaned up {deleted} old queue tasks")

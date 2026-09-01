@@ -4,7 +4,7 @@ import sys
 import time
 
 # Make sure we can import from one directory up
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from config.settings import Config
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
@@ -53,12 +53,13 @@ def test_real_linkedin_scraping():
         logger.error(f"Scraping test failed: {str(e)}")
         if scraper and scraper.browser:
             logger.info("Capturing screenshot of failure...")
-            scraper.browser.latest_tab.screenshot('test_failure.png')
+            scraper.browser.latest_tab.screenshot("test_failure.png")
     finally:
         if scraper and scraper.browser:
             logger.info("Closing Drission browser...")
             scraper.browser.quit()
         logger.info("Test completed.")
+
 
 if __name__ == "__main__":
     test_real_linkedin_scraping()

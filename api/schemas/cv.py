@@ -6,12 +6,14 @@ from pydantic import BaseModel, Field, field_validator
 
 class CVGenerateRequest(BaseModel):
     """Request to generate a tailored CV"""
+
     job_description: str = Field(..., min_length=50, description="Job description text")
     instructions: Optional[str] = Field(None, description="Special instructions for CV generation")
 
 
 class CVGenerateResponse(BaseModel):
     """Response from CV generation"""
+
     cv_markdown: str
     cv_pdf_url: str  # Presigned MinIO URL for PDF download
     cv_docx_url: Optional[str] = None  # Presigned MinIO URL for DOCX download
@@ -23,6 +25,7 @@ class CVGenerateResponse(BaseModel):
 
 class CVUploadResponse(BaseModel):
     """Response from CV file upload"""
+
     path: str
     url: Optional[str] = None
     filename: str
@@ -31,6 +34,7 @@ class CVUploadResponse(BaseModel):
 
 class CVHistoryItem(BaseModel):
     """Single item in CV generation history"""
+
     id: str
     job_title: str
     created_at: datetime
@@ -42,6 +46,7 @@ class CVHistoryItem(BaseModel):
 
 class CVHistoryResponse(BaseModel):
     """List of CV history items"""
+
     items: List[CVHistoryItem]
     total: int
 
@@ -50,8 +55,10 @@ class CVHistoryResponse(BaseModel):
 # CV VERSION MANAGEMENT SCHEMAS
 # ──────────────────────────────────────────────────────────
 
+
 class CVVersionBase(BaseModel):
     """Base schema for CV version data"""
+
     version_name: str = Field(..., min_length=1, max_length=100, description="Human-readable version name")
     auto_category: Optional[str] = Field(None, max_length=50, description="Auto-detected role category")
     user_tags: Optional[List[str]] = Field(default_factory=list, description="User-defined tags")
@@ -59,6 +66,7 @@ class CVVersionBase(BaseModel):
 
 class CVVersionCreate(CVVersionBase):
     """Request to create a new CV version (file uploaded separately)"""
+
     source_job_link: Optional[str] = Field(None, description="Job this CV was generated for")
     source_job_title: Optional[str] = Field(None, description="Title of the source job")
     parent_version_id: Optional[str] = Field(None, description="Parent version if forked")
@@ -66,6 +74,7 @@ class CVVersionCreate(CVVersionBase):
 
 class CVVersionUpdate(BaseModel):
     """Request to update CV version metadata"""
+
     version_name: Optional[str] = Field(None, min_length=1, max_length=100)
     auto_category: Optional[str] = Field(None, max_length=50)
     user_tags: Optional[List[str]] = None
@@ -74,6 +83,7 @@ class CVVersionUpdate(BaseModel):
 
 class CVVersionResponse(CVVersionBase):
     """Response containing CV version details"""
+
     id: str
     version_id: str
     user_email: str
@@ -97,6 +107,7 @@ class CVVersionResponse(CVVersionBase):
 
 class CVVersionListResponse(BaseModel):
     """Paginated list of CV versions"""
+
     items: List[CVVersionResponse]
     total: int
     categories: List[str] = []
@@ -105,11 +116,13 @@ class CVVersionListResponse(BaseModel):
 
 class CVVersionForkRequest(BaseModel):
     """Request to fork an existing CV version"""
+
     new_name: str = Field(..., min_length=1, max_length=100, description="Name for the forked version")
 
 
 class CVVersionMatchRequest(BaseModel):
     """Request to find matching CV versions for a job"""
+
     job_description: str = Field(..., min_length=50, description="Job description to match against")
     job_title: Optional[str] = Field(None, description="Job title for better matching")
     company_name: Optional[str] = Field(None, description="Company name for industry matching")
@@ -118,6 +131,7 @@ class CVVersionMatchRequest(BaseModel):
 
 class CVVersionMatchScore(BaseModel):
     """Match score for a CV version against a job"""
+
     version_id: str
     version_name: str
     auto_category: Optional[str]
@@ -132,12 +146,14 @@ class CVVersionMatchScore(BaseModel):
 
 class CVVersionMatchResponse(BaseModel):
     """Response containing CV version suggestions for a job"""
+
     suggestions: List[CVVersionMatchScore]
     job_analysis: dict = Field(default_factory=dict, description="Analysis of job requirements")
 
 
 class CVVersionAnalyticsResponse(BaseModel):
     """Analytics summary for user's CV versions"""
+
     total_versions: int
     active_versions: int
     archived_versions: int
@@ -151,12 +167,14 @@ class CVVersionAnalyticsResponse(BaseModel):
 
 class CVVersionBulkActionRequest(BaseModel):
     """Request for bulk operations on CV versions"""
+
     version_ids: List[str] = Field(..., min_items=1, max_items=50)
     action: str = Field(..., description="Action: archive, restore, delete")
 
 
 class CVVersionBulkActionResponse(BaseModel):
     """Response from bulk operation"""
+
     success_count: int
     failed_count: int
     failed_ids: List[str] = []
@@ -164,12 +182,15 @@ class CVVersionBulkActionResponse(BaseModel):
 
 class CVVersionFromHistoryRequest(BaseModel):
     """Request to create a CV version from a history record (generated CV)"""
+
     history_id: str = Field(..., description="Airtable record ID of the history entry")
-    version_name: Optional[str] = Field(None, max_length=100, description="Custom name (auto-generated if not provided)")
+    version_name: Optional[str] = Field(
+        None, max_length=100, description="Custom name (auto-generated if not provided)"
+    )
     auto_category: Optional[str] = Field(None, max_length=50, description="Category for the CV")
     user_tags: Optional[List[str]] = Field(default_factory=list, description="User-defined tags")
 
-    @field_validator('history_id', 'version_name', 'auto_category', mode='before')
+    @field_validator("history_id", "version_name", "auto_category", mode="before")
     @classmethod
     def coerce_string_fields(cls, value: Any) -> Any:
         if value is None:
@@ -179,13 +200,13 @@ class CVVersionFromHistoryRequest(BaseModel):
         if isinstance(value, (int, float, bool)):
             return str(value)
         if isinstance(value, dict):
-            for key in ('history_id', 'id', 'value', 'job_title', 'title', 'name', 'label'):
+            for key in ("history_id", "id", "value", "job_title", "title", "name", "label"):
                 candidate = value.get(key)
                 if candidate is not None:
                     return str(candidate)
         return str(value)
 
-    @field_validator('user_tags', mode='before')
+    @field_validator("user_tags", mode="before")
     @classmethod
     def coerce_user_tags(cls, value: Any) -> List[str]:
         if value is None:
@@ -198,7 +219,7 @@ class CVVersionFromHistoryRequest(BaseModel):
                 if item is None:
                     continue
                 if isinstance(item, dict):
-                    item = item.get('value') or item.get('name') or item.get('label') or item.get('id')
+                    item = item.get("value") or item.get("name") or item.get("label") or item.get("id")
                 if item is not None:
                     tag = str(item).strip()
                     if tag:
@@ -211,8 +232,10 @@ class CVVersionFromHistoryRequest(BaseModel):
 # CV-JD FIT ANALYSIS SCHEMAS
 # ──────────────────────────────────────────────────────────
 
+
 class KeywordMatchSchema(BaseModel):
     """Keyword match analysis"""
+
     score: int = Field(..., ge=0, le=100)
     matched: List[str] = []
     missing: List[str] = []
@@ -221,6 +244,7 @@ class KeywordMatchSchema(BaseModel):
 
 class TechnicalSkillsSchema(BaseModel):
     """Technical skills breakdown"""
+
     matched: List[str] = []
     partial: List[str] = []
     missing: List[str] = []
@@ -228,12 +252,14 @@ class TechnicalSkillsSchema(BaseModel):
 
 class SoftSkillsSchema(BaseModel):
     """Soft skills analysis"""
+
     matched: List[str] = []
     demonstrated: List[str] = []
 
 
 class SkillsCoverageSchema(BaseModel):
     """Skills coverage analysis"""
+
     score: int = Field(..., ge=0, le=100)
     technical_skills: TechnicalSkillsSchema
     soft_skills: SoftSkillsSchema
@@ -241,6 +267,7 @@ class SkillsCoverageSchema(BaseModel):
 
 class ExperienceRelevanceSchema(BaseModel):
     """Experience relevance analysis"""
+
     score: int = Field(..., ge=0, le=100)
     aligned_roles: List[str] = []
     relevant_achievements: List[str] = []
@@ -249,6 +276,7 @@ class ExperienceRelevanceSchema(BaseModel):
 
 class ATSOptimizationSchema(BaseModel):
     """ATS optimization analysis"""
+
     score: int = Field(..., ge=0, le=100)
     format_check: bool = True
     keyword_density: str = "Good"
@@ -258,6 +286,7 @@ class ATSOptimizationSchema(BaseModel):
 
 class GapAnalysisSchema(BaseModel):
     """Gap analysis"""
+
     critical_gaps: List[str] = []
     minor_gaps: List[str] = []
     mitigation_suggestions: List[str] = []
@@ -265,6 +294,7 @@ class GapAnalysisSchema(BaseModel):
 
 class TalkingPointsSchema(BaseModel):
     """Interview talking points"""
+
     strengths_to_highlight: List[str] = []
     questions_to_prepare: List[str] = []
     stories_to_ready: List[str] = []
@@ -272,6 +302,7 @@ class TalkingPointsSchema(BaseModel):
 
 class CVAnalysisResponse(BaseModel):
     """Complete CV-JD fit analysis response"""
+
     status: str = Field(..., description="pending | ready | failed")
     overall_score: Optional[int] = Field(None, ge=0, le=100)
     summary: Optional[str] = None

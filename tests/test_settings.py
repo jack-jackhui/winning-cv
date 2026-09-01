@@ -1,6 +1,7 @@
 """
 Tests for Pydantic Settings configuration.
 """
+
 import os
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ class TestSettingsValidation:
     def test_settings_import(self):
         """Test that settings can be imported."""
         from config.settings_v2 import Settings
+
         assert Settings is not None
 
     def test_default_values(self):

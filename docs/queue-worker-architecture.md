@@ -97,7 +97,8 @@ class TaskWorker:
     async def claim_task(self) -> Optional[Task]:
         """Atomically claim a pending task."""
         # Use FOR UPDATE SKIP LOCKED for safe concurrent claiming
-        return await db.execute("""
+        return await db.execute(
+            """
             UPDATE task_queue
             SET status = 'running',
                 worker_id = :worker_id,
@@ -113,7 +114,10 @@ class TaskWorker:
                 LIMIT 1
             )
             RETURNING *
-        """, worker_id=self.worker_id, task_types=self.task_types)
+        """,
+            worker_id=self.worker_id,
+            task_types=self.task_types,
+        )
 
     async def process_task(self, task: Task):
         """Process a claimed task with error handling."""
@@ -135,7 +139,7 @@ def calculate_retry_delay(attempts: int) -> timedelta:
     base_delay = 30  # seconds
     max_delay = 3600  # 1 hour cap
 
-    delay = min(base_delay * (2 ** attempts), max_delay)
+    delay = min(base_delay * (2**attempts), max_delay)
     jitter = random.uniform(0, delay * 0.1)
 
     return timedelta(seconds=delay + jitter)
@@ -182,12 +186,15 @@ def calculate_retry_delay(attempts: int) -> timedelta:
 
 #### Logging
 ```python
-logger.info("task_claimed", extra={
-    "task_id": task.id,
-    "task_type": task.task_type,
-    "worker_id": self.worker_id,
-    "queue_wait_time": (now - task.created_at).total_seconds()
-})
+logger.info(
+    "task_claimed",
+    extra={
+        "task_id": task.id,
+        "task_type": task.task_type,
+        "worker_id": self.worker_id,
+        "queue_wait_time": (now - task.created_at).total_seconds(),
+    },
+)
 ```
 
 #### Health Endpoint
@@ -211,11 +218,7 @@ GET /api/v1/health/workers
 #### Task Creation (No Change to External API)
 ```python
 async def start_job_search(user: User, config: JobConfig) -> TaskResponse:
-    task = await task_manager.create_task(
-        task_type="job_search",
-        user_id=user.id,
-        payload={"config": config.dict()}
-    )
+    task = await task_manager.create_task(task_type="job_search", user_id=user.id, payload={"config": config.dict()})
     return TaskResponse(task_id=task.id, status="pending")
 ```
 
@@ -232,8 +235,10 @@ async def get_search_status(task_id: str) -> TaskStatus:
         retry_info={
             "attempts": task.attempts,
             "max_attempts": task.max_attempts,
-            "next_retry": task.retry_after.isoformat() if task.retry_after else None
-        } if task.status == "pending" and task.attempts > 0 else None
+            "next_retry": task.retry_after.isoformat() if task.retry_after else None,
+        }
+        if task.status == "pending" and task.attempts > 0
+        else None,
     )
 ```
 

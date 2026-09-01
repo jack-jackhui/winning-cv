@@ -6,6 +6,7 @@ This module provides a properly configured pyairtable Api instance that:
 - Implements exponential backoff retry for transient failures
 - Handles rate limits (429) and server errors (5xx) gracefully
 """
+
 import logging
 from typing import Optional, Tuple
 
@@ -89,7 +90,7 @@ def create_airtable_api(
     logger.debug(
         "Creating Airtable API client with timeout=%s, retry_total=%s",
         timeout,
-        retry_strategy.total if retry_strategy else "none"
+        retry_strategy.total if retry_strategy else "none",
     )
 
     return Api(

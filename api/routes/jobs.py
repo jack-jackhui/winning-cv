@@ -2,6 +2,7 @@
 Job Search routes for WinningCV API.
 Handles job search configuration, execution, and results.
 """
+
 import fcntl
 import json
 import logging
@@ -18,9 +19,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from api.middleware.auth_middleware import get_current_user
 from api.schemas.auth import UserInfo
 from api.schemas.jobs import (
+    ApplicationsResponse,
     ApplicationStatusUpdate,
     ApplicationSummary,
-    ApplicationsResponse,
     JobConfigResponse,
     JobResult,
     JobResultsResponse,
@@ -51,11 +52,13 @@ _executor = ThreadPoolExecutor(max_workers=3)
 # File-based task manager (fallback when Postgres unavailable)
 # =============================================================================
 
+
 class FileBasedTaskManager:
     """
     File-based task storage for development/fallback.
     Uses /tmp storage with file locking for cross-process sharing.
     """
+
     _TASKS_FILE = Path("/tmp/winningcv_search_tasks.json")
 
     def _read_tasks(self) -> Dict[str, dict]:
@@ -63,7 +66,7 @@ class FileBasedTaskManager:
         if not self._TASKS_FILE.exists():
             return {}
         try:
-            with open(self._TASKS_FILE, 'r') as f:
+            with open(self._TASKS_FILE, "r") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                 try:
                     return json.load(f)
@@ -74,7 +77,7 @@ class FileBasedTaskManager:
 
     def _write_tasks(self, tasks: Dict[str, dict]):
         """Write tasks to shared file with locking."""
-        with open(self._TASKS_FILE, 'w') as f:
+        with open(self._TASKS_FILE, "w") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
                 json.dump(tasks, f)
@@ -82,11 +85,7 @@ class FileBasedTaskManager:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def create_task(
-        self,
-        task_id: str,
-        user_email: str,
-        status: str = "pending",
-        message: str = "Task created"
+        self, task_id: str, user_email: str, status: str = "pending", message: str = "Task created"
     ) -> Dict[str, Any]:
         """Create a new task."""
         tasks = self._read_tasks()
@@ -115,7 +114,7 @@ class FileBasedTaskManager:
         progress: Optional[int] = None,
         message: Optional[str] = None,
         results_count: Optional[int] = None,
-        error_details: Optional[str] = None
+        error_details: Optional[str] = None,
     ) -> bool:
         """Update task fields."""
         tasks = self._read_tasks()
@@ -149,12 +148,14 @@ def _get_task_manager():
 
     try:
         from data_store.storage_factory import get_task_manager
+
         _task_manager = get_task_manager()
     except Exception as e:
         logger.warning(f"Using file-based task manager: {e}")
         _task_manager = FileBasedTaskManager()
 
     return _task_manager
+
 
 # LinkedIn GeoID mapping
 LINKEDIN_GEOID_MAP = {
@@ -165,15 +166,12 @@ LINKEDIN_GEOID_MAP = {
     "United Kingdom": "101165590",
     "Canada": "101174742",
     "Hong Kong": "103291313",
-    "Singapore": "102454443"
+    "Singapore": "102454443",
 }
 
 
 def build_linkedin_search_url(
-    keywords: str,
-    location: str,
-    posted_hours: Optional[int] = None,
-    geoId_map: Optional[dict] = None
+    keywords: str, location: str, posted_hours: Optional[int] = None, geoId_map: Optional[dict] = None
 ) -> str:
     """Build LinkedIn job search URL from parameters"""
     if geoId_map is None:
@@ -183,16 +181,16 @@ def build_linkedin_search_url(
     params = {}
 
     if keywords:
-        params['keywords'] = keywords.replace(",", " OR ")
+        params["keywords"] = keywords.replace(",", " OR ")
     if location:
         geoId = geoId_map.get(location, "")
         if geoId:
-            params['geoId'] = geoId
-        params['location'] = location
+            params["geoId"] = geoId
+        params["location"] = location
     if posted_hours:
         try:
             seconds = int(posted_hours) * 3600
-            params['f_TPR'] = f"r{seconds}"
+            params["f_TPR"] = f"r{seconds}"
         except:
             pass
 
@@ -205,7 +203,7 @@ def build_seek_url(
     location: str,
     daterange: Optional[int] = None,
     salaryrange: Optional[str] = None,
-    salarytype: str = "annual"
+    salarytype: str = "annual",
 ) -> str:
     """Build SEEK job search URL from parameters"""
     keywords_path = quote(keywords.replace(" ", "-"))
@@ -216,11 +214,11 @@ def build_seek_url(
     params = {}
 
     if daterange:
-        params['daterange'] = str(daterange)
+        params["daterange"] = str(daterange)
     if salaryrange:
-        params['salaryrange'] = salaryrange
+        params["salaryrange"] = salaryrange
     if salarytype:
-        params['salarytype'] = salarytype
+        params["salarytype"] = salarytype
 
     if params:
         return f"{base}?{urlencode(params)}"
@@ -228,9 +226,7 @@ def build_seek_url(
 
 
 @router.get("/config", response_model=JobConfigResponse)
-async def get_job_config(
-    user: UserInfo = Depends(get_current_user)
-) -> JobConfigResponse:
+async def get_job_config(user: UserInfo = Depends(get_current_user)) -> JobConfigResponse:
     """
     Get the user's saved job search configuration.
 
@@ -254,7 +250,7 @@ async def get_job_config(
                 hours_old=cfg.HOURS_OLD,
                 results_wanted=cfg.RESULTS_WANTED,
                 country=cfg.COUNTRY,
-                max_jobs_to_scrape=cfg.MAX_JOBS_TO_SCRAPE
+                max_jobs_to_scrape=cfg.MAX_JOBS_TO_SCRAPE,
             )
 
         return JobConfigResponse(
@@ -269,15 +265,12 @@ async def get_job_config(
             location=user_config.get("location", cfg.LOCATION),
             hours_old=user_config.get("hours_old", cfg.HOURS_OLD),
             results_wanted=user_config.get("results_wanted", cfg.RESULTS_WANTED),
-            country=user_config.get("country", cfg.COUNTRY)
+            country=user_config.get("country", cfg.COUNTRY),
         )
 
     except Exception as e:
         logger.error(f"Failed to get job config: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get configuration: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get configuration: {str(e)}")
 
 
 @router.post("/config", response_model=JobConfigResponse)
@@ -296,7 +289,7 @@ async def save_job_config(
     country: str = Form(default="Australia"),
     cv_file: Optional[UploadFile] = File(None),
     selected_cv_version_id: Optional[str] = Form(None, description="ID of CV version from library to use as base CV"),
-    user: UserInfo = Depends(get_current_user)
+    user: UserInfo = Depends(get_current_user),
 ) -> JobConfigResponse:
     """
     Save job search configuration.
@@ -339,10 +332,7 @@ async def save_job_config(
                     content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
                 object_path = minio.upload_cv(
-                    file_path=cv_path,
-                    user_id=user.email,
-                    filename=unique_filename,
-                    content_type=content_type
+                    file_path=cv_path, user_id=user.email, filename=unique_filename, content_type=content_type
                 )
                 cv_url = minio.get_download_url_by_path(object_path, expires_hours=24)
                 logger.info(f"Uploaded base CV to MinIO: {object_path}")
@@ -355,7 +345,7 @@ async def save_job_config(
                         filename=unique_filename,
                         wp_site=cfg.WORDPRESS_SITE,
                         wp_user=cfg.WORDPRESS_USERNAME,
-                        wp_app_password=cfg.WORDPRESS_APP_PASSWORD
+                        wp_app_password=cfg.WORDPRESS_APP_PASSWORD,
                     )
                 except Exception as wp_e:
                     logger.warning(f"Failed to upload CV to WordPress: {wp_e}")
@@ -369,7 +359,7 @@ async def save_job_config(
                 if not version:
                     raise HTTPException(status_code=404, detail="Selected CV version not found")
 
-                storage_path = version.get('storage_path')
+                storage_path = version.get("storage_path")
                 if not storage_path:
                     raise HTTPException(status_code=404, detail="CV file not found in storage")
 
@@ -395,11 +385,7 @@ async def save_job_config(
             cv_url = existing_config.get("base_cv_link", "")
 
         # Build URLs from search parameters
-        linkedin_url = build_linkedin_search_url(
-            search_keywords,
-            location,
-            posted_hours=hours_old
-        )
+        linkedin_url = build_linkedin_search_url(search_keywords, location, posted_hours=hours_old)
 
         seek_url = build_seek_url(
             search_keywords,
@@ -407,7 +393,7 @@ async def save_job_config(
             location,
             daterange=int(math.ceil(hours_old / 24)),
             salaryrange=seek_salaryrange,
-            salarytype=seek_salarytype
+            salarytype=seek_salarytype,
         )
 
         # Build config dict for storage
@@ -423,14 +409,11 @@ async def save_job_config(
             "location": location,
             "hours_old": hours_old,
             "results_wanted": results_wanted,
-            "country": country
+            "country": country,
         }
 
         if not manager.save_user_config(config_data):
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to save configuration"
-            )
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
 
         return JobConfigResponse(**config_data)
 
@@ -438,10 +421,7 @@ async def save_job_config(
         raise
     except Exception as e:
         logger.error(f"Failed to save job config: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save configuration: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
 
 def _run_job_search(task_id: str, user_email: str, config_data: dict):
@@ -470,11 +450,7 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
         joblist_mgr = get_data_manager()
 
         # Create processor with progress callback
-        processor = JobProcessor(
-            config=Struct(**merged),
-            airtable=joblist_mgr,
-            progress_callback=update_progress
-        )
+        processor = JobProcessor(config=Struct(**merged), airtable=joblist_mgr, progress_callback=update_progress)
 
         # process_jobs() will now call update_progress internally
         results = processor.process_jobs()
@@ -484,7 +460,7 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
             progress=100,
             status=SearchStatus.COMPLETED.value,
             message=f"Complete! Generated {len(results)} tailored CVs",
-            results_count=len(results)
+            results_count=len(results),
         )
 
     except Exception as e:
@@ -494,8 +470,7 @@ def _run_job_search(task_id: str, user_email: str, config_data: dict):
 
 @router.post("/search", response_model=SearchTaskResponse)
 async def start_job_search(
-    background_tasks: BackgroundTasks,
-    user: UserInfo = Depends(get_current_user)
+    background_tasks: BackgroundTasks, user: UserInfo = Depends(get_current_user)
 ) -> SearchTaskResponse:
     """
     Start an asynchronous job search.
@@ -513,18 +488,14 @@ async def start_job_search(
         user_config = manager.get_user_config(user.email)
         if not user_config:
             raise HTTPException(
-                status_code=400,
-                detail="No job search configuration found. Please configure search settings first."
+                status_code=400, detail="No job search configuration found. Please configure search settings first."
             )
 
         # Create task using durable storage (Postgres preferred, file fallback)
         task_id = str(uuid.uuid4())
         task_mgr = _get_task_manager()
         task_mgr.create_task(
-            task_id=task_id,
-            user_email=user.email,
-            status=SearchStatus.PENDING.value,
-            message="Task created"
+            task_id=task_id, user_email=user.email, status=SearchStatus.PENDING.value, message="Task created"
         )
 
         # Prefer the durable Postgres queue for long-running scraping/generation jobs.
@@ -532,6 +503,7 @@ async def start_job_search(
         queued = False
         try:
             from data_store.postgres_manager import get_postgres_task_queue
+
             queue = get_postgres_task_queue()
             queue.enqueue(
                 task_id=f"job-search-{task_id}",
@@ -553,24 +525,18 @@ async def start_job_search(
         return SearchTaskResponse(
             task_id=task_id,
             status=SearchStatus.PENDING,
-            message="Job search queued" if queued else "Job search started"
+            message="Job search queued" if queued else "Job search started",
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to start job search: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to start search: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to start search: {str(e)}")
 
 
 @router.get("/search/{task_id}/status", response_model=SearchStatusResponse)
-async def get_search_status(
-    task_id: str,
-    user: UserInfo = Depends(get_current_user)
-) -> SearchStatusResponse:
+async def get_search_status(task_id: str, user: UserInfo = Depends(get_current_user)) -> SearchStatusResponse:
     """
     Get the status of a job search task.
 
@@ -584,25 +550,20 @@ async def get_search_status(
     task_mgr = _get_task_manager()
     task = task_mgr.get_task(task_id)
     if not task:
-        raise HTTPException(
-            status_code=404,
-            detail="Task not found"
-        )
+        raise HTTPException(status_code=404, detail="Task not found")
 
     return SearchStatusResponse(
         task_id=task_id,
         status=task["status"],
         progress=task["progress"],
         message=task["message"],
-        results_count=task.get("results_count")
+        results_count=task.get("results_count"),
     )
 
 
 @router.get("/search/tasks", response_model=List[SearchStatusResponse])
 async def get_user_search_tasks(
-    user: UserInfo = Depends(get_current_user),
-    include_completed: bool = False,
-    limit: int = 5
+    user: UserInfo = Depends(get_current_user), include_completed: bool = False, limit: int = 5
 ) -> List[SearchStatusResponse]:
     """
     Get the user's recent search tasks.
@@ -620,37 +581,35 @@ async def get_user_search_tasks(
     task_mgr = _get_task_manager()
 
     # Check if task manager supports user tasks (Postgres-backed)
-    if hasattr(task_mgr, 'get_user_tasks'):
-        tasks = task_mgr.get_user_tasks(
-            user_email=user.email,
-            limit=limit,
-            include_completed=include_completed
-        )
+    if hasattr(task_mgr, "get_user_tasks"):
+        tasks = task_mgr.get_user_tasks(user_email=user.email, limit=limit, include_completed=include_completed)
     else:
         # File-based fallback: scan all tasks for user's tasks
         # This is less efficient but maintains compatibility
         tasks = []
-        if hasattr(task_mgr, '_read_tasks'):
+        if hasattr(task_mgr, "_read_tasks"):
             all_tasks = task_mgr._read_tasks()
             for task_id, task in all_tasks.items():
-                if task.get('user_email') == user.email:
-                    if include_completed or task.get('status') not in ('completed', 'failed'):
-                        tasks.append({
-                            'task_id': task_id,
-                            'status': task.get('status', 'pending'),
-                            'progress': task.get('progress', 0),
-                            'message': task.get('message', ''),
-                            'results_count': task.get('results_count')
-                        })
+                if task.get("user_email") == user.email:
+                    if include_completed or task.get("status") not in ("completed", "failed"):
+                        tasks.append(
+                            {
+                                "task_id": task_id,
+                                "status": task.get("status", "pending"),
+                                "progress": task.get("progress", 0),
+                                "message": task.get("message", ""),
+                                "results_count": task.get("results_count"),
+                            }
+                        )
             tasks = tasks[:limit]
 
     return [
         SearchStatusResponse(
-            task_id=t.get('task_id', ''),
-            status=t.get('status', 'pending'),
-            progress=t.get('progress', 0),
-            message=t.get('message', ''),
-            results_count=t.get('results_count')
+            task_id=t.get("task_id", ""),
+            status=t.get("status", "pending"),
+            progress=t.get("progress", 0),
+            message=t.get("message", ""),
+            results_count=t.get("results_count"),
         )
         for t in tasks
     ]
@@ -699,11 +658,7 @@ def _job_result_from_record(rec: Dict[str, Any], cv_dates: Dict[str, Any]) -> Jo
         score_breakdown = ScoreBreakdown(
             ats_score=float(ats_score) if ats_score is not None else None,
             hr_score=float(hr_score) if hr_score is not None else None,
-            llm_score=(
-                float(fields.get("LLM Score"))
-                if fields.get("LLM Score") is not None
-                else None
-            ),
+            llm_score=(float(fields.get("LLM Score")) if fields.get("LLM Score") is not None else None),
             recommendation=fields.get("HR Recommendation"),
             matched_keywords=matched_keywords,
             missing_keywords=missing_keywords,
@@ -764,7 +719,7 @@ async def get_applications(
 async def get_job_results(
     user: UserInfo = Depends(get_current_user),
     limit: int = 100,
-    sort_by: str = "date"  # "date" or "score"
+    sort_by: str = "date",  # "date" or "score"
 ) -> JobResultsResponse:
     """Get the authenticated user's job search results."""
     try:
@@ -820,15 +775,15 @@ async def get_job_result(
 
 @router.patch("/results/{job_id}/application", response_model=JobResult)
 async def update_application_status_result(
-    job_id: str,
-    update: ApplicationStatusUpdate,
-    user: UserInfo = Depends(get_current_user)
+    job_id: str, update: ApplicationStatusUpdate, user: UserInfo = Depends(get_current_user)
 ) -> JobResult:
     """Update tracking for a path-safe PostgreSQL UUID or Airtable record ID."""
     try:
         manager = get_data_manager()
         if not hasattr(manager, "update_application_status"):
-            raise HTTPException(status_code=501, detail="Application tracking is only available on the Postgres backend")
+            raise HTTPException(
+                status_code=501, detail="Application tracking is only available on the Postgres backend"
+            )
 
         updated = manager.update_application_status(
             job_id=job_id,
@@ -854,9 +809,7 @@ async def update_application_status_result(
 
 
 @router.get("/linkedin/status")
-async def get_linkedin_status(
-    user: UserInfo = Depends(get_current_user)
-) -> dict:
+async def get_linkedin_status(user: UserInfo = Depends(get_current_user)) -> dict:
     """
     Check LinkedIn authentication status.
 
@@ -876,7 +829,7 @@ async def get_linkedin_status(
             return {
                 "authenticated": False,
                 "message": "No LinkedIn session saved. Run the login utility to enable authenticated access.",
-                "instructions": "python -m job_sources.linkedin_login"
+                "instructions": "python -m job_sources.linkedin_login",
             }
 
         info = cookie_manager.get_cookie_info()
@@ -885,27 +838,22 @@ async def get_linkedin_status(
                 "authenticated": True,
                 "saved_at": info.get("saved_at"),
                 "cookie_count": info.get("cookie_count"),
-                "message": "LinkedIn session available. Scraping will use authenticated access."
+                "message": "LinkedIn session available. Scraping will use authenticated access.",
             }
         else:
             return {
                 "authenticated": False,
                 "message": "Could not read saved session. Try re-authenticating.",
-                "instructions": "python -m job_sources.linkedin_login --clear && python -m job_sources.linkedin_login"
+                "instructions": "python -m job_sources.linkedin_login --clear && python -m job_sources.linkedin_login",
             }
 
     except Exception as e:
         logger.error(f"Failed to check LinkedIn status: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to check status: {str(e)}")
 
 
 @router.get("/linkedin/health")
-async def get_linkedin_cookie_health(
-    user: UserInfo = Depends(get_current_user)
-) -> dict:
+async def get_linkedin_cookie_health(user: UserInfo = Depends(get_current_user)) -> dict:
     """
     Get detailed LinkedIn cookie health status.
 
@@ -933,20 +881,18 @@ async def get_linkedin_cookie_health(
             "message": health["message"],
             "needs_refresh": health["needs_refresh"],
             "status_level": _get_status_level(health["status"]),
-            "instructions": "python -m job_sources.linkedin_login" if health["needs_refresh"] else None
+            "instructions": "python -m job_sources.linkedin_login" if health["needs_refresh"] else None,
         }
 
     except Exception as e:
         logger.error(f"Failed to check LinkedIn cookie health: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check cookie health: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to check cookie health: {str(e)}")
 
 
 def _get_status_level(status) -> str:
     """Map cookie status to severity level for UI display."""
     from job_sources.linkedin_cookie_health import CookieStatus
+
     level_map = {
         CookieStatus.HEALTHY: "success",
         CookieStatus.AGING: "info",

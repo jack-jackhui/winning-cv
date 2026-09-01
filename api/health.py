@@ -7,10 +7,11 @@ Provides comprehensive health checks for all external dependencies:
 - Azure OpenAI service
 - LinkedIn cookie status
 """
+
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ def check_postgres_health() -> Dict[str, Any]:
     """Check PostgreSQL database connectivity and basic operations."""
     try:
         from data_store.postgres_manager import get_postgres_manager
+
         mgr = get_postgres_manager()
 
         # Test connection with a simple query
@@ -50,6 +52,7 @@ def check_minio_health() -> Dict[str, Any]:
     """Check MinIO object storage connectivity."""
     try:
         from utils.minio_storage import get_minio_storage
+
         storage = get_minio_storage()
 
         # Check if bucket exists (lightweight operation)
@@ -82,9 +85,9 @@ def check_azure_openai_health() -> Dict[str, Any]:
         from config.settings import Config
 
         # Check configuration exists
-        endpoint = getattr(Config, 'AZURE_AI_ENDPOINT', None) or os.getenv('AZURE_AI_ENDPOINT')
-        api_key = getattr(Config, 'AZURE_AI_API_KEY', None) or os.getenv('AZURE_AI_API_KEY')
-        deployment = getattr(Config, 'AZURE_DEPLOYMENT', None) or os.getenv('AZURE_DEPLOYMENT')
+        endpoint = getattr(Config, "AZURE_AI_ENDPOINT", None) or os.getenv("AZURE_AI_ENDPOINT")
+        api_key = getattr(Config, "AZURE_AI_API_KEY", None) or os.getenv("AZURE_AI_API_KEY")
+        deployment = getattr(Config, "AZURE_DEPLOYMENT", None) or os.getenv("AZURE_DEPLOYMENT")
 
         if not all([endpoint, api_key, deployment]):
             missing = []
@@ -149,13 +152,13 @@ def check_auth_service_health() -> Dict[str, Any]:
     try:
         from config.settings import Config
 
-        oauth_provider = getattr(Config, 'OAUTH_PROVIDER', None) or os.getenv('OAUTH_PROVIDER', 'keycloak')
+        oauth_provider = getattr(Config, "OAUTH_PROVIDER", None) or os.getenv("OAUTH_PROVIDER", "keycloak")
         auth_url = None
 
-        if oauth_provider == 'keycloak':
-            auth_url = getattr(Config, 'KEYCLOAK_URL', None) or os.getenv('KEYCLOAK_URL')
-        elif oauth_provider == 'auth0':
-            auth_url = getattr(Config, 'AUTH0_DOMAIN', None) or os.getenv('AUTH0_DOMAIN')
+        if oauth_provider == "keycloak":
+            auth_url = getattr(Config, "KEYCLOAK_URL", None) or os.getenv("KEYCLOAK_URL")
+        elif oauth_provider == "auth0":
+            auth_url = getattr(Config, "AUTH0_DOMAIN", None) or os.getenv("AUTH0_DOMAIN")
 
         if not auth_url:
             return {

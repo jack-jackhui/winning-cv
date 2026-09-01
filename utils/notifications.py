@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 # USER NOTIFICATION PREFERENCES (for per-user notifications)
 # ──────────────────────────────────────────────────────────
 
+
 class UserNotificationPrefs:
     """User notification preferences structure"""
+
     def __init__(
         self,
         user_email: str,
@@ -28,7 +30,7 @@ class UserNotificationPrefs:
         weekly_digest: bool = True,
         telegram_chat_id: Optional[str] = None,
         wechat_id: Optional[str] = None,
-        notification_email: Optional[str] = None
+        notification_email: Optional[str] = None,
     ):
         self.user_email = user_email
         self.email_alerts = email_alerts
@@ -64,6 +66,7 @@ class UserNotificationPrefs:
             notification_email=data.get("notification_email"),
         )
 
+
 def send_telegram_message(message: str):
     """
     Send a message to a Telegram chat using a bot token and chat id from environment variables.
@@ -74,17 +77,14 @@ def send_telegram_message(message: str):
         logger.warning("Telegram bot token or chat id not set in environment variables.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
         resp = requests.post(url, data=data)
         if resp.status_code != 200:
             logger.warning(f"Telegram API error: {resp.text}")
     except Exception as e:
         logger.error(f"Failed to send Telegram message: {str(e)}")
+
 
 def send_email_notification(subject: str, body: str, to_email: Optional[str] = None):
     """
@@ -107,15 +107,15 @@ def send_email_notification(subject: str, body: str, to_email: Optional[str] = N
         return False
 
     msg = MIMEMultipart()
-    msg['From'] = EMAIL_FROM
-    msg['To'] = EMAIL_TO
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
+    msg["From"] = EMAIL_FROM
+    msg["To"] = EMAIL_TO
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
     try:
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, EMAIL_TO.split(','), msg.as_string())
+            server.sendmail(EMAIL_FROM, EMAIL_TO.split(","), msg.as_string())
         logger.info(f"Email notification sent to {EMAIL_TO}")
         return True
     except Exception as e:
@@ -153,24 +153,13 @@ def send_wechat_message(message: str, wechat_id: Optional[str] = None) -> bool:
             if is_user_wxid:
                 # Direct user message
                 endpoint = f"{WECHAT_API_URL.rstrip('/')}/send_direct_message"
-                payload = {
-                    "receiver_wxid": wechat_id,
-                    "message": message,
-                    "message_type": "TEXT"
-                }
+                payload = {"receiver_wxid": wechat_id, "message": message, "message_type": "TEXT"}
             else:
                 # Group message (treat wechat_id as group name)
                 endpoint = f"{WECHAT_API_URL.rstrip('/')}/send_message"
-                payload = {
-                    "group_name": wechat_id,
-                    "message": message,
-                    "message_type": "TEXT"
-                }
+                payload = {"group_name": wechat_id, "message": message, "message_type": "TEXT"}
 
-            headers = {
-                "Authorization": f"Bearer {WECHAT_API_KEY}",
-                "Content-Type": "application/json"
-            }
+            headers = {"Authorization": f"Bearer {WECHAT_API_KEY}", "Content-Type": "application/json"}
 
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
 
@@ -200,12 +189,7 @@ def send_wechat_message(message: str, wechat_id: Optional[str] = None) -> bool:
     elif WECHAT_BOT_URL:
         try:
             # WeChat Work webhook format
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {
-                    "content": message
-                }
-            }
+            payload = {"msgtype": "markdown", "markdown": {"content": message}}
 
             resp = requests.post(WECHAT_BOT_URL, json=payload, timeout=10)
 
@@ -252,11 +236,7 @@ def send_telegram_to_user(message: str, chat_id: str) -> bool:
         return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
 
     try:
         resp = requests.post(url, data=data, timeout=10)
@@ -275,37 +255,27 @@ def send_telegram_to_user(message: str, chat_id: str) -> bool:
         logger.error(f"Failed to send Telegram message: {str(e)}")
         return False
 
+
 def notify_all(job_count: int, job_titles: list, airtable_link: str):
     """
     Send both Telegram and Email notifications about job updates.
     """
+
     def format_job(job):
-        title = job.get('Job Title', 'N/A')
-        company = job.get('Company', 'N/A')
-        link = job.get('Job Link', '')
-        cv = job.get('CV URL', '')
-        score = job.get('Score', '')
-        return (
-            f"*{title}*\n"
-            f"*{company}*\n"
-            f"🔗 [Job Link]({link})\n"
-            f"📄 [CV]({cv})\n"
-            f"⭐ Score: {score}"
-        )
+        title = job.get("Job Title", "N/A")
+        company = job.get("Company", "N/A")
+        link = job.get("Job Link", "")
+        cv = job.get("CV URL", "")
+        score = job.get("Score", "")
+        return f"*{title}*\n*{company}*\n🔗 [Job Link]({link})\n📄 [CV]({cv})\n⭐ Score: {score}"
 
     def format_job_email(job):
-        title = job.get('Job Title', 'N/A')
-        company = job.get('Company', 'N/A')
-        link = job.get('Job Link', '')
-        cv = job.get('CV URL', '')
-        score = job.get('Score', '')
-        return (
-            f"{title}\n"
-            f"*{company}*\n"
-            f"  Job Link: {link}\n"
-            f"  CV: {cv}\n"
-            f"  Score: {score}"
-        )
+        title = job.get("Job Title", "N/A")
+        company = job.get("Company", "N/A")
+        link = job.get("Job Link", "")
+        cv = job.get("CV URL", "")
+        score = job.get("Score", "")
+        return f"{title}\n*{company}*\n  Job Link: {link}\n  CV: {cv}\n  Score: {score}"
 
     jobs_list = "\n\n".join([format_job(job) for job in job_titles])
     jobs_list_email = "\n\n".join([format_job_email(job) for job in job_titles])
@@ -333,10 +303,7 @@ def notify_all(job_count: int, job_titles: list, airtable_link: str):
 
 
 def notify_user(
-    user_prefs: UserNotificationPrefs,
-    job_count: int,
-    job_titles: List[Dict[str, Any]],
-    airtable_link: str
+    user_prefs: UserNotificationPrefs, job_count: int, job_titles: List[Dict[str, Any]], airtable_link: str
 ) -> Dict[str, bool]:
     """
     Send notifications to a specific user based on their preferences.
@@ -350,40 +317,24 @@ def notify_user(
     Returns:
         Dictionary with status of each notification channel
     """
-    results = {
-        "email": False,
-        "telegram": False,
-        "wechat": False
-    }
+    results = {"email": False, "telegram": False, "wechat": False}
 
     # Format messages
     def format_job_markdown(job):
-        title = job.get('Job Title', 'N/A')
-        company = job.get('Company', 'N/A')
-        link = job.get('Job Link', '')
-        cv = job.get('CV URL', '')
-        score = job.get('Score', '')
-        return (
-            f"**{title}**\n"
-            f"*{company}*\n"
-            f"🔗 [Job Link]({link})\n"
-            f"📄 [CV]({cv})\n"
-            f"⭐ Score: {score}"
-        )
+        title = job.get("Job Title", "N/A")
+        company = job.get("Company", "N/A")
+        link = job.get("Job Link", "")
+        cv = job.get("CV URL", "")
+        score = job.get("Score", "")
+        return f"**{title}**\n*{company}*\n🔗 [Job Link]({link})\n📄 [CV]({cv})\n⭐ Score: {score}"
 
     def format_job_plain(job):
-        title = job.get('Job Title', 'N/A')
-        company = job.get('Company', 'N/A')
-        link = job.get('Job Link', '')
-        cv = job.get('CV URL', '')
-        score = job.get('Score', '')
-        return (
-            f"{title}\n"
-            f"  Company: {company}\n"
-            f"  Job Link: {link}\n"
-            f"  CV: {cv}\n"
-            f"  Score: {score}"
-        )
+        title = job.get("Job Title", "N/A")
+        company = job.get("Company", "N/A")
+        link = job.get("Job Link", "")
+        cv = job.get("CV URL", "")
+        score = job.get("Score", "")
+        return f"{title}\n  Company: {company}\n  Job Link: {link}\n  CV: {cv}\n  Score: {score}"
 
     jobs_markdown = "\n\n".join([format_job_markdown(job) for job in job_titles])
     jobs_plain = "\n\n".join([format_job_plain(job) for job in job_titles])
@@ -428,10 +379,7 @@ def notify_user(
 
 
 def notify_all_users(
-    job_count: int,
-    job_titles: List[Dict[str, Any]],
-    airtable_link: str,
-    airtable_manager=None
+    job_count: int, job_titles: List[Dict[str, Any]], airtable_link: str, airtable_manager=None
 ) -> Dict[str, Dict[str, bool]]:
     """
     Send notifications to all users who have notifications enabled.
@@ -449,7 +397,6 @@ def notify_all_users(
     Returns:
         Dictionary mapping user emails to their notification results
     """
-    from config.settings import Config
     from data_store.storage_factory import get_data_manager
 
     # Create manager if not provided
@@ -479,7 +426,7 @@ def notify_all_users(
             weekly_digest=user_data.get("weekly_digest", True),
             telegram_chat_id=user_data.get("telegram_chat_id"),
             wechat_id=user_data.get("wechat_id") or user_data.get("wechat_openid"),
-            notification_email=user_data.get("notification_email")
+            notification_email=user_data.get("notification_email"),
         )
 
         try:
@@ -494,11 +441,7 @@ def notify_all_users(
 
 
 def notify_specific_user(
-    user_email: str,
-    job_count: int,
-    job_titles: List[Dict[str, Any]],
-    airtable_link: str,
-    airtable_manager=None
+    user_email: str, job_count: int, job_titles: List[Dict[str, Any]], airtable_link: str, airtable_manager=None
 ) -> Dict[str, bool]:
     """
     Send notifications to a specific user based on their stored preferences.
@@ -513,7 +456,6 @@ def notify_specific_user(
     Returns:
         Dictionary with status of each notification channel
     """
-    from config.settings import Config
     from data_store.storage_factory import get_data_manager
 
     # Create manager if not provided
@@ -541,7 +483,7 @@ def notify_specific_user(
         weekly_digest=prefs_data.get("weekly_digest", True),
         telegram_chat_id=prefs_data.get("telegram_chat_id"),
         wechat_id=prefs_data.get("wechat_id") or prefs_data.get("wechat_openid"),
-        notification_email=prefs_data.get("notification_email")
+        notification_email=prefs_data.get("notification_email"),
     )
 
     return notify_user(user_prefs, job_count, job_titles, airtable_link)

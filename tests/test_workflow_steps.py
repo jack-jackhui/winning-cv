@@ -3,7 +3,7 @@ import os
 import sys
 
 # Add parent directory to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import logging
 
@@ -31,11 +31,7 @@ def test_real_workflow_steps_1_to_3():
     # Initialize components with real connections
     matcher = JobMatcher()
 
-    airtable = AirtableManager(
-        config.AIRTABLE_API_KEY,
-        config.AIRTABLE_BASE_ID,
-        config.AIRTABLE_TABLE_ID
-    )
+    airtable = AirtableManager(config.AIRTABLE_API_KEY, config.AIRTABLE_BASE_ID, config.AIRTABLE_TABLE_ID)
     # feed_processor = LinkedInFeedProcessor(config.RSS_FEED_URL)
     content_cleaner = ContentCleaner(config.MAX_DESCRIPTION_LENGTH)
 
@@ -102,8 +98,8 @@ def test_real_workflow_steps_1_to_3():
         return
 
     for record in unprocessed_jobs:
-        job_desc = record['fields']['Job Description']
-        job_link = record['fields']['Job Link']
+        job_desc = record["fields"]["Job Description"]
+        job_link = record["fields"]["Job Link"]
 
         if not job_desc:
             continue
@@ -113,8 +109,8 @@ def test_real_workflow_steps_1_to_3():
         logger.info(f"""
                 Match analysis for {job_link}:
                 - Final Score: {score:.2f}/10
-                - Key Reasons: {analysis.get('reasons', [])[:3]}
-                - Suggestions: {analysis.get('suggestions', [])[:3]}
+                - Key Reasons: {analysis.get("reasons", [])[:3]}
+                - Suggestions: {analysis.get("suggestions", [])[:3]}
                 """)
 
         # Explicitly prevent CV generation
@@ -122,6 +118,7 @@ def test_real_workflow_steps_1_to_3():
             logger.warning(f"Score threshold met ({score}), but CV generation skipped per test config")
 
     logger.info("Real workflow test completed (Steps 1-3)")
+
 
 if __name__ == "__main__":
     test_real_workflow_steps_1_to_3()

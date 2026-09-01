@@ -30,20 +30,20 @@ import os
 import signal
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from api.tasks.state import TaskState, TaskType, get_task_config
 from api.tasks.retry import (
-    RetryableError,
     PermanentError,
+    RetryableError,
     calculate_retry_delay,
     should_retry_exception,
 )
-from data_store.postgres_manager import get_postgres_task_queue, PostgresTaskQueue
+from api.tasks.state import TaskType
+from data_store.postgres_manager import PostgresTaskQueue, get_postgres_task_queue
 
 # Configure logging
 logging.basicConfig(
@@ -80,15 +80,18 @@ _registry = TaskHandlerRegistry()
 
 def register_handler(task_type: str):
     """Decorator to register a task handler."""
+
     def decorator(func: Callable):
         _registry.register(task_type, func)
         return func
+
     return decorator
 
 
 # ============================================================================
 # Task Handlers
 # ============================================================================
+
 
 @register_handler("job_search")
 async def handle_job_search(
@@ -158,6 +161,7 @@ async def handle_notification(
 # ============================================================================
 # Worker Implementation
 # ============================================================================
+
 
 class Worker:
     """
@@ -263,10 +267,7 @@ class Worker:
         max_attempts = task.get("max_attempts", 3)
 
         self.current_task_id = task_id
-        logger.info(
-            f"Processing task {task_id} (type={task_type}, "
-            f"attempt={attempts}/{max_attempts})"
-        )
+        logger.info(f"Processing task {task_id} (type={task_type}, attempt={attempts}/{max_attempts})")
 
         handler = _registry.get(task_type)
         if not handler:
@@ -327,6 +328,7 @@ class Worker:
 # CLI
 # ============================================================================
 
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -385,7 +387,8 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable debug logging",
     )

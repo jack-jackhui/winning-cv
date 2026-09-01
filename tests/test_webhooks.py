@@ -4,6 +4,7 @@ Tests for webhook endpoints in WinningCV.
 
 These tests are designed to be standalone and mock all external dependencies.
 """
+
 import hashlib
 import hmac
 import json
@@ -26,19 +27,11 @@ class TestWebhookSignatureVerification:
         # Import the module directly to avoid full chain
         secret = "test-secret"
         payload = b'{"event": "test"}'
-        signature = hmac.new(
-            secret.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
+        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
         # Direct implementation test
-        expected = hmac.new(
-            secret.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
+        expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
         assert hmac.compare_digest(expected, signature) is True
 
     def test_verify_signature_invalid(self):
@@ -46,13 +39,9 @@ class TestWebhookSignatureVerification:
         secret = "test-secret"
         payload = b'{"event": "test"}'
         wrong_signature = "invalid-signature"
-        
-        expected = hmac.new(
-            secret.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
+
+        expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
         assert hmac.compare_digest(expected, wrong_signature) is False
 
     def test_verify_signature_timing_safe(self):
@@ -60,13 +49,9 @@ class TestWebhookSignatureVerification:
         # This ensures we use hmac.compare_digest not ==
         secret = "test-secret"
         payload = b'{"event": "test"}'
-        
-        signature = hmac.new(
-            secret.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
+
+        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
         # hmac.compare_digest should handle both str and bytes
         assert hmac.compare_digest(signature, signature) is True
 
@@ -80,7 +65,7 @@ class TestTelegramAlertLogic:
         provider = "google"
         timestamp = "2024-01-01T00:00:00Z"
         user_id = 123
-        
+
         message = (
             "🎉 *New WinningCV Signup!*\n\n"
             f"📧 *Email:* `{email}`\n"
@@ -88,7 +73,7 @@ class TestTelegramAlertLogic:
             f"🕐 *Time:* {timestamp}\n"
             f"🆔 *User ID:* {user_id}"
         )
-        
+
         assert "newuser@example.com" in message
         assert "Google" in message  # .title()
         assert "🎉" in message
@@ -96,10 +81,10 @@ class TestTelegramAlertLogic:
     def test_telegram_message_escapes_markdown(self):
         """Test special characters in email don't break markdown."""
         email = "user_with+special@example.com"
-        
+
         # Using backticks for code formatting handles special chars
         message = f"📧 *Email:* `{email}`"
-        
+
         assert email in message
 
 
@@ -116,10 +101,10 @@ class TestWebhookPayloadValidation:
                 "email": "test@example.com",
                 "username": "testuser",
                 "date_joined": "2024-01-01T00:00:00",
-                "provider": "google"
-            }
+                "provider": "google",
+            },
         }
-        
+
         assert payload["event"] == "user.created"
         assert "user" in payload
         assert payload["user"]["email"] == "test@example.com"
@@ -130,17 +115,10 @@ class TestWebhookPayloadValidation:
         payload = {
             "event": "user.login",
             "timestamp": "2024-01-01T00:00:00Z",
-            "user": {
-                "id": 123,
-                "email": "test@example.com",
-                "provider": "email"
-            },
-            "data": {
-                "ip": "192.168.1.1",
-                "user_agent": "Mozilla/5.0..."
-            }
+            "user": {"id": 123, "email": "test@example.com", "provider": "email"},
+            "data": {"ip": "192.168.1.1", "user_agent": "Mozilla/5.0..."},
         }
-        
+
         assert payload["event"] == "user.login"
         assert payload["data"]["ip"] == "192.168.1.1"
 
@@ -149,12 +127,9 @@ class TestWebhookPayloadValidation:
         payload = {
             "event": "user.created",
             "timestamp": "2024-01-01T00:00:00Z",
-            "user": {
-                "id": 1,
-                "email": "test@example.com"
-            }
+            "user": {"id": 1, "email": "test@example.com"},
         }
-        
+
         # Should have defaults for optional fields
         user = payload["user"]
         provider = user.get("provider", "email")
@@ -169,7 +144,7 @@ class TestAirtableRecordStructure:
         user_email = "test@example.com"
         auth_user_id = 123
         provider = "google"
-        
+
         record_fields = {
             "user_email": user_email,
             "auth_user_id": auth_user_id,
@@ -178,7 +153,7 @@ class TestAirtableRecordStructure:
             "created_at": datetime.utcnow().isoformat(),
             "last_active_at": datetime.utcnow().isoformat(),
         }
-        
+
         assert record_fields["plan"] == "free"
         assert record_fields["signup_provider"] == "google"
         assert record_fields["auth_user_id"] == 123
@@ -189,7 +164,7 @@ class TestAirtableRecordStructure:
             "last_active_at": datetime.utcnow().isoformat(),
             "auth_user_id": 123,
         }
-        
+
         assert "last_active_at" in update_fields
         assert "plan" not in update_fields  # Don't change plan on update
 
@@ -200,12 +175,15 @@ class TestWebhookModuleIntegration:
     @pytest.fixture
     def mock_all_deps(self):
         """Mock all external dependencies."""
-        with patch.dict('sys.modules', {
-            'azure.ai': MagicMock(),
-            'azure.ai.inference': MagicMock(),
-            'pyairtable': MagicMock(),
-            'pyairtable.formulas': MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "azure.ai": MagicMock(),
+                "azure.ai.inference": MagicMock(),
+                "pyairtable": MagicMock(),
+                "pyairtable.formulas": MagicMock(),
+            },
+        ):
             yield
 
     def test_webhook_module_imports(self, mock_all_deps):
@@ -222,22 +200,18 @@ class TestAsyncTelegramAlert:
     async def test_httpx_call_structure(self):
         """Test the expected httpx call structure."""
         import httpx
-        
+
         bot_token = "test-token"
         chat_id = "12345"
         message = "Test message"
-        
+
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        expected_payload = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "Markdown"
-        }
-        
+        expected_payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+
         assert url == "https://api.telegram.org/bottest-token/sendMessage"
         assert expected_payload["chat_id"] == "12345"
         assert expected_payload["parse_mode"] == "Markdown"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

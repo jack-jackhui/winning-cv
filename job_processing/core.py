@@ -18,12 +18,13 @@ from utils.utils import canonicalize_url, create_pdf
 
 logger = logging.getLogger(__name__)
 
+
 class JobProcessor:
     def __init__(
         self,
         config,
-        airtable = None,  # Storage manager (backend-aware)
-        progress_callback: Optional[Callable[[int, str], None]] = None
+        airtable=None,  # Storage manager (backend-aware)
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ):
         self.config = config
         self.airtable = airtable or get_data_manager()
@@ -31,10 +32,7 @@ class JobProcessor:
         self.seek_scraper = SeekJobScraper(config.seek_job_url)
         self.content_cleaner = ContentCleaner(config.max_description_length)
         self.matcher = JobMatcher()
-        self.additional_processor = AdditionalJobProcessor(
-            content_cleaner=self.content_cleaner,
-            config=config
-        )
+        self.additional_processor = AdditionalJobProcessor(content_cleaner=self.content_cleaner, config=config)
         # Progress callback: (progress_percent, message) -> None
         self._progress_callback = progress_callback
 
@@ -55,16 +53,14 @@ class JobProcessor:
         sources = {
             "LinkedIn": self._process_linkedin_jobs,
             "Seek": self._process_seek_jobs,
-            "Additional Sources": self._process_additional_sources
+            "Additional Sources": self._process_additional_sources,
         }
         results = {}
         completed_sources = 0
 
         # Spin up a threadpool
         with ThreadPoolExecutor(max_workers=len(sources)) as pool:
-            future_to_name = {
-                pool.submit(fn): name for name, fn in sources.items()
-            }
+            future_to_name = {pool.submit(fn): name for name, fn in sources.items()}
             for future in as_completed(future_to_name):
                 name = future_to_name[future]
                 try:
@@ -100,9 +96,7 @@ class JobProcessor:
             target_urls = self.get_target_urls()
             existing_links = {
                 canonicalize_url(link)
-                for link in self.airtable.get_existing_job_links(
-                    user_email=self.config.user_email
-                )
+                for link in self.airtable.get_existing_job_links(user_email=self.config.user_email)
             }
             new_jobs = 0
             for url in target_urls:
@@ -152,9 +146,7 @@ class JobProcessor:
                 return 0
             existing_links = {
                 canonicalize_url(link)
-                for link in self.airtable.get_existing_job_links(
-                    user_email=self.config.user_email
-                )
+                for link in self.airtable.get_existing_job_links(user_email=self.config.user_email)
             }
             new_jobs = 0
             for job_data in job_list:
@@ -195,14 +187,12 @@ class JobProcessor:
                 return 0
             existing_links = {
                 canonicalize_url(link)
-                for link in self.airtable.get_existing_job_links(
-                    user_email=self.config.user_email
-                )
+                for link in self.airtable.get_existing_job_links(user_email=self.config.user_email)
             }
             new_jobs_added = 0
 
             for job in processed_jobs:
-                job_url = canonicalize_url(job.get('Job Link'))
+                job_url = canonicalize_url(job.get("Job Link"))
                 if not job_url or job_url in existing_links:
                     continue
                 # Airtable-level check (race condition safety)
@@ -210,7 +200,7 @@ class JobProcessor:
                     logger.info(f"Job {job_url} already exists in Airtable, skipping.")
                     existing_links.add(job_url)
                     continue
-                job['Job Link'] = job_url  # Overwrite with canonicalized link
+                job["Job Link"] = job_url  # Overwrite with canonicalized link
                 if self.airtable.create_job_record(job, user_email=self.config.user_email):
                     new_jobs_added += 1
                     logger.info(f"Added job from additional source: {job['Job Title']}")
@@ -248,10 +238,10 @@ class JobProcessor:
             self._update_progress(51, f"Analyzing {total_jobs} jobs against your CV...")
 
             for idx, record in enumerate(unprocessed_jobs):
-                fields = record['fields']
-                job_desc = fields.get('Job Description', '')
-                job_link = fields.get('Job Link', '')
-                job_title = fields.get('Job Title', 'Unknown Position')
+                fields = record["fields"]
+                job_desc = fields.get("Job Description", "")
+                job_link = fields.get("Job Link", "")
+                job_title = fields.get("Job Title", "Unknown Position")
 
                 if not job_desc:
                     logger.warning(f"Skipping match calculation for {job_link} - missing description.")
@@ -266,27 +256,29 @@ class JobProcessor:
 
                 logger.info(f"Match analysis for '{job_title}' [{job_link}]: Score={score:.2f}/10")
                 if analysis:
-                    logger.debug(f"ATS: {analysis.get('ats_score')}, HR: {analysis.get('hr_score')}, LLM: {analysis.get('llm_score')}")
+                    logger.debug(
+                        f"ATS: {analysis.get('ats_score')}, HR: {analysis.get('hr_score')}, LLM: {analysis.get('llm_score')}"
+                    )
                     logger.debug(f"Recommendation: {analysis.get('recommendation')}")
                     logger.debug(f"Key reasons: {analysis.get('reasons', [])}")
 
                 # Extract score breakdown from analysis
-                ats_breakdown = analysis.get('ats_breakdown') if analysis else None
-                hr_breakdown = analysis.get('hr_breakdown') if analysis else None
+                ats_breakdown = analysis.get("ats_breakdown") if analysis else None
+                hr_breakdown = analysis.get("hr_breakdown") if analysis else None
 
                 # 3) Always store the match score with full breakdown
                 updated_record = self.airtable.update_cv_info(
                     job_link=job_link,
                     score=score,
                     cv_url=None,
-                    reasons=analysis.get('reasons') if analysis else None,
-                    suggestions=analysis.get('suggestions') if analysis else None,
-                    ats_score=analysis.get('ats_score') if analysis else None,
-                    hr_score=analysis.get('hr_score') if analysis else None,
-                    llm_score=analysis.get('llm_score') if analysis else None,
-                    recommendation=analysis.get('recommendation') if analysis else None,
-                    matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
-                    missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
+                    reasons=analysis.get("reasons") if analysis else None,
+                    suggestions=analysis.get("suggestions") if analysis else None,
+                    ats_score=analysis.get("ats_score") if analysis else None,
+                    hr_score=analysis.get("hr_score") if analysis else None,
+                    llm_score=analysis.get("llm_score") if analysis else None,
+                    recommendation=analysis.get("recommendation") if analysis else None,
+                    matched_keywords=ats_breakdown.get("matched_keywords") if ats_breakdown else None,
+                    missing_keywords=ats_breakdown.get("missing_keywords") if ats_breakdown else None,
                     user_email=self.config.user_email,
                 )
                 if not updated_record:
@@ -302,32 +294,35 @@ class JobProcessor:
                             job_link=job_link,
                             score=score,
                             cv_url=cv_url,
-                            reasons=analysis.get('reasons') if analysis else None,
-                            suggestions=analysis.get('suggestions') if analysis else None,
-                            ats_score=analysis.get('ats_score') if analysis else None,
-                            hr_score=analysis.get('hr_score') if analysis else None,
-                            llm_score=analysis.get('llm_score') if analysis else None,
-                            recommendation=analysis.get('recommendation') if analysis else None,
-                            matched_keywords=ats_breakdown.get('matched_keywords') if ats_breakdown else None,
-                            missing_keywords=ats_breakdown.get('missing_keywords') if ats_breakdown else None,
+                            reasons=analysis.get("reasons") if analysis else None,
+                            suggestions=analysis.get("suggestions") if analysis else None,
+                            ats_score=analysis.get("ats_score") if analysis else None,
+                            hr_score=analysis.get("hr_score") if analysis else None,
+                            llm_score=analysis.get("llm_score") if analysis else None,
+                            recommendation=analysis.get("recommendation") if analysis else None,
+                            matched_keywords=ats_breakdown.get("matched_keywords") if ats_breakdown else None,
+                            missing_keywords=ats_breakdown.get("missing_keywords") if ats_breakdown else None,
                             user_email=self.config.user_email,
                         )
                         if updated_record:
                             logger.info(f"Generated targeted CV for '{job_title}' -> {cv_url}")
-                            jobs_with_cv.append({
-                                'Job Title': job_title,
-                                'Company': fields.get('Company', 'Unknown Company'),
-                                'Job Link': job_link,
-                                'CV URL': cv_url,
-                                'Score': score
-                            })
+                            jobs_with_cv.append(
+                                {
+                                    "Job Title": job_title,
+                                    "Company": fields.get("Company", "Unknown Company"),
+                                    "Job Link": job_link,
+                                    "CV URL": cv_url,
+                                    "Score": score,
+                                }
+                            )
                         else:
                             logger.warning(f"Failed to attach CV link for {job_link}.")
                     except Exception as e:
                         logger.error(f"CV generation failed for {job_link}: {str(e)}")
                 else:
                     logger.info(
-                        f"Score below threshold ({score:.2f} < {self.config.job_match_threshold}) - no CV generated.")
+                        f"Score below threshold ({score:.2f} < {self.config.job_match_threshold}) - no CV generated."
+                    )
 
                 # Update progress: 51-99% for matching phase
                 if total_jobs > 0:
@@ -337,7 +332,7 @@ class JobProcessor:
                     cvs_generated = len(jobs_with_cv)
                     self._update_progress(
                         match_progress,
-                        f"Processed {idx + 1}/{total_jobs} jobs • {cvs_generated} CVs generated • Current: {job_title[:40]}..."
+                        f"Processed {idx + 1}/{total_jobs} jobs • {cvs_generated} CVs generated • Current: {job_title[:40]}...",
                     )
 
             return jobs_with_cv
@@ -354,8 +349,7 @@ class JobProcessor:
         Return URLs to scrape from config or from a database.
         Adjust or extend this logic as needed.
         """
-        linkedin_urls = [url.strip() for url in self.config.linkedin_job_url.split(",")
-                         if url.strip()]
+        linkedin_urls = [url.strip() for url in self.config.linkedin_job_url.split(",") if url.strip()]
         return linkedin_urls or [os.getenv("LINKEDIN_JOB_URL")]
 
     def generate_targeted_cv(self, cv_text: str, job_data: Dict, analysis: Dict, user_id: str = "default") -> str:
@@ -383,19 +377,14 @@ class JobProcessor:
         )
 
         job_desc = job_data.get("Job Description", "")
-        new_cv_markdown = generator.generate_cv(
-            cv_content=cv_text,
-            job_desc=job_desc,
-            instructions=instructions
-        )
+        new_cv_markdown = generator.generate_cv(cv_content=cv_text, job_desc=job_desc, instructions=instructions)
 
         today = datetime.today().strftime("%Y%m%d")
         unique_id = uuid.uuid4().hex
         raw_title = job_data.get("Job Title", "untitled")
-        clean_title = "".join(
-            c if c.isalnum() or c in ('_', '-', '.') else '_'
-            for c in raw_title
-        ).replace(" ", "_")[:50]
+        clean_title = "".join(c if c.isalnum() or c in ("_", "-", ".") else "_" for c in raw_title).replace(" ", "_")[
+            :50
+        ]
         output_dir = "customised_cv"
         os.makedirs(output_dir, exist_ok=True)
 
@@ -420,7 +409,7 @@ class JobProcessor:
                 user_id=user_id,
                 wp_site=Config.WORDPRESS_SITE,
                 wp_user=Config.WORDPRESS_USERNAME,
-                wp_app_password=Config.WORDPRESS_APP_PASSWORD
+                wp_app_password=Config.WORDPRESS_APP_PASSWORD,
             )
             backend = get_storage_backend()
             logger.debug(f"Uploaded CV to {backend}: {cv_url}")

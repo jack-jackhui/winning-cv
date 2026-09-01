@@ -14,7 +14,6 @@ Analyzes a generated CV against a job description to provide:
 
 import json
 import logging
-import os
 import re
 from dataclasses import asdict, dataclass
 
@@ -180,11 +179,11 @@ You MUST respond with ONLY a valid JSON object matching this exact structure:
 def _clean_json_response(text: str) -> str:
     """Clean LLM response to extract valid JSON."""
     # Remove markdown code blocks if present
-    text = re.sub(r'^```(?:json)?\s*\n?', '', text.strip())
-    text = re.sub(r'\n?```\s*$', '', text.strip())
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    text = re.sub(r"\n?```\s*$", "", text.strip())
 
     # Remove any <think> blocks
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
     return text
 
@@ -205,7 +204,7 @@ def _parse_analysis_response(response_text: str) -> CVAnalysis:
         score=data["keyword_match"]["score"],
         matched=data["keyword_match"]["matched"],
         missing=data["keyword_match"]["missing"],
-        density_assessment=data["keyword_match"]["density_assessment"]
+        density_assessment=data["keyword_match"]["density_assessment"],
     )
 
     skills_coverage = SkillsCoverage(
@@ -213,19 +212,19 @@ def _parse_analysis_response(response_text: str) -> CVAnalysis:
         technical_skills=TechnicalSkills(
             matched=data["skills_coverage"]["technical_skills"]["matched"],
             partial=data["skills_coverage"]["technical_skills"]["partial"],
-            missing=data["skills_coverage"]["technical_skills"]["missing"]
+            missing=data["skills_coverage"]["technical_skills"]["missing"],
         ),
         soft_skills=SoftSkills(
             matched=data["skills_coverage"]["soft_skills"]["matched"],
-            demonstrated=data["skills_coverage"]["soft_skills"]["demonstrated"]
-        )
+            demonstrated=data["skills_coverage"]["soft_skills"]["demonstrated"],
+        ),
     )
 
     experience_relevance = ExperienceRelevance(
         score=data["experience_relevance"]["score"],
         aligned_roles=data["experience_relevance"]["aligned_roles"],
         relevant_achievements=data["experience_relevance"]["relevant_achievements"],
-        years_alignment=data["experience_relevance"]["years_alignment"]
+        years_alignment=data["experience_relevance"]["years_alignment"],
     )
 
     ats_optimization = ATSOptimization(
@@ -233,19 +232,19 @@ def _parse_analysis_response(response_text: str) -> CVAnalysis:
         format_check=data["ats_optimization"]["format_check"],
         keyword_density=data["ats_optimization"]["keyword_density"],
         section_structure=data["ats_optimization"]["section_structure"],
-        recommendations=data["ats_optimization"]["recommendations"]
+        recommendations=data["ats_optimization"]["recommendations"],
     )
 
     gap_analysis = GapAnalysis(
         critical_gaps=data["gap_analysis"]["critical_gaps"],
         minor_gaps=data["gap_analysis"]["minor_gaps"],
-        mitigation_suggestions=data["gap_analysis"]["mitigation_suggestions"]
+        mitigation_suggestions=data["gap_analysis"]["mitigation_suggestions"],
     )
 
     talking_points = TalkingPoints(
         strengths_to_highlight=data["talking_points"]["strengths_to_highlight"],
         questions_to_prepare=data["talking_points"]["questions_to_prepare"],
-        stories_to_ready=data["talking_points"]["stories_to_ready"]
+        stories_to_ready=data["talking_points"]["stories_to_ready"],
     )
 
     return CVAnalysis(
@@ -256,7 +255,7 @@ def _parse_analysis_response(response_text: str) -> CVAnalysis:
         experience_relevance=experience_relevance,
         ats_optimization=ats_optimization,
         gap_analysis=gap_analysis,
-        talking_points=talking_points
+        talking_points=talking_points,
     )
 
 
@@ -301,9 +300,7 @@ Provide your analysis as a JSON object following the exact structure specified i
 """
 
             response = self.llm_client.generate(
-                system_prompt=CV_ANALYSIS_SYSTEM_PROMPT,
-                user_prompt=user_message,
-                max_tokens=8192
+                system_prompt=CV_ANALYSIS_SYSTEM_PROMPT, user_prompt=user_message, max_tokens=8192
             )
 
             response_text = response.content

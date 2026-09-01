@@ -7,7 +7,6 @@ from requests import HTTPError
 from config.settings import Config
 from utils.airtable_client import create_airtable_api
 
-
 APPLICATION_SUMMARY_FIELDS = [
     "Job Title",
     "Company",
@@ -29,7 +28,7 @@ class AirtableManager:
 
         self.user_config_table = self.api.table(
             base_id,
-            Config.AIRTABLE_TABLE_ID_USER_CONFIGS  # Get from settings
+            Config.AIRTABLE_TABLE_ID_USER_CONFIGS,  # Get from settings
         )
 
         self._history_field_map = {
@@ -58,7 +57,7 @@ class AirtableManager:
         try:
             formula = str(EQ(Field("User Email"), user_email)) if user_email is not None else None
             records = self.table.all(formula=formula) if formula else self.table.all()
-            return {rec['fields']['Job Link'] for rec in records if 'Job Link' in rec['fields']}
+            return {rec["fields"]["Job Link"] for rec in records if "Job Link" in rec["fields"]}
         except Exception as e:
             self.logger.error(f"Failed to fetch existing jobs: {str(e)}")
             return set()
@@ -66,17 +65,19 @@ class AirtableManager:
     def create_job_record(self, job_data, user_email: str = "system"):
         """Create new job record with proper column mapping"""
         try:
-            record = self.table.create({
-                'User Email': user_email,
-                'Job Title': job_data.get('Job Title'),
-                'Job Description': job_data.get('Job Description'),
-                'Job Date': self._format_date(job_data.get('Job Date')),
-                'Job Link': job_data.get('Job Link'),
-                'Company': job_data.get('Company'),
-                'Location': job_data.get('Location'),
-                'Matching Score': job_data.get('score', 0),
-                'CV Link': job_data.get('cv_url', '')
-            })
+            record = self.table.create(
+                {
+                    "User Email": user_email,
+                    "Job Title": job_data.get("Job Title"),
+                    "Job Description": job_data.get("Job Description"),
+                    "Job Date": self._format_date(job_data.get("Job Date")),
+                    "Job Link": job_data.get("Job Link"),
+                    "Company": job_data.get("Company"),
+                    "Location": job_data.get("Location"),
+                    "Matching Score": job_data.get("score", 0),
+                    "CV Link": job_data.get("cv_url", ""),
+                }
+            )
             self.logger.info(f"Created job: {record['id']}")
             return record
         except Exception as e:
@@ -103,36 +104,33 @@ class AirtableManager:
             formula = EQ(Field("Job Link"), job_link)
             if user_email is not None:
                 formula = AND(formula, EQ(Field("User Email"), user_email))
-            record = self.table.first(
-                formula=str(formula),
-                fields=["Job Link"]
-            )
+            record = self.table.first(formula=str(formula), fields=["Job Link"])
             if record:
-                update_fields = {
-                    'Matching Score': score,
-                    'CV Link': cv_url
-                }
+                update_fields = {"Matching Score": score, "CV Link": cv_url}
                 if reasons is not None:
-                    update_fields['Match Reasons'] = "\n".join(reasons) if isinstance(reasons, list) else reasons
+                    update_fields["Match Reasons"] = "\n".join(reasons) if isinstance(reasons, list) else reasons
                 if suggestions is not None:
-                    update_fields['Match Suggestions'] = "\n".join(suggestions) if isinstance(suggestions, list) else suggestions
+                    update_fields["Match Suggestions"] = (
+                        "\n".join(suggestions) if isinstance(suggestions, list) else suggestions
+                    )
                 # Store score breakdown (new fields - Airtable will create them if they don't exist)
                 if ats_score is not None:
-                    update_fields['ATS Score'] = ats_score
+                    update_fields["ATS Score"] = ats_score
                 if hr_score is not None:
-                    update_fields['HR Score'] = hr_score
+                    update_fields["HR Score"] = hr_score
                 if llm_score is not None:
-                    update_fields['LLM Score'] = llm_score
+                    update_fields["LLM Score"] = llm_score
                 if recommendation is not None:
-                    update_fields['HR Recommendation'] = recommendation
+                    update_fields["HR Recommendation"] = recommendation
                 if matched_keywords is not None:
-                    update_fields['Matched Keywords'] = ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords
+                    update_fields["Matched Keywords"] = (
+                        ", ".join(matched_keywords[:15]) if isinstance(matched_keywords, list) else matched_keywords
+                    )
                 if missing_keywords is not None:
-                    update_fields['Missing Keywords'] = ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords
-                return self.table.update(
-                    record['id'],
-                    update_fields
-                )
+                    update_fields["Missing Keywords"] = (
+                        ", ".join(missing_keywords[:15]) if isinstance(missing_keywords, list) else missing_keywords
+                    )
+                return self.table.update(record["id"], update_fields)
             return None
         except Exception as e:
             self.logger.error(f"Update failed: {str(e)}")
@@ -140,19 +138,14 @@ class AirtableManager:
 
     def _format_date(self, date_str):
         """Ensure Airtable-compatible ISO format without microseconds"""
-        formats = [
-            '%a, %d %b %Y %H:%M:%S %Z',
-            '%Y-%m-%dT%H:%M:%S.%fZ',
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d'
-        ]
+        formats = ["%a, %d %b %Y %H:%M:%S %Z", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str, fmt)
-                return dt.strftime('%Y-%m-%d')  # Airtable's preferred format
+                return dt.strftime("%Y-%m-%d")  # Airtable's preferred format
             except (ValueError, TypeError):
                 continue
-        return datetime.now().strftime('%Y-%m-%d')
+        return datetime.now().strftime("%Y-%m-%d")
 
     def get_unprocessed_jobs(self, user_email: str | None = None):
         """Get unprocessed jobs, optionally scoped to one user."""
@@ -161,10 +154,7 @@ class AirtableManager:
             if user_email is not None:
                 filters.append(EQ(Field("User Email"), user_email))
             formula = AND(*filters)
-            return self.table.all(
-                formula=str(formula),
-                fields=["Job Title", "Job Description", "Job Link", "Company"]
-            )
+            return self.table.all(formula=str(formula), fields=["Job Title", "Job Description", "Job Link", "Company"])
         except Exception as e:
             self.logger.error(f"Fetch unprocessed failed: {str(e)}")
             return []
@@ -216,10 +206,7 @@ class AirtableManager:
             True if successful
         """
         try:
-            self.table.update(record_id, {
-                "cv_analysis": analysis_json,
-                "analysis_status": status
-            })
+            self.table.update(record_id, {"cv_analysis": analysis_json, "analysis_status": status})
             self.logger.info("History analysis updated: %s status=%s", record_id, status)
             return True
         except Exception as e:
@@ -283,9 +270,7 @@ class AirtableManager:
             "Application Notes": application_notes,
         }
         if update_next_action:
-            fields["Next Action At"] = (
-                next_action_at.isoformat() if next_action_at is not None else None
-            )
+            fields["Next Action At"] = next_action_at.isoformat() if next_action_at is not None else None
         if application_status == "applied" and not record.get("fields", {}).get("Applied At"):
             fields["Applied At"] = datetime.now(timezone.utc).isoformat()
         return self.table.update(record["id"], fields)
@@ -346,9 +331,9 @@ class AirtableManager:
             formula = f"{{user_email}} = '{user_email}'"
             records = self.user_config_table.all(
                 formula=formula,
-                max_records=1  # Get only the first match
+                max_records=1,  # Get only the first match
             )
-            return records[0]['fields'] if records else {}
+            return records[0]["fields"] if records else {}
         except Exception as e:
             self.logger.error(f"Config fetch failed: {str(e)}")
             return {}
@@ -356,9 +341,7 @@ class AirtableManager:
     def save_user_config(self, config_data: dict) -> bool:
         """Store/update user configuration"""
         try:
-            existing = self.user_config_table.first(
-                formula=f"{{user_email}} = '{config_data['user_email']}'"
-            )
+            existing = self.user_config_table.first(formula=f"{{user_email}} = '{config_data['user_email']}'")
 
             # Map to lowercase field names expected by Airtable
             fields = {
@@ -373,11 +356,11 @@ class AirtableManager:
                 "location": config_data["location"],
                 "hours_old": config_data["hours_old"],
                 "results_wanted": config_data["results_wanted"],
-                "country": config_data["country"]
+                "country": config_data["country"],
             }
 
             if existing:
-                self.user_config_table.update(existing['id'], fields)
+                self.user_config_table.update(existing["id"], fields)
             else:
                 self.user_config_table.create(fields)
 
@@ -394,12 +377,9 @@ class AirtableManager:
         try:
             safe_email = user_email.replace("'", "\\'")
             formula = f"{{user_email}} = '{safe_email}'"
-            records = self.user_config_table.all(
-                formula=formula,
-                max_records=1
-            )
+            records = self.user_config_table.all(formula=formula, max_records=1)
             if records:
-                fields = records[0]['fields']
+                fields = records[0]["fields"]
                 # Support both wechat_id and wechat_openid (wechat_id takes precedence)
                 wechat_id = fields.get("wechat_id") or fields.get("wechat_openid")
                 return {
@@ -426,9 +406,7 @@ class AirtableManager:
                 return False
 
             safe_email = user_email.replace("'", "\\'")
-            existing = self.user_config_table.first(
-                formula=f"{{user_email}} = '{safe_email}'"
-            )
+            existing = self.user_config_table.first(formula=f"{{user_email}} = '{safe_email}'")
 
             # Build notification preference fields
             # Support both wechat_id and wechat_openid (wechat_id takes precedence)
@@ -445,7 +423,7 @@ class AirtableManager:
 
             if existing:
                 # Update existing record with notification fields
-                self.user_config_table.update(existing['id'], notification_fields)
+                self.user_config_table.update(existing["id"], notification_fields)
             else:
                 # Create new record with user_email and notification fields
                 notification_fields["user_email"] = user_email
@@ -465,20 +443,22 @@ class AirtableManager:
             records = self.user_config_table.all(formula=formula)
             users = []
             for rec in records:
-                if rec['fields'].get("user_email"):
-                    fields = rec['fields']
+                if rec["fields"].get("user_email"):
+                    fields = rec["fields"]
                     wechat_id = fields.get("wechat_id") or fields.get("wechat_openid")
-                    users.append({
-                        "user_email": fields.get("user_email"),
-                        "email_alerts": fields.get("email_alerts", True),
-                        "telegram_alerts": fields.get("telegram_alerts", False),
-                        "wechat_alerts": fields.get("wechat_alerts", False),
-                        "weekly_digest": fields.get("weekly_digest", True),
-                        "telegram_chat_id": fields.get("telegram_chat_id"),
-                        "wechat_id": wechat_id,
-                        "wechat_openid": wechat_id,  # For backward compatibility
-                        "notification_email": fields.get("notification_email"),
-                    })
+                    users.append(
+                        {
+                            "user_email": fields.get("user_email"),
+                            "email_alerts": fields.get("email_alerts", True),
+                            "telegram_alerts": fields.get("telegram_alerts", False),
+                            "wechat_alerts": fields.get("wechat_alerts", False),
+                            "weekly_digest": fields.get("weekly_digest", True),
+                            "telegram_chat_id": fields.get("telegram_chat_id"),
+                            "wechat_id": wechat_id,
+                            "wechat_openid": wechat_id,  # For backward compatibility
+                            "notification_email": fields.get("notification_email"),
+                        }
+                    )
             return users
         except Exception as e:
             self.logger.error(f"Failed to get users with notifications: {str(e)}")

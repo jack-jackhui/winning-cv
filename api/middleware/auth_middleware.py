@@ -2,6 +2,7 @@
 Authentication middleware for WinningCV API.
 Supports both token-based auth (like sel-exam) and session cookies.
 """
+
 import logging
 import os
 from typing import Optional
@@ -25,15 +26,15 @@ auth_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 # HTTP client configuration
 HTTP_TIMEOUT = httpx.Timeout(
-    connect=5.0,    # Connection timeout
-    read=10.0,      # Read timeout
-    write=5.0,      # Write timeout
-    pool=5.0        # Pool timeout
+    connect=5.0,  # Connection timeout
+    read=10.0,  # Read timeout
+    write=5.0,  # Write timeout
+    pool=5.0,  # Pool timeout
 )
 HTTP_LIMITS = httpx.Limits(
     max_keepalive_connections=5,
     max_connections=10,
-    keepalive_expiry=30.0  # Close idle connections after 30s
+    keepalive_expiry=30.0,  # Close idle connections after 30s
 )
 
 
@@ -63,10 +64,7 @@ class AuthMiddleware:
         self._client = None
 
     async def _make_auth_request(
-        self,
-        headers: dict,
-        cookies: Optional[dict] = None,
-        max_retries: int = 2
+        self, headers: dict, cookies: Optional[dict] = None, max_retries: int = 2
     ) -> Optional[httpx.Response]:
         """
         Make auth request with retry on connection errors.
@@ -215,7 +213,7 @@ def extract_token(authorization: Optional[str]) -> Optional[str]:
 async def get_current_user(
     request: Request,
     authorization: Optional[str] = Depends(auth_header),
-    session_id: Optional[str] = Depends(session_cookie)
+    session_id: Optional[str] = Depends(session_cookie),
 ) -> UserInfo:
     """
     Dependency to get the current authenticated user.
@@ -237,17 +235,13 @@ async def get_current_user(
             return user
 
     # Neither method worked
-    raise HTTPException(
-        status_code=401,
-        detail="Not authenticated",
-        headers={"WWW-Authenticate": "Bearer, Cookie"}
-    )
+    raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer, Cookie"})
 
 
 async def get_optional_user(
     request: Request,
     authorization: Optional[str] = Depends(auth_header),
-    session_id: Optional[str] = Depends(session_cookie)
+    session_id: Optional[str] = Depends(session_cookie),
 ) -> Optional[UserInfo]:
     """
     Dependency to optionally get the current user.

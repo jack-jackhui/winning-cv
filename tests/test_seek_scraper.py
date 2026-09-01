@@ -4,7 +4,7 @@ import sys
 import time
 
 # Add project root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from config.settings import Config
 from job_sources.seek_job_scraper import SeekJobScraper
@@ -23,7 +23,8 @@ def test_real_seek_scraping():
         test_url = Config.SEEK_JOB_URL
         logger.info(f"Testing Seek scraper with URL: {test_url}")
         logger.info(
-            f"MAX_JOBS_TO_SCRAPE={Config.MAX_JOBS_TO_SCRAPE}, MAX_JOBS_FOR_DESCRIPTION={Config.MAX_JOBS_FOR_DESCRIPTION}")
+            f"MAX_JOBS_TO_SCRAPE={Config.MAX_JOBS_TO_SCRAPE}, MAX_JOBS_FOR_DESCRIPTION={Config.MAX_JOBS_FOR_DESCRIPTION}"
+        )
 
         if not scraper.validate_url(test_url):
             logger.error(f"Invalid Seek URL: {test_url}")
@@ -47,9 +48,12 @@ def test_real_seek_scraping():
             logger.info(f"Work Type: {job['work_type']}")
             logger.info(f"URL: {job['job_url']}")
 
-            if job['full_description']:
-                desc_snippet = job['full_description'][:150] + "..." if len(job['full_description']) > 150 else job[
-                    'full_description']
+            if job["full_description"]:
+                desc_snippet = (
+                    job["full_description"][:150] + "..."
+                    if len(job["full_description"]) > 150
+                    else job["full_description"]
+                )
                 logger.debug(f"Full Description:\n{desc_snippet}")
             else:
                 logger.debug("No full description available")
@@ -63,7 +67,7 @@ def test_real_seek_scraping():
         if scraper and scraper.browser:
             logger.info("Capturing browser state...")
             try:
-                scraper.browser.latest_tab.screenshot('seek_test_failure.png')
+                scraper.browser.latest_tab.screenshot("seek_test_failure.png")
                 logger.info("Saved screenshot as seek_test_failure.png")
             except Exception as screenshot_error:
                 logger.error(f"Failed to capture screenshot: {screenshot_error}")

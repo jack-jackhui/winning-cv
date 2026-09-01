@@ -2,6 +2,7 @@
 WinningCV FastAPI Application
 REST API backend for the React frontend.
 """
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -62,7 +63,7 @@ def setup_cookie_health_monitoring():
             # Force fresh test on scheduled runs
             lambda: run_cookie_health_check(send_alert=True, force_test=True),
             interval_minutes=interval_minutes,
-            name="linkedin_cookie_health_check"
+            name="linkedin_cookie_health_check",
         )
         scheduler.start()
 
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
     # Close knowledge base connection pool
     try:
         from cv.cv_knowledge_base import get_knowledge_base
+
         kb = get_knowledge_base()
         await kb.close()
     except Exception as e:
@@ -112,7 +114,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS configuration
@@ -144,10 +146,7 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "An internal error occurred"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "An internal error occurred"})
 
 
 # Include routers with /api/v1 prefix
@@ -176,13 +175,10 @@ async def health_check(detailed: bool = False):
     """
     if detailed:
         from api.health import get_comprehensive_health
+
         return get_comprehensive_health()
 
-    return {
-        "status": "healthy",
-        "service": "winningcv-api",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy", "service": "winningcv-api", "version": "1.0.0"}
 
 
 @app.get("/api/health/detailed")
@@ -198,6 +194,7 @@ async def health_check_detailed():
     - Auth service configuration
     """
     from api.health import get_comprehensive_health
+
     return get_comprehensive_health()
 
 
@@ -215,17 +212,12 @@ async def api_root():
             "knowledge_base": "/api/v1/knowledge-base",
             "profile": "/api/v1/profile",
             "telemetry": "/api/v1/telemetry",
-            "docs": "/api/docs"
-        }
+            "docs": "/api/docs",
+        },
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

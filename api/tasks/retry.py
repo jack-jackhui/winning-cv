@@ -72,7 +72,7 @@ def calculate_retry_delay(
         >>> calculate_retry_delay(7)  # ~3600s (capped)
     """
     # Exponential backoff: base * 2^attempts
-    delay = min(base_delay * (2 ** attempts), max_delay)
+    delay = min(base_delay * (2**attempts), max_delay)
 
     # Add jitter to prevent synchronized retries
     jitter = random.uniform(0, delay * jitter_factor)

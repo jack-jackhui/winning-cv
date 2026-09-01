@@ -7,6 +7,7 @@ from jobspy import scrape_jobs
 
 logger = logging.getLogger(__name__)
 
+
 class AdditionalJobProcessor:
     def __init__(self, content_cleaner, config):
         self.content_cleaner = content_cleaner
@@ -41,13 +42,13 @@ class AdditionalJobProcessor:
         """Core scraping functionality"""
         return scrape_jobs(
             site_name=["indeed", "glassdoor", "google"],
-            search_term=self._get_config('additional_search_term'),
-            google_search_term=self._get_config('google_search_term') or self._get_config('additional_search_term'),
-            location=self._get_config('location'),
+            search_term=self._get_config("additional_search_term"),
+            google_search_term=self._get_config("google_search_term") or self._get_config("additional_search_term"),
+            location=self._get_config("location"),
             job_type="fulltime",
-            results_wanted=self._get_config('results_wanted'),
-            hours_old=self._get_config('hours_old'),
-            country_indeed=self._get_config('country')
+            results_wanted=self._get_config("results_wanted"),
+            hours_old=self._get_config("hours_old"),
+            country_indeed=self._get_config("country"),
         )
 
     def _prepare_for_airtable(self, jobs_df: pd.DataFrame) -> List[Dict]:
@@ -59,21 +60,17 @@ class AdditionalJobProcessor:
         jobs_df = jobs_df.loc[:, ~jobs_df.columns.duplicated()]
 
         # Ensure expected columns exist
-        for col in ['salary', 'employment_type', 'description']:
+        for col in ["salary", "employment_type", "description"]:
             if col not in jobs_df.columns:
                 jobs_df[col] = None
 
-        jobs_df = jobs_df.rename(columns={
-            'job_url': 'url',
-            'date_posted': 'posted_date',
-            'job_type': 'employment_type'
-        })
+        jobs_df = jobs_df.rename(
+            columns={"job_url": "url", "date_posted": "posted_date", "job_type": "employment_type"}
+        )
 
-        return jobs_df[[
-            'title', 'company', 'location', 'url',
-            'posted_date', 'employment_type',
-            'salary', 'description'
-        ]].to_dict('records')
+        return jobs_df[
+            ["title", "company", "location", "url", "posted_date", "employment_type", "salary", "description"]
+        ].to_dict("records")
 
     def _process_jobs(self, raw_jobs: List[Dict]) -> List[Dict]:
         """Clean and normalize job data"""
@@ -102,7 +99,7 @@ class AdditionalJobProcessor:
                 "Location": job.get("location", ""),
                 "Job Description": job.get("description", ""),
                 "Salary": job.get("salary", ""),
-                "Employment Type": job.get("employment_type", "")
+                "Employment Type": job.get("employment_type", ""),
             }
         except KeyError as e:
             logger.warning(f"Invalid job format: {str(e)}")

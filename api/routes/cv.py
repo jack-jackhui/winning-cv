@@ -3,6 +3,7 @@ CV Generation routes for WinningCV API.
 Handles CV generation, upload, and history.
 Uses MinIO for file storage.
 """
+
 import asyncio
 import logging
 import re
@@ -16,9 +17,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 
 # Security constants for file uploads
 MAX_CV_FILE_SIZE = 10 * 1024 * 1024  # 10MB max
-ALLOWED_CV_EXTENSIONS = {'.pdf', '.docx', '.txt'}
-PDF_MAGIC_BYTES = b'%PDF'
-DOCX_MAGIC_BYTES = b'PK'  # DOCX is a ZIP file
+ALLOWED_CV_EXTENSIONS = {".pdf", ".docx", ".txt"}
+PDF_MAGIC_BYTES = b"%PDF"
+DOCX_MAGIC_BYTES = b"PK"  # DOCX is a ZIP file
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -54,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 class GeneratedCVDownloadRequest(BaseModel):
     """Request to proxy-download a generated CV file from MinIO storage."""
+
     file_url: str = Field(..., description="Generated CV presigned/storage URL returned by the API")
     filename: Optional[str] = Field(None, max_length=255, description="Suggested download filename")
     format: Optional[str] = Field("pdf", description="Requested file format: pdf or docx")
@@ -81,11 +83,8 @@ def _coerce_json_field(value, default=None):
 # BACKGROUND TASK FOR CV ANALYSIS
 # ──────────────────────────────────────────────────────────
 
-def run_cv_analysis_background(
-    history_id: str,
-    cv_markdown: str,
-    job_description: str
-):
+
+def run_cv_analysis_background(history_id: str, cv_markdown: str, job_description: str):
     """
     Background task to analyze CV-JD fit after CV generation.
 
@@ -125,10 +124,7 @@ def run_cv_analysis_background(
 
 
 def validate_cv_file(
-    filename: str,
-    content_type: str,
-    content: bytes,
-    allowed_extensions: set = ALLOWED_CV_EXTENSIONS
+    filename: str, content_type: str, content: bytes, allowed_extensions: set = ALLOWED_CV_EXTENSIONS
 ) -> None:
     """
     Validate CV file for security and compatibility.
@@ -144,29 +140,24 @@ def validate_cv_file(
     # Check file size
     if len(content) > MAX_CV_FILE_SIZE:
         raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size is {MAX_CV_FILE_SIZE // (1024*1024)}MB"
+            status_code=413, detail=f"File too large. Maximum size is {MAX_CV_FILE_SIZE // (1024 * 1024)}MB"
         )
 
     if len(content) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Empty file uploaded"
-        )
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
 
     # Check extension
-    ext = Path(filename).suffix.lower() if filename else ''
+    ext = Path(filename).suffix.lower() if filename else ""
     if ext not in allowed_extensions:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file extension. Allowed: {', '.join(sorted(allowed_extensions))}"
+            status_code=400, detail=f"Invalid file extension. Allowed: {', '.join(sorted(allowed_extensions))}"
         )
 
     # Check content type matches extension
     valid_types = {
-        '.pdf': ['application/pdf'],
-        '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-        '.txt': ['text/plain', 'text/x-python', 'application/octet-stream'],
+        ".pdf": ["application/pdf"],
+        ".docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        ".txt": ["text/plain", "text/x-python", "application/octet-stream"],
     }
 
     expected_types = valid_types.get(ext, [])
@@ -175,22 +166,17 @@ def validate_cv_file(
         logger.warning(f"Content-type mismatch: {content_type} for extension {ext}")
 
     # Check magic bytes for binary formats
-    if ext == '.pdf':
+    if ext == ".pdf":
         if not content[:4].startswith(PDF_MAGIC_BYTES):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid PDF file (corrupted or not a real PDF)"
-            )
-    elif ext == '.docx':
+            raise HTTPException(status_code=400, detail="Invalid PDF file (corrupted or not a real PDF)")
+    elif ext == ".docx":
         if not content[:2].startswith(DOCX_MAGIC_BYTES):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid DOCX file (corrupted or not a real DOCX)"
-            )
+            raise HTTPException(status_code=400, detail="Invalid DOCX file (corrupted or not a real DOCX)")
 
 
 class FileWrapper:
     """Wrapper to make UploadFile compatible with extract_text_from_file"""
+
     def __init__(self, upload_file: UploadFile, content: bytes):
         self.name = upload_file.filename
         self.type = upload_file.content_type
@@ -207,7 +193,7 @@ async def generate_cv(
     cv_file: UploadFile = File(...),
     instructions: Optional[str] = Form(None),
     use_knowledge_base: bool = Form(False),
-    user: UserInfo = Depends(get_current_user)
+    user: UserInfo = Depends(get_current_user),
 ) -> CVGenerateResponse:
     """
     Generate a tailored CV based on job description and user's CV.
@@ -233,7 +219,7 @@ async def generate_cv(
             filename=cv_file.filename,
             content_type=cv_file.content_type,
             content=file_content,
-            allowed_extensions={'.pdf', '.docx', '.txt'}
+            allowed_extensions={".pdf", ".docx", ".txt"},
         )
 
         # Extract text from CV
@@ -243,21 +229,18 @@ async def generate_cv(
         except Exception as parse_error:
             logger.error(f"CV parsing failed: {parse_error}")
             raise HTTPException(
-                status_code=400,
-                detail="Could not parse CV file. Ensure it's a valid PDF, DOCX, or TXT file."
+                status_code=400, detail="Could not parse CV file. Ensure it's a valid PDF, DOCX, or TXT file."
             )
 
         if len(orig_cv.strip()) < 30:
-            raise HTTPException(
-                status_code=400,
-                detail="Could not parse CV content. Try a different format."
-            )
+            raise HTTPException(status_code=400, detail="Could not parse CV content. Try a different format.")
 
         # Generate tailored CV
         llm_response_id = None
         if use_knowledge_base:
             # Use knowledge base enhanced generation (legacy, no response_id)
             from cv.cv_generator import generate_cv_with_knowledge
+
             raw_md = await generate_cv_with_knowledge(
                 user_email=user.email,
                 job_desc=job_description,
@@ -268,6 +251,7 @@ async def generate_cv(
             # Use CVGeneratorV2 with Responses API
             try:
                 from cv.cv_generator_v2 import CVGeneratorV2
+
                 generator = CVGeneratorV2()
                 raw_md, llm_response_id = generator.generate(
                     cv_content=orig_cv,
@@ -278,12 +262,13 @@ async def generate_cv(
                 # Fall back to legacy generator
                 logger.warning("CVGeneratorV2 not available, using legacy generator")
                 from cv.cv_generator import CVGenerator
+
                 generator = CVGenerator()
                 raw_md = await asyncio.to_thread(generator.generate_cv, orig_cv, job_description, instructions or "")
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
-        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        safe_title = re.sub(r"[^\w]+", "_", job_title)[:30].strip("_")
         today = datetime.now().strftime("%Y-%m-%d")
         unique_id = uuid.uuid4().hex[:8]
 
@@ -300,10 +285,7 @@ async def generate_cv(
         # Generate PDF
         pdf_result = create_pdf(raw_md, str(pdf_path))
         if not pdf_result:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate PDF"
-            )
+            raise HTTPException(status_code=500, detail="Failed to generate PDF")
 
         # Generate DOCX
         docx_result = create_docx(raw_md, str(docx_path))
@@ -317,11 +299,7 @@ async def generate_cv(
 
         # Upload PDF to MinIO
         try:
-            pdf_object_path = minio.upload_cv(
-                file_path=str(pdf_path),
-                user_id=user.email,
-                filename=pdf_filename
-            )
+            pdf_object_path = minio.upload_cv(file_path=str(pdf_path), user_id=user.email, filename=pdf_filename)
             cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
             logger.info(f"Uploaded PDF to MinIO: {pdf_object_path}")
         except Exception as e:
@@ -335,7 +313,7 @@ async def generate_cv(
                     file_path=str(docx_path),
                     user_id=user.email,
                     filename=docx_filename,
-                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
                 cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
                 logger.info(f"Uploaded DOCX to MinIO: {docx_object_path}")
@@ -366,7 +344,7 @@ async def generate_cv(
                     run_cv_analysis_background,
                     history_id=history_id,
                     cv_markdown=raw_md,
-                    job_description=job_description
+                    job_description=job_description,
                 )
                 logger.info(f"Queued background analysis for history_id={history_id}")
 
@@ -379,24 +357,18 @@ async def generate_cv(
             cv_pdf_url=cv_pdf_url,
             cv_docx_url=cv_docx_url if cv_docx_url else None,
             job_title=job_title,
-            history_id=history_id  # Return for frontend to poll analysis status
+            history_id=history_id,  # Return for frontend to poll analysis status
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"CV generation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"CV generation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"CV generation failed: {str(e)}")
 
 
 @router.post("/upload", response_model=CVUploadResponse)
-async def upload_cv(
-    cv_file: UploadFile = File(...),
-    user: UserInfo = Depends(get_current_user)
-) -> CVUploadResponse:
+async def upload_cv(cv_file: UploadFile = File(...), user: UserInfo = Depends(get_current_user)) -> CVUploadResponse:
     """
     Upload a base CV for job search configuration.
 
@@ -416,7 +388,7 @@ async def upload_cv(
             filename=cv_file.filename,
             content_type=cv_file.content_type,
             content=content,
-            allowed_extensions={'.pdf', '.docx'}  # No TXT for base CV
+            allowed_extensions={".pdf", ".docx"},  # No TXT for base CV
         )
 
         # Create user-specific directory
@@ -442,35 +414,22 @@ async def upload_cv(
                 content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
             object_path = minio.upload_cv(
-                file_path=str(cv_path),
-                user_id=user.email,
-                filename=unique_filename,
-                content_type=content_type
+                file_path=str(cv_path), user_id=user.email, filename=unique_filename, content_type=content_type
             )
             cv_url = minio.get_download_url_by_path(object_path, expires_hours=24)
             logger.info(f"Uploaded base CV to MinIO: {object_path}")
         except Exception as e:
             logger.warning(f"Failed to upload CV to MinIO: {e}")
 
-        return CVUploadResponse(
-            path=str(cv_path),
-            url=cv_url or None,
-            filename=unique_filename
-        )
+        return CVUploadResponse(path=str(cv_path), url=cv_url or None, filename=unique_filename)
 
     except Exception as e:
         logger.error(f"CV upload failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to upload CV: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to upload CV: {str(e)}")
 
 
 @router.get("/history", response_model=CVHistoryResponse)
-async def get_cv_history(
-    user: UserInfo = Depends(get_current_user),
-    limit: int = 50
-) -> CVHistoryResponse:
+async def get_cv_history(user: UserInfo = Depends(get_current_user), limit: int = 50) -> CVHistoryResponse:
     """
     Get the user's CV generation history.
 
@@ -490,34 +449,27 @@ async def get_cv_history(
         items = []
         for r in records[:limit]:
             fields = r.get("fields", {})
-            items.append(CVHistoryItem(
-                id=r.get("id", ""),
-                job_title=fields.get("job_title", "Untitled"),
-                created_at=fields.get("created_at", datetime.now().isoformat()),
-                cv_pdf_url=fields.get("cv_pdf_url", ""),
-                cv_docx_url=fields.get("cv_docx_url"),
-                job_description=fields.get("job_description"),
-                instructions=fields.get("Instructions")
-            ))
+            items.append(
+                CVHistoryItem(
+                    id=r.get("id", ""),
+                    job_title=fields.get("job_title", "Untitled"),
+                    created_at=fields.get("created_at", datetime.now().isoformat()),
+                    cv_pdf_url=fields.get("cv_pdf_url", ""),
+                    cv_docx_url=fields.get("cv_docx_url"),
+                    job_description=fields.get("job_description"),
+                    instructions=fields.get("Instructions"),
+                )
+            )
 
-        return CVHistoryResponse(
-            items=items,
-            total=len(items)
-        )
+        return CVHistoryResponse(items=items, total=len(items))
 
     except Exception as e:
         logger.error(f"Failed to fetch history: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch history: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
 
 @router.get("/download/{filename}")
-async def download_cv(
-    filename: str,
-    user: UserInfo = Depends(get_current_user)
-) -> FileResponse:
+async def download_cv(filename: str, user: UserInfo = Depends(get_current_user)) -> FileResponse:
     """
     Download a generated CV PDF.
 
@@ -535,22 +487,14 @@ async def download_cv(
     pdf_path = Path("customised_cv") / safe_filename
 
     if not pdf_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="File not found"
-        )
+        raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(
-        path=str(pdf_path),
-        filename=safe_filename,
-        media_type="application/pdf"
-    )
+    return FileResponse(path=str(pdf_path), filename=safe_filename, media_type="application/pdf")
 
 
 @router.post("/download/generated")
 async def download_generated_cv(
-    request: GeneratedCVDownloadRequest,
-    user: UserInfo = Depends(get_current_user)
+    request: GeneratedCVDownloadRequest, user: UserInfo = Depends(get_current_user)
 ) -> StreamingResponse:
     """Stream a generated CV file through the authenticated API."""
     from minio.error import S3Error
@@ -562,9 +506,9 @@ async def download_generated_cv(
     storage_prefix = f"storage/{minio.bucket}/"
     bucket_prefix = f"{minio.bucket}/"
     if path.startswith(storage_prefix):
-        object_path = path[len(storage_prefix):]
+        object_path = path[len(storage_prefix) :]
     elif path.startswith(bucket_prefix):
-        object_path = path[len(bucket_prefix):]
+        object_path = path[len(bucket_prefix) :]
     else:
         raise HTTPException(status_code=400, detail="Unsupported generated CV download URL")
 
@@ -584,7 +528,8 @@ async def download_generated_cv(
     suffix = ".docx" if requested_format == "docx" else ".pdf"
     media_type = stat.content_type or (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        if suffix == ".docx" else "application/pdf"
+        if suffix == ".docx"
+        else "application/pdf"
     )
 
     safe_filename = Path(request.filename or Path(object_path).name).name
@@ -607,7 +552,7 @@ async def download_generated_cv(
             "Content-Disposition": f'attachment; filename="{safe_filename}"',
             "Content-Length": str(stat.size),
             "Cache-Control": "private, max-age=3600",
-        }
+        },
     )
 
 
@@ -615,11 +560,9 @@ async def download_generated_cv(
 # CV-JD FIT ANALYSIS ENDPOINT
 # ──────────────────────────────────────────────────────────
 
+
 @router.get("/analysis/{history_id}", response_model=CVAnalysisResponse)
-async def get_cv_analysis(
-    history_id: str,
-    user: UserInfo = Depends(get_current_user)
-) -> CVAnalysisResponse:
+async def get_cv_analysis(history_id: str, user: UserInfo = Depends(get_current_user)) -> CVAnalysisResponse:
     """
     Get the CV-JD fit analysis for a generated CV.
 
@@ -657,10 +600,7 @@ async def get_cv_analysis(
 
         if status == "failed":
             error_data = _coerce_json_field(analysis_json) if analysis_json else {}
-            return CVAnalysisResponse(
-                status="failed",
-                error=error_data.get("error", "Analysis failed")
-            )
+            return CVAnalysisResponse(status="failed", error=error_data.get("error", "Analysis failed"))
 
         # Parse the analysis JSON
         try:
@@ -677,58 +617,68 @@ async def get_cv_analysis(
                 score=analysis_data["keyword_match"]["score"],
                 matched=analysis_data["keyword_match"]["matched"],
                 missing=analysis_data["keyword_match"]["missing"],
-                density_assessment=analysis_data["keyword_match"]["density_assessment"]
-            ) if analysis_data.get("keyword_match") else None,
+                density_assessment=analysis_data["keyword_match"]["density_assessment"],
+            )
+            if analysis_data.get("keyword_match")
+            else None,
             skills_coverage=SkillsCoverageSchema(
                 score=analysis_data["skills_coverage"]["score"],
                 technical_skills=TechnicalSkillsSchema(
                     matched=analysis_data["skills_coverage"]["technical_skills"]["matched"],
                     partial=analysis_data["skills_coverage"]["technical_skills"]["partial"],
-                    missing=analysis_data["skills_coverage"]["technical_skills"]["missing"]
+                    missing=analysis_data["skills_coverage"]["technical_skills"]["missing"],
                 ),
                 soft_skills=SoftSkillsSchema(
                     matched=analysis_data["skills_coverage"]["soft_skills"]["matched"],
-                    demonstrated=analysis_data["skills_coverage"]["soft_skills"]["demonstrated"]
-                )
-            ) if analysis_data.get("skills_coverage") else None,
+                    demonstrated=analysis_data["skills_coverage"]["soft_skills"]["demonstrated"],
+                ),
+            )
+            if analysis_data.get("skills_coverage")
+            else None,
             experience_relevance=ExperienceRelevanceSchema(
                 score=analysis_data["experience_relevance"]["score"],
                 aligned_roles=analysis_data["experience_relevance"]["aligned_roles"],
                 relevant_achievements=analysis_data["experience_relevance"]["relevant_achievements"],
-                years_alignment=analysis_data["experience_relevance"]["years_alignment"]
-            ) if analysis_data.get("experience_relevance") else None,
+                years_alignment=analysis_data["experience_relevance"]["years_alignment"],
+            )
+            if analysis_data.get("experience_relevance")
+            else None,
             ats_optimization=ATSOptimizationSchema(
                 score=analysis_data["ats_optimization"]["score"],
                 format_check=analysis_data["ats_optimization"]["format_check"],
                 keyword_density=analysis_data["ats_optimization"]["keyword_density"],
                 section_structure=analysis_data["ats_optimization"]["section_structure"],
-                recommendations=analysis_data["ats_optimization"]["recommendations"]
-            ) if analysis_data.get("ats_optimization") else None,
+                recommendations=analysis_data["ats_optimization"]["recommendations"],
+            )
+            if analysis_data.get("ats_optimization")
+            else None,
             gap_analysis=GapAnalysisSchema(
                 critical_gaps=analysis_data["gap_analysis"]["critical_gaps"],
                 minor_gaps=analysis_data["gap_analysis"]["minor_gaps"],
-                mitigation_suggestions=analysis_data["gap_analysis"]["mitigation_suggestions"]
-            ) if analysis_data.get("gap_analysis") else None,
+                mitigation_suggestions=analysis_data["gap_analysis"]["mitigation_suggestions"],
+            )
+            if analysis_data.get("gap_analysis")
+            else None,
             talking_points=TalkingPointsSchema(
                 strengths_to_highlight=analysis_data["talking_points"]["strengths_to_highlight"],
                 questions_to_prepare=analysis_data["talking_points"]["questions_to_prepare"],
-                stories_to_ready=analysis_data["talking_points"]["stories_to_ready"]
-            ) if analysis_data.get("talking_points") else None
+                stories_to_ready=analysis_data["talking_points"]["stories_to_ready"],
+            )
+            if analysis_data.get("talking_points")
+            else None,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get analysis: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get analysis: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get analysis: {str(e)}")
 
 
 # ──────────────────────────────────────────────────────────
 # REGENERATE CV WITH IMPROVEMENTS FROM ANALYSIS
 # ──────────────────────────────────────────────────────────
+
 
 def _build_improvement_instructions(analysis_data: dict) -> str:
     """
@@ -788,9 +738,7 @@ def _build_improvement_instructions(analysis_data: dict) -> str:
 
 @router.post("/regenerate-with-improvements", response_model=CVGenerateResponse)
 async def regenerate_cv_with_improvements(
-    background_tasks: BackgroundTasks,
-    history_id: str = Form(...),
-    user: UserInfo = Depends(get_current_user)
+    background_tasks: BackgroundTasks, history_id: str = Form(...), user: UserInfo = Depends(get_current_user)
 ) -> CVGenerateResponse:
     """
     Regenerate a CV with improvements based on analysis feedback.
@@ -830,10 +778,7 @@ async def regenerate_cv_with_improvements(
         analysis_json = fields.get("cv_analysis")
 
         if not cv_markdown or not job_description:
-            raise HTTPException(
-                status_code=400,
-                detail="Original CV or job description not found in history"
-            )
+            raise HTTPException(status_code=400, detail="Original CV or job description not found in history")
 
         # Parse and extract improvement instructions from analysis
         improvement_instructions = ""
@@ -856,6 +801,7 @@ async def regenerate_cv_with_improvements(
         llm_response_id = None
         try:
             from cv.cv_generator_v2 import CVGeneratorV2
+
             generator = CVGeneratorV2()
             raw_md, llm_response_id = generator.generate(
                 cv_content=cv_markdown,
@@ -869,7 +815,7 @@ async def regenerate_cv_with_improvements(
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
-        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        safe_title = re.sub(r"[^\w]+", "_", job_title)[:30].strip("_")
         today = datetime.now().strftime("%Y-%m-%d")
         unique_id = uuid.uuid4().hex[:8]
 
@@ -900,11 +846,7 @@ async def regenerate_cv_with_improvements(
 
         # Upload PDF to MinIO
         try:
-            pdf_object_path = minio.upload_cv(
-                file_path=str(pdf_path),
-                user_id=user.email,
-                filename=pdf_filename
-            )
+            pdf_object_path = minio.upload_cv(file_path=str(pdf_path), user_id=user.email, filename=pdf_filename)
             cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
             logger.info(f"Uploaded improved PDF to MinIO: {pdf_object_path}")
         except Exception as e:
@@ -917,7 +859,7 @@ async def regenerate_cv_with_improvements(
                     file_path=str(docx_path),
                     user_id=user.email,
                     filename=docx_filename,
-                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
                 cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
                 logger.info(f"Uploaded improved DOCX to MinIO: {docx_object_path}")
@@ -946,7 +888,7 @@ async def regenerate_cv_with_improvements(
                     run_cv_analysis_background,
                     history_id=new_history_id,
                     cv_markdown=raw_md,
-                    job_description=job_description
+                    job_description=job_description,
                 )
                 logger.info(f"Queued background analysis for improved CV, history_id={new_history_id}")
 
@@ -958,52 +900,49 @@ async def regenerate_cv_with_improvements(
             cv_pdf_url=cv_pdf_url,
             cv_docx_url=cv_docx_url if cv_docx_url else None,
             job_title=f"{job_title} (Improved)",
-            history_id=new_history_id
+            history_id=new_history_id,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"CV regeneration with improvements failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"CV regeneration failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"CV regeneration failed: {str(e)}")
 
 
 # ──────────────────────────────────────────────────────────
 # USER-GUIDED CV REFINEMENT ENDPOINT
 # ──────────────────────────────────────────────────────────
 
+
 @router.post("/refine", response_model=CVGenerateResponse)
 async def refine_cv_with_instructions(
     background_tasks: BackgroundTasks,
     history_id: str = Form(...),
     refinement_instructions: str = Form(...),
-    user: UserInfo = Depends(get_current_user)
+    user: UserInfo = Depends(get_current_user),
 ) -> CVGenerateResponse:
     """
     Refine a previously generated CV based on specific user instructions.
-    
+
     This endpoint uses the Responses API to chain with previous generation,
     maintaining full context while applying user-specified improvements.
-    
+
     Args:
         background_tasks: FastAPI background tasks handler
         history_id: Airtable record ID of the CV to refine
         refinement_instructions: User's specific improvement requests
         user: Authenticated user
-        
+
     Returns:
         Refined CV with user's requested changes applied
-        
+
     Example refinement instructions:
         - "Focus more on AI and machine learning experience"
         - "Add more quantified achievements with percentages"
         - "Emphasize leadership and team management skills"
         - "Make the executive profile more concise"
     """
-    import json
 
     try:
         cfg = Config
@@ -1027,16 +966,10 @@ async def refine_cv_with_instructions(
         llm_response_id = fields.get("llm_response_id")  # For Responses API chaining
 
         if not cv_markdown or not job_description:
-            raise HTTPException(
-                status_code=400,
-                detail="Original CV or job description not found in history"
-            )
+            raise HTTPException(status_code=400, detail="Original CV or job description not found in history")
 
         if not refinement_instructions.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Refinement instructions cannot be empty"
-            )
+            raise HTTPException(status_code=400, detail="Refinement instructions cannot be empty")
 
         # Get original CV content for context (needed for refinement)
         # Try to get from parent history if this is already a refined version
@@ -1054,9 +987,9 @@ async def refine_cv_with_instructions(
         # Use CV generator v2 with Responses API chaining
         try:
             from cv.cv_generator_v2 import CVGeneratorV2
-            
+
             generator = CVGeneratorV2()
-            
+
             if llm_response_id:
                 # Chain with previous response for full context
                 raw_md, new_response_id = generator.refine(
@@ -1072,24 +1005,19 @@ async def refine_cv_with_instructions(
                     job_desc=job_description,
                     instructions=combined,
                 )
-                
+
         except ImportError:
             # Fall back to legacy generator if v2 not available
             logger.warning("CVGeneratorV2 not available, using legacy generator")
             new_response_id = None
-            
+
             combined_instructions = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
             generator = CVGenerator()
-            raw_md = await asyncio.to_thread(
-                generator.generate_cv, 
-                cv_markdown, 
-                job_description, 
-                combined_instructions
-            )
+            raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
-        safe_title = re.sub(r'[^\w]+', '_', job_title)[:30].strip('_')
+        safe_title = re.sub(r"[^\w]+", "_", job_title)[:30].strip("_")
         today = datetime.now().strftime("%Y-%m-%d")
         unique_id = uuid.uuid4().hex[:8]
 
@@ -1120,11 +1048,7 @@ async def refine_cv_with_instructions(
 
         # Upload PDF to MinIO
         try:
-            pdf_object_path = minio.upload_cv(
-                file_path=str(pdf_path),
-                user_id=user.email,
-                filename=pdf_filename
-            )
+            pdf_object_path = minio.upload_cv(file_path=str(pdf_path), user_id=user.email, filename=pdf_filename)
             cv_pdf_url = minio.get_download_url_by_path(pdf_object_path, expires_hours=24)
             logger.info(f"Uploaded refined PDF to MinIO: {pdf_object_path}")
         except Exception as e:
@@ -1137,7 +1061,7 @@ async def refine_cv_with_instructions(
                     file_path=str(docx_path),
                     user_id=user.email,
                     filename=docx_filename,
-                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
                 cv_docx_url = minio.get_download_url_by_path(docx_object_path, expires_hours=24)
                 logger.info(f"Uploaded refined DOCX to MinIO: {docx_object_path}")
@@ -1150,7 +1074,7 @@ async def refine_cv_with_instructions(
             # Track refinement chain
             refinement_count = fields.get("refinement_count", 0) + 1
             parent_history_id = fields.get("parent_history_id") or history_id
-            
+
             history_data = {
                 "user_email": user.email,
                 "job_title": f"{job_title} (Refined v{refinement_count})",
@@ -1172,7 +1096,7 @@ async def refine_cv_with_instructions(
                     run_cv_analysis_background,
                     history_id=new_history_id,
                     cv_markdown=raw_md,
-                    job_description=job_description
+                    job_description=job_description,
                 )
                 logger.info(f"Queued background analysis for refined CV, history_id={new_history_id}")
 
@@ -1184,14 +1108,11 @@ async def refine_cv_with_instructions(
             cv_pdf_url=cv_pdf_url,
             cv_docx_url=cv_docx_url if cv_docx_url else None,
             job_title=f"{job_title} (Refined)",
-            history_id=new_history_id
+            history_id=new_history_id,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"CV refinement failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"CV refinement failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"CV refinement failed: {str(e)}")

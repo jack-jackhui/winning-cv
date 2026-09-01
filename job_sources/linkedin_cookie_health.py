@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 
 class CookieStatus(Enum):
     """Cookie health status levels - now based on actual session validity"""
-    HEALTHY = "healthy"       # Session is valid and authenticated
-    INVALID = "invalid"       # Session test failed - needs refresh
-    MISSING = "missing"       # No cookies found
-    UNTESTED = "untested"     # Cookies exist but session not yet tested
+
+    HEALTHY = "healthy"  # Session is valid and authenticated
+    INVALID = "invalid"  # Session test failed - needs refresh
+    MISSING = "missing"  # No cookies found
+    UNTESTED = "untested"  # Cookies exist but session not yet tested
 
 
 # Cache file for session test results
@@ -41,7 +42,7 @@ def _load_session_cache() -> Optional[Dict]:
     """Load cached session test result."""
     try:
         if SESSION_CACHE_FILE.exists():
-            with open(SESSION_CACHE_FILE, 'r') as f:
+            with open(SESSION_CACHE_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
         logger.warning(f"Could not load session cache: {e}")
@@ -57,7 +58,7 @@ def _save_session_cache(is_valid: bool, message: str):
             "message": message,
             "tested_at": datetime.now().isoformat(),
         }
-        with open(SESSION_CACHE_FILE, 'w') as f:
+        with open(SESSION_CACHE_FILE, "w") as f:
             json.dump(cache_data, f, indent=2)
         logger.debug(f"Session cache saved: valid={is_valid}")
     except Exception as e:
@@ -71,7 +72,7 @@ def _is_cache_valid(max_age_hours: int = 24) -> bool:
         return False
 
     try:
-        tested_at = datetime.fromisoformat(cache['tested_at'])
+        tested_at = datetime.fromisoformat(cache["tested_at"])
         age = datetime.now() - tested_at
         return age < timedelta(hours=max_age_hours)
     except (KeyError, ValueError):
@@ -95,7 +96,7 @@ def test_cookie_session(force: bool = False) -> Tuple[bool, str]:
     if not force and _is_cache_valid(max_age_hours=24):
         cache = _load_session_cache()
         logger.info(f"Using cached session status: valid={cache['is_valid']}")
-        return cache['is_valid'], f"[Cached] {cache['message']}"
+        return cache["is_valid"], f"[Cached] {cache['message']}"
 
     logger.info("Performing fresh session validity test...")
 
@@ -164,7 +165,7 @@ def check_cookie_health(use_session_test: bool = True, force_test: bool = False)
             "cookie_count": 0,
             "message": "No LinkedIn cookies found. Login required.",
             "needs_refresh": True,
-            "last_tested": None
+            "last_tested": None,
         }
 
     # Get cookie info
@@ -179,14 +180,14 @@ def check_cookie_health(use_session_test: bool = True, force_test: bool = False)
             "cookie_count": 0,
             "message": "Could not read cookie information.",
             "needs_refresh": True,
-            "last_tested": None
+            "last_tested": None,
         }
 
     # Calculate age (informational only - not used for status determination)
     age_days = None
     age_hours = None
     try:
-        saved_at = datetime.fromisoformat(info['saved_at'])
+        saved_at = datetime.fromisoformat(info["saved_at"])
         age = datetime.now() - saved_at
         age_days = age.days
         age_hours = age.total_seconds() / 3600
@@ -199,18 +200,18 @@ def check_cookie_health(use_session_test: bool = True, force_test: bool = False)
         # Check cached session status
         cache = _load_session_cache()
         if cache:
-            last_tested = cache.get('tested_at')
+            last_tested = cache.get("tested_at")
 
         if force_test or not _is_cache_valid(max_age_hours=24):
             # Need to run fresh test
             is_valid, session_msg = test_cookie_session(force=force_test)
             cache = _load_session_cache()
             if cache:
-                last_tested = cache.get('tested_at')
+                last_tested = cache.get("tested_at")
         else:
             # Use cached result
-            is_valid = cache.get('is_valid', False)
-            session_msg = cache.get('message', 'Cached result')
+            is_valid = cache.get("is_valid", False)
+            session_msg = cache.get("message", "Cached result")
 
         if is_valid:
             status = CookieStatus.HEALTHY
@@ -232,11 +233,11 @@ def check_cookie_health(use_session_test: bool = True, force_test: bool = False)
         "session_valid": status == CookieStatus.HEALTHY,
         "age_days": age_days,
         "age_hours": round(age_hours, 1) if age_hours else None,
-        "saved_at": info.get('saved_at'),
-        "cookie_count": info.get('cookie_count', 0),
+        "saved_at": info.get("saved_at"),
+        "cookie_count": info.get("cookie_count", 0),
         "message": message,
         "needs_refresh": needs_refresh,
-        "last_tested": last_tested
+        "last_tested": last_tested,
     }
 
 
@@ -247,7 +248,7 @@ def send_cookie_alert(health_info: Dict):
     Args:
         health_info: Dictionary from check_cookie_health()
     """
-    status = health_info['status']
+    status = health_info["status"]
 
     # Only send alerts when session is actually invalid or missing
     if status == CookieStatus.HEALTHY:
@@ -273,18 +274,20 @@ def send_cookie_alert(health_info: Dict):
         f"**Message:** {health_info['message']}",
     ]
 
-    if health_info['age_days'] is not None:
+    if health_info["age_days"] is not None:
         message_parts.append(f"**Cookie Age:** {health_info['age_days']} days")
 
-    if health_info['last_tested']:
+    if health_info["last_tested"]:
         message_parts.append(f"**Last Tested:** {health_info['last_tested']}")
 
-    message_parts.extend([
-        "",
-        "**Action Required:**",
-        "1. Run `python -m job_sources.linkedin_login` on your local machine",
-        "2. Run `./scripts/sync_linkedin_cookies.sh` to sync to production",
-    ])
+    message_parts.extend(
+        [
+            "",
+            "**Action Required:**",
+            "1. Run `python -m job_sources.linkedin_login` on your local machine",
+            "2. Run `./scripts/sync_linkedin_cookies.sh` to sync to production",
+        ]
+    )
 
     message = "\n".join(message_parts)
 
@@ -326,7 +329,7 @@ def run_cookie_health_check(send_alert: bool = True, force_test: bool = False) -
     logger.info(f"Session valid: {health_info['session_valid']}")
     logger.info(f"Message: {health_info['message']}")
 
-    if send_alert and health_info['needs_refresh']:
+    if send_alert and health_info["needs_refresh"]:
         send_cookie_alert(health_info)
 
     return health_info
@@ -398,7 +401,7 @@ def schedule_cookie_health_check(scheduler, interval_hours: int = 24):
         id=_scheduler_job_id,
         name="LinkedIn Cookie Health Check",
         max_instances=1,
-        replace_existing=True
+        replace_existing=True,
     )
 
     logger.info(f"Scheduled cookie health check every {interval_hours} hours")
@@ -435,10 +438,7 @@ if __name__ == "__main__":
     # Allow running as standalone script for testing
     import sys
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     print("=" * 60)
     print("LinkedIn Cookie Health Check (Session-Based)")
@@ -447,16 +447,13 @@ if __name__ == "__main__":
     force = "--force" in sys.argv
 
     # Run health check
-    health = run_cookie_health_check(
-        send_alert="--alert" in sys.argv,
-        force_test=force
-    )
+    health = run_cookie_health_check(send_alert="--alert" in sys.argv, force_test=force)
 
     print()
     print(f"Status:         {health['status'].value}")
     print(f"Session Valid:  {health['session_valid']}")
     print(f"Message:        {health['message']}")
-    print(f"Age:            {health['age_days']} days" if health['age_days'] else "Age: N/A")
+    print(f"Age:            {health['age_days']} days" if health["age_days"] else "Age: N/A")
     print(f"Cookie Count:   {health['cookie_count']}")
     print(f"Saved At:       {health['saved_at']}")
     print(f"Needs Refresh:  {health['needs_refresh']}")

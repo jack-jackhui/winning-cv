@@ -29,6 +29,7 @@ def _login_dialog():
             st.session_state.require_login = True
             st.rerun()
 
+
 def show_history_ui(user_email: str):
     st.title("📂 Your CV Generation History")
 
@@ -61,11 +62,13 @@ def show_history_ui(user_email: str):
     for r in records:
         fields = r["fields"]
         cv_url = fields.get("cv_pdf_url", "")
-        history_data.append({
-            "Position": fields.get("job_title", "–"),
-            "Generated Date": fields.get("created_at", ""),
-            "CV": f'[Download CV]({cv_url})' if cv_url else "–"
-        })
+        history_data.append(
+            {
+                "Position": fields.get("job_title", "–"),
+                "Generated Date": fields.get("created_at", ""),
+                "CV": f"[Download CV]({cv_url})" if cv_url else "–",
+            }
+        )
 
     df = pd.DataFrame(history_data)
 
@@ -91,22 +94,12 @@ def show_history_ui(user_email: str):
                 # table_body_border_bottom_color="var(--secondary-background-color)",
                 # column_labels_border_bottom_color="var(--secondary-background-color)",
             )
+            .tab_style(style=style.text(color="var(--text-color)", size="30", weight="bold"), locations=loc.title())
             .tab_style(
-                style=style.text(color="var(--text-color)", size="30", weight="bold"),
-                locations=loc.title()
+                style=style.text(color="var(--primary-color)", size="20", weight="bold"), locations=loc.subtitle()
             )
-            .tab_style(
-                style=style.text(color="var(--primary-color)", size="20", weight="bold"),
-                locations=loc.subtitle()
-            )
-            .tab_style(
-                style=style.text(color="var(--text-color)", size="16"),
-                locations=loc.column_header()
-            )
-            .tab_style(
-                style=style.text(color="var(--text-color)", size="16"),
-                locations=loc.body()
-            )
+            .tab_style(style=style.text(color="var(--text-color)", size="16"), locations=loc.column_header())
+            .tab_style(style=style.text(color="var(--text-color)", size="16"), locations=loc.body())
         )
 
         great_tables(table, width="stretch")
@@ -122,12 +115,13 @@ def show_history_ui(user_email: str):
             cv_url = f.get("cv_pdf_url", "")
 
             c1, c2, c3 = st.columns([4, 1, 1])
-            c1.markdown(f"<span style='color:var(--text-color);font-weight:bold'>{title}</span>",
-                        unsafe_allow_html=True)
+            c1.markdown(
+                f"<span style='color:var(--text-color);font-weight:bold'>{title}</span>", unsafe_allow_html=True
+            )
             c2.markdown(f"<span style='color:var(--text-color);'>{created}</span>", unsafe_allow_html=True)
             c3.markdown(
-                f"<a style='color:var(--primary-color);' href='{cv_url}' target='_blank'>📥 Download</a>" if cv_url else "–",
-                unsafe_allow_html=True
+                f"<a style='color:var(--primary-color);' href='{cv_url}' target='_blank'>📥 Download</a>"
+                if cv_url
+                else "–",
+                unsafe_allow_html=True,
             )
-
-

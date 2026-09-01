@@ -2,7 +2,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import logging
 from datetime import datetime
@@ -15,20 +15,14 @@ from utils.content_cleaner import ContentCleaner
 def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("live_job_test.log"),
-            logging.StreamHandler()
-        ]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler("live_job_test.log"), logging.StreamHandler()],
     )
 
 
 def validate_job(job: dict) -> bool:
     """Validate job structure and content"""
-    required_fields = [
-        'title', 'link', 'published', 'company',
-        'location', 'description'
-    ]
+    required_fields = ["title", "link", "published", "company", "location", "description"]
 
     # Check for required fields
     for field in required_fields:
@@ -39,13 +33,13 @@ def validate_job(job: dict) -> bool:
             logging.warning(f"Empty value for field: {field}")
 
     # Validate URL format
-    if not job['link'].startswith('http'):
+    if not job["link"].startswith("http"):
         logging.error(f"Invalid job URL: {job['link']}")
         return False
 
     # Validate date format (assuming ISO format)
     try:
-        datetime.fromisoformat(job['published'])
+        datetime.fromisoformat(job["published"])
     except (ValueError, TypeError):
         logging.warning(f"Invalid date format: {job['published']}")
         return False

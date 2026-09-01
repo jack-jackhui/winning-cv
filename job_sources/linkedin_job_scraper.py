@@ -12,6 +12,7 @@ from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 logger = logging.getLogger(__name__)
 
+
 class LinkedInJobScraper:
     def __init__(self, base_url=None):
         self.browser = None
@@ -26,29 +27,28 @@ class LinkedInJobScraper:
         """Initialize DrissionPage browser"""
         options = ChromiumOptions()
 
-        options.auto_port(True) \
-            .headless(Config.HEADLESS) \
-            .no_imgs(False) \
-            .mute(True) \
-            .set_paths(browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH) \
-            .set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        options.auto_port(True).headless(Config.HEADLESS).no_imgs(False).mute(True).set_paths(
+            browser_path=Config.CHROMIUM_PATH or Config.CHROME_PATH
+        ).set_user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
 
         # Anti-detection flags to avoid LinkedIn blocking
-        options.set_argument('--disable-blink-features=AutomationControlled')
-        options.set_argument('--disable-infobars')
-        options.set_argument('--disable-extensions')
-        options.set_argument('--disable-dev-shm-usage')
-        options.set_argument('--window-size=1920,1080')
+        options.set_argument("--disable-blink-features=AutomationControlled")
+        options.set_argument("--disable-infobars")
+        options.set_argument("--disable-extensions")
+        options.set_argument("--disable-dev-shm-usage")
+        options.set_argument("--window-size=1920,1080")
 
         if Config.HEADLESS:
             # Chromium 149+ is more reliable in containers with the new headless backend.
-            options.set_argument('--headless=new')
+            options.set_argument("--headless=new")
 
         if Config.RUNNING_IN_DOCKER:
-            options.set_argument('--no-sandbox')
-            options.set_argument('--disable-gpu')
-            options.set_argument('--disable-crash-reporter')
-            options.set_argument('--disable-crashpad')
+            options.set_argument("--no-sandbox")
+            options.set_argument("--disable-gpu")
+            options.set_argument("--disable-crash-reporter")
+            options.set_argument("--disable-crashpad")
             # Do not use --single-process: Chromium 149 can crash with Trace/breakpoint trap.
 
         self.browser = Chromium(options)
@@ -93,11 +93,7 @@ class LinkedInJobScraper:
         """Verify if the current session is authenticated."""
         try:
             # Check for login wall indicators
-            login_indicators = [
-                'authwall',
-                'login',
-                'sign-in'
-            ]
+            login_indicators = ["authwall", "login", "sign-in"]
             current_url = tab.url.lower()
 
             for indicator in login_indicators:
@@ -107,7 +103,7 @@ class LinkedInJobScraper:
             # Check for authenticated content indicators
             try:
                 # Look for job search results (authenticated users see more)
-                if tab.ele('.jobs-search-results', timeout=5):
+                if tab.ele(".jobs-search-results", timeout=5):
                     return True
             except:
                 pass
@@ -162,17 +158,17 @@ class LinkedInJobScraper:
             # Wait for main content using multiple possible selectors
             logger.info("Waiting for job search results to load")
             try:
-                tab.ele('.jobs-search-results', timeout=20)
+                tab.ele(".jobs-search-results", timeout=20)
             except Exception as e:
                 logger.error(f"Error waiting for job search results: {str(e)}")
-                tab.screenshot('jobs_search_results_error.png')
+                tab.screenshot("jobs_search_results_error.png")
                 raise
 
             # Scroll to load all available jobs
             logger.info("Loading all job listings by scrolling")
             self.load_all_jobs(tab)
 
-            soup = BeautifulSoup(tab.html, 'html.parser')
+            soup = BeautifulSoup(tab.html, "html.parser")
             logger.info("Successfully loaded page and parsed HTML")
 
             job_listings = self.extract_job_listings(soup)
@@ -199,17 +195,19 @@ class LinkedInJobScraper:
 
             # Check how many job elements are present
             # Try authenticated view first (data-job-id)
-            job_cards = tab.eles('@data-job-id')
+            job_cards = tab.eles("@data-job-id")
 
             # Try anonymous view with new structure
             if not job_cards:
-                job_cards = tab.eles('@data-chameleon-result-urn')
+                job_cards = tab.eles("@data-chameleon-result-urn")
 
             # Fallback to old selector
             if not job_cards:
-                job_cards = tab.eles('@class=base-card relative w-full hover:no-underline '
-                                     'focus:no-underline base-card--link base-search-card '
-                                     'base-search-card--link job-search-card')
+                job_cards = tab.eles(
+                    "@class=base-card relative w-full hover:no-underline "
+                    "focus:no-underline base-card--link base-search-card "
+                    "base-search-card--link job-search-card"
+                )
 
             job_count = len(job_cards)
             logger.debug(f"Current job count: {job_count}, Previous: {previous_job_count}")
@@ -227,7 +225,7 @@ class LinkedInJobScraper:
                 attempts += 1
 
             # Check for "See more jobs" button
-            see_more_button = tab.ele('@@tag()=button@@text()=See more jobs')
+            see_more_button = tab.ele("@@tag()=button@@text()=See more jobs")
 
             if see_more_button:
                 logger.debug("Found 'See more jobs' button, clicking...")
@@ -323,7 +321,7 @@ class LinkedInJobScraper:
                 job_url = job_link.get("href", "")
 
             # Fetch description for limited number of jobs
-            fetch_desc = (processed_descriptions < max_jobs_for_description)
+            fetch_desc = processed_descriptions < max_jobs_for_description
             desc = ""
             company_from_detail = ""
             if fetch_desc and job_url:
@@ -376,7 +374,7 @@ class LinkedInJobScraper:
                     "h4.base-search-card__subtitle a",
                     "h4.base-search-card__subtitle",
                     "a.hidden-nested-link",
-                    "span.job-search-card__company-name"
+                    "span.job-search-card__company-name",
                 ]
                 for selector in company_selectors:
                     company_element = job_card.select_one(selector)
@@ -419,7 +417,25 @@ class LinkedInJobScraper:
                 all_spans = job_card.find_all("span")
                 for span in all_spans:
                     text = span.get_text(strip=True)
-                    if text and any(loc in text.lower() for loc in ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'remote', 'hybrid', 'on-site', 'nsw', 'vic', 'qld', 'wa', 'sa']):
+                    if text and any(
+                        loc in text.lower()
+                        for loc in [
+                            "australia",
+                            "sydney",
+                            "melbourne",
+                            "brisbane",
+                            "perth",
+                            "adelaide",
+                            "remote",
+                            "hybrid",
+                            "on-site",
+                            "nsw",
+                            "vic",
+                            "qld",
+                            "wa",
+                            "sa",
+                        ]
+                    ):
                         location = text
                         break
 
@@ -445,7 +461,7 @@ class LinkedInJobScraper:
                     "location": location,
                     "posted_date": posted_date,
                     "job_url": job_url,
-                    "description": desc
+                    "description": desc,
                 }
                 job_listings.append(job)
                 logger.debug(f"Extracted job: {title} at {company} ({location})")
@@ -461,7 +477,7 @@ class LinkedInJobScraper:
             return "", ""
         try:
             # Convert relative URLs to absolute
-            if job_url.startswith('/'):
+            if job_url.startswith("/"):
                 job_url = f"https://www.linkedin.com{job_url}"
 
             # Open job page in new tab
@@ -475,10 +491,10 @@ class LinkedInJobScraper:
             # Extract company name from detail page
             company = ""
             company_selectors = [
-                '@@tag()=div@@class=job-details-jobs-unified-top-card__company-name',
-                '@@tag()=a@@class=topcard__org-name-link',
-                '@@tag()=span@@class=topcard__flavor--black',
-                '@@tag()=a@@data-tracking-control-name=public_jobs_topcard-org-name'
+                "@@tag()=div@@class=job-details-jobs-unified-top-card__company-name",
+                "@@tag()=a@@class=topcard__org-name-link",
+                "@@tag()=span@@class=topcard__flavor--black",
+                "@@tag()=a@@data-tracking-control-name=public_jobs_topcard-org-name",
             ]
             for selector in company_selectors:
                 try:
@@ -495,7 +511,9 @@ class LinkedInJobScraper:
             description = ""
             try:
                 logger.debug("Extracting job description")
-                description_element = new_tab.ele('@@tag()=div@@class=description__text description__text--rich', timeout=5)
+                description_element = new_tab.ele(
+                    "@@tag()=div@@class=description__text description__text--rich", timeout=5
+                )
                 description = description_element.text.strip() if description_element else ""
             except Exception as e:
                 logger.warning(f"Could not extract description: {str(e)}")

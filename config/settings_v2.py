@@ -1,23 +1,77 @@
 """
 Pydantic Settings v2 - Type-safe configuration with validation.
 """
+
 from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SUPPORTED_COUNTRIES = [
-    "Argentina", "Australia", "Austria", "Bahrain", "Belgium", "Brazil",
-    "Canada", "Chile", "China", "Colombia", "Costa Rica", "Czech Republic",
-    "Denmark", "Ecuador", "Egypt", "Finland", "France", "Germany", "Greece",
-    "Hong Kong", "Hungary", "India", "Indonesia", "Ireland", "Israel", "Italy",
-    "Japan", "Kuwait", "Luxembourg", "Malaysia", "Mexico", "Morocco",
-    "Netherlands", "New Zealand", "Nigeria", "Norway", "Oman", "Pakistan",
-    "Panama", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania",
-    "Saudi Arabia", "Singapore", "South Africa", "South Korea", "Spain",
-    "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey", "Ukraine",
-    "United Arab Emirates", "UK", "USA", "Uruguay", "Venezuela", "Vietnam"
+    "Argentina",
+    "Australia",
+    "Austria",
+    "Bahrain",
+    "Belgium",
+    "Brazil",
+    "Canada",
+    "Chile",
+    "China",
+    "Colombia",
+    "Costa Rica",
+    "Czech Republic",
+    "Denmark",
+    "Ecuador",
+    "Egypt",
+    "Finland",
+    "France",
+    "Germany",
+    "Greece",
+    "Hong Kong",
+    "Hungary",
+    "India",
+    "Indonesia",
+    "Ireland",
+    "Israel",
+    "Italy",
+    "Japan",
+    "Kuwait",
+    "Luxembourg",
+    "Malaysia",
+    "Mexico",
+    "Morocco",
+    "Netherlands",
+    "New Zealand",
+    "Nigeria",
+    "Norway",
+    "Oman",
+    "Pakistan",
+    "Panama",
+    "Peru",
+    "Philippines",
+    "Poland",
+    "Portugal",
+    "Qatar",
+    "Romania",
+    "Saudi Arabia",
+    "Singapore",
+    "South Africa",
+    "South Korea",
+    "Spain",
+    "Sweden",
+    "Switzerland",
+    "Taiwan",
+    "Thailand",
+    "Turkey",
+    "Ukraine",
+    "United Arab Emirates",
+    "UK",
+    "USA",
+    "Uruguay",
+    "Venezuela",
+    "Vietnam",
 ]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -78,7 +132,7 @@ class Settings(BaseSettings):
     # Storage Backend Selection (for data layer: airtable, postgres, dual)
     storage_backend: Literal["airtable", "postgres", "dual"] = Field(
         default="airtable",
-        description="Data storage backend: airtable (default), postgres (direct), dual (write both, read airtable)"
+        description="Data storage backend: airtable (default), postgres (direct), dual (write both, read airtable)",
     )
 
     @property
@@ -120,15 +174,19 @@ class Settings(BaseSettings):
             raise ValueError(f"Invalid country: {v}")
         return country_map[v.lower()]
 
+
 try:
     settings = Settings()
 except Exception as e:
     import sys
+
     print(f"Config error: {e}", file=sys.stderr)
     raise
 
+
 class ConfigCompat:
     """Backward-compatible wrapper for legacy Config usage."""
+
     def __getattr__(self, name: str):
         lower = name.lower()
         if hasattr(settings, lower):
@@ -136,5 +194,6 @@ class ConfigCompat:
         if hasattr(settings, name):
             return getattr(settings, name)
         raise AttributeError(f"Config has no attribute '{name}'")
+
 
 Config = ConfigCompat()

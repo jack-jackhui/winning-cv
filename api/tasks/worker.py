@@ -10,7 +10,6 @@ execution is still handled by ThreadPoolExecutor in the API process.
 
 import asyncio
 import logging
-import os
 import signal
 import uuid
 from abc import ABC, abstractmethod
@@ -18,17 +17,14 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from api.tasks.retry import (
-    RetryableError,
     PermanentError,
-    calculate_retry_timestamp,
-    should_retry_exception,
+    RetryableError,
     get_retry_delay_for_exception,
+    should_retry_exception,
 )
 from api.tasks.state import (
     TaskState,
     TaskType,
-    get_task_config,
-    is_terminal_state,
     can_retry,
 )
 
@@ -109,10 +105,7 @@ class TaskWorker:
         # Registry of handlers by task type
         self._handlers: Dict[TaskType, TaskHandler] = {}
 
-        logger.info(
-            f"Worker {self.worker_id} initialized for task types: "
-            f"{[t.value for t in self.task_types]}"
-        )
+        logger.info(f"Worker {self.worker_id} initialized for task types: {[t.value for t in self.task_types]}")
 
     def register_handler(self, handler: TaskHandler) -> None:
         """
@@ -219,10 +212,7 @@ class TaskWorker:
         max_attempts = task.get("max_attempts", 3)
 
         self.current_task_id = task_id
-        logger.info(
-            f"Processing task {task_id} (type={task_type.value}, "
-            f"attempt={attempts}/{max_attempts})"
-        )
+        logger.info(f"Processing task {task_id} (type={task_type.value}, attempt={attempts}/{max_attempts})")
 
         handler = self.get_handler(task_type)
         if not handler:
@@ -253,9 +243,7 @@ class TaskWorker:
         finally:
             self.current_task_id = None
 
-    def _make_progress_callback(
-        self, task_id: str
-    ) -> Callable[[int, str], None]:
+    def _make_progress_callback(self, task_id: str) -> Callable[[int, str], None]:
         """
         Create a progress callback for a task.
 
@@ -265,6 +253,7 @@ class TaskWorker:
         Returns:
             Callback function that updates task progress
         """
+
         def callback(progress: int, message: str) -> None:
             # TODO: Update task progress via search_tasks for user-visible jobs.
             logger.debug(f"Task {task_id}: {progress}% - {message}")
@@ -295,9 +284,7 @@ class TaskWorker:
         # TODO: Update task in database
         # SET state = 'failed', error = :error, completed_at = NOW()
 
-    async def _schedule_retry(
-        self, task_id: str, attempts: int, error: Exception
-    ) -> None:
+    async def _schedule_retry(self, task_id: str, attempts: int, error: Exception) -> None:
         """
         Schedule a task for retry with backoff.
 
@@ -309,9 +296,7 @@ class TaskWorker:
         delay = get_retry_delay_for_exception(error, attempts)
         retry_at = datetime.now(timezone.utc) + delay
 
-        logger.warning(
-            f"Task {task_id} scheduled for retry at {retry_at.isoformat()}: {error}"
-        )
+        logger.warning(f"Task {task_id} scheduled for retry at {retry_at.isoformat()}: {error}")
         # TODO: Update task in database
         # SET state = 'pending', run_after = :retry_at
 
