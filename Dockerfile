@@ -85,10 +85,6 @@ RUN echo "deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-
        --force-reinstall \
        -r requirements.txt && \
     \
-    # Download & install spaCy English model
-    python -m spacy download en_core_web_sm && \
-    python -m spacy validate && \
-    \
     # Remove build tools & clean up apt caches
     apt-get purge -y --auto-remove \
         build-essential gcc g++ python3-dev && \

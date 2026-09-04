@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from DrissionPage import Chromium, ChromiumOptions
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 logger = logging.getLogger(__name__)

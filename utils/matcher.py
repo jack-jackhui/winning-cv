@@ -3,9 +3,6 @@ import logging
 import re
 from typing import Any, Dict, Optional, Tuple
 
-import spacy
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from utils.ats_scorer import score_resume_ats
@@ -16,8 +13,6 @@ from utils.llm_client import get_llm_client
 class JobMatcher:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def __init__(self):
-        self.nlp = spacy.load("en_core_web_sm")
-        self.vectorizer = TfidfVectorizer(stop_words="english")
         self.llm_client = get_llm_client()
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -108,12 +103,6 @@ class JobMatcher:
         except Exception as e:
             self.logger.error(f"Response validation failed: {str(e)}")
             return None
-
-    def preprocess_text(self, text):
-        """Clean and lemmatize text"""
-        text = re.sub(r"[^a-zA-Z0-9\s]", "", text.lower())
-        doc = self.nlp(text)
-        return " ".join([token.lemma_ for token in doc if not token.is_stop])
 
     def calculate_match_score(
         self, job_desc: str, cv_text: str, use_llm: bool = True, weights: Optional[Dict[str, float]] = None
@@ -222,20 +211,3 @@ class JobMatcher:
         except Exception as e:
             self.logger.error(f"HR scoring failed: {e}")
             return None
-
-    def basic_match_score(self, job_desc, cv_text):
-        """TF-IDF scoring without LLM"""
-        try:
-            clean_job = self.preprocess_text(job_desc)
-            clean_cv = self.preprocess_text(cv_text)
-
-            if not clean_job or not clean_cv:
-                return 0
-
-            tfidf_matrix = self.vectorizer.fit_transform([clean_job, clean_cv])
-            similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-            return round(similarity * 10, 2)
-
-        except Exception as e:
-            self.logger.error(f"TF-IDF scoring failed: {str(e)}")
-            return 0

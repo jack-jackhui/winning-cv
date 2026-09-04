@@ -14,4 +14,3 @@ ignore = [
 [lint.per-file-ignores]
 "tests/*" = ["F401", "F811"]
 "__init__.py" = ["F401", "F403"]
-"webui*.py" = ["E402"]  # Streamlit requires specific import order

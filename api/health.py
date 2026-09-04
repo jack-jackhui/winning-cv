@@ -82,7 +82,7 @@ def check_minio_health() -> Dict[str, Any]:
 def check_azure_openai_health() -> Dict[str, Any]:
     """Check Azure OpenAI service configuration and basic connectivity."""
     try:
-        from config.settings import Config
+        from config.settings_v2 import Config
 
         # Check configuration exists
         endpoint = getattr(Config, "AZURE_AI_ENDPOINT", None) or os.getenv("AZURE_AI_ENDPOINT")
@@ -150,7 +150,7 @@ def check_linkedin_cookie_health() -> Dict[str, Any]:
 def check_auth_service_health() -> Dict[str, Any]:
     """Check auth service configuration."""
     try:
-        from config.settings import Config
+        from config.settings_v2 import Config
 
         oauth_provider = getattr(Config, "OAUTH_PROVIDER", None) or os.getenv("OAUTH_PROVIDER", "keycloak")
         auth_url = None

@@ -6,7 +6,7 @@ import time
 # Make sure we can import from one directory up
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from utils.logger import setup_logger
 

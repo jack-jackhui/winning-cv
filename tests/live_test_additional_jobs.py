@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import logging
 from datetime import datetime
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_sources.additional_job_search import AdditionalJobProcessor
 from utils.content_cleaner import ContentCleaner
 

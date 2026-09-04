@@ -59,7 +59,7 @@ Winning CV 是一款开源应用，彻底改变传统的求职方式。无需手
 - LinkedIn Cookie健康监控，确保爬取稳定性
 
 ### 简历智能匹配
-- 基于spaCy NLP的职位描述与简历语义分析
+- 基于规则引擎（ATS/HR）与大模型的职位描述与简历语义分析
 - 0-10分匹配评分系统
 - 简历-职位匹配度分析（CV-JD Fit Analysis）
 - 技能差距识别与建议
@@ -112,9 +112,7 @@ Winning CV 是一款开源应用，彻底改变传统的求职方式。无需手
 |------|------|
 | 前端 | React 18, Vite, Tailwind CSS, HeroUI |
 | 后端 | FastAPI, Python 3.10+ |
-| 管理界面 | Streamlit + OAuth |
 | 存储 | MinIO (S3兼容), Airtable |
-| NLP | spaCy + en-core-web-sm |
 | 容器化 | Docker, Docker Compose |
 
 ---
@@ -161,9 +159,6 @@ cp env.example .env
 pip install uv  # 或: brew install uv
 uv pip install -r requirements.txt
 
-# 安装spaCy语言模型
-python -m spacy download en-core-web-sm
-
 # 配置浏览器路径 (.env)
 # macOS: CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 # Windows: CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -180,10 +175,6 @@ python run_api.py
 # 终端2: React前端（开发模式）
 cd frontend && npm install && npm run dev
 # 前端: http://localhost:3000
-
-# 终端3: Streamlit管理界面
-python webui_new.py
-# 管理界面: http://localhost:8501
 
 # 或运行CLI命令行
 python main.py --user-email your@email.com
@@ -308,7 +299,6 @@ winning-cv/
 ├── cv/                    # 简历解析与生成
 ├── utils/                 # MinIO存储, 通知, 日志
 ├── scheduler/             # APScheduler后台任务
-├── webui_new.py           # Streamlit 管理应用
 ├── main.py                # CLI 接口
 └── run_api.py             # FastAPI 服务入口
 ```
@@ -446,9 +436,7 @@ chmod 600 .env
 - **[FastAPI](https://fastapi.tiangolo.com)** — 现代Python Web框架
 - **[React](https://react.dev)** — UI组件库
 - **[HeroUI](https://heroui.com)** — React组件库
-- **[Streamlit](https://streamlit.io)** — 快速仪表盘开发
 - **[MinIO](https://min.io)** — S3兼容对象存储
-- **[spaCy](https://spacy.io)** — 工业级NLP
 - **[Docker](https://docker.com)** — 容器化技术
 
 *特别感谢所有开源维护者和贡献者，正是你们让此类项目成为可能。*

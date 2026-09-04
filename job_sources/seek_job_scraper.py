@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 from DrissionPage import Chromium, ChromiumOptions
 
-from config.settings import Config
+from config.settings_v2 import Config
 
 logger = logging.getLogger(__name__)
 

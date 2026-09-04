@@ -20,7 +20,7 @@ Usage:
 import logging
 import os
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,92 +47,80 @@ class ShadowWriteError(RuntimeError):
     """Raised when a required PostgreSQL shadow write is not persisted."""
 
 
-class DualWriteDataManager:
+class _DualWriteProxy:
     """
-    Dual-write manager that writes to both Airtable and PostgreSQL.
-    Reads come from Airtable (primary) only.
+    Shared base for dual-write managers.
 
-    Use this during migration validation to ensure Postgres receives
-    all writes without affecting production reads.
+    Reads are delegated to the Airtable primary only. Writes fan out to
+    PostgreSQL as a shadow, with a configurable strictness policy.
     """
+
+    # Shadow-write calls that must persist or raise (vs. lenient log-only)
+    _STRICT = frozenset()
 
     def __init__(self, airtable_manager, postgres_manager):
         self.airtable = airtable_manager
         self.postgres = postgres_manager
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    # =========================================================================
-    # READ OPERATIONS (Airtable primary)
-    # =========================================================================
+    def _lenient_shadow(self, method: str, *args, **kwargs):
+        """Fire a shadow write, logging (not raising) on failure."""
+        try:
+            getattr(self.postgres, method)(*args, **kwargs)
+        except Exception as e:  # pragma: no cover - defensive
+            self.logger.warning(f"Postgres shadow write failed ({method}): {e}")
 
-    def job_exists(self, job_link: str, user_email: Optional[str] = None) -> bool:
-        return self.airtable.job_exists(job_link, user_email=user_email)
-
-    def get_existing_job_links(self, user_email: Optional[str] = None) -> set:
-        return self.airtable.get_existing_job_links(user_email=user_email)
-
-    def get_jobs_by_user(self, user_email: str) -> List[Dict]:
-        return self.airtable.get_jobs_by_user(user_email)
-
-    def get_applications_by_user(self, user_email: str) -> List[Dict]:
-        return self.airtable.get_applications_by_user(user_email)
-
-    def get_unprocessed_jobs(self, user_email: Optional[str] = None) -> List[Dict]:
-        return self.airtable.get_unprocessed_jobs(user_email=user_email)
-
-    def get_job_result(self, job_id: str, user_email: str) -> Optional[Dict]:
-        return self.airtable.get_job_result(job_id, user_email)
-
-    def get_history_record(self, record_id: str) -> Optional[Dict]:
-        return self.airtable.get_history_record(record_id)
-
-    def get_history_by_user(self, user_email: str) -> List[Dict]:
-        return self.airtable.get_history_by_user(user_email)
-
-    def get_user_config(self, user_email: str) -> Dict:
-        return self.airtable.get_user_config(user_email)
-
-    def get_notification_preferences(self, user_email: str) -> Dict:
-        return self.airtable.get_notification_preferences(user_email)
-
-    def get_users_with_notifications_enabled(self) -> List[Dict]:
-        return self.airtable.get_users_with_notifications_enabled()
-
-    # =========================================================================
-    # WRITE OPERATIONS (Dual-write)
-    # =========================================================================
-
-    def create_job_record(self, job_data: Dict, user_email: str = "system") -> Optional[Dict]:
-        # Primary: Airtable
-        result = self.airtable.create_job_record(job_data, user_email)
-
-        if result is None:
+    def _strict_shadow(self, method: str, primary_result, *args, **kwargs):
+        """
+        Fire a shadow write that must persist or raise ``ShadowWriteError``.
+        Returns the primary result; raises if the shadow is unpersisted.
+        """
+        if primary_result is None:
             return None
         try:
-            shadow_result = self.postgres.create_job_record(job_data, user_email)
+            shadow_result = getattr(self.postgres, method)(*args, **kwargs)
         except Exception as e:
-            self.logger.warning("Postgres shadow write failed (create_job): %s", e)
-            raise ShadowWriteError("Postgres shadow job create failed") from e
+            self.logger.warning(f"Postgres shadow write failed ({method}): {e}")
+            raise ShadowWriteError(f"Postgres shadow {method} failed") from e
         if shadow_result is None:
-            self.logger.warning("Postgres shadow write missed job create for user_email=%s", user_email)
-            raise ShadowWriteError("Postgres shadow job create did not persist")
-        return result
+            self.logger.warning(f"Postgres shadow write missed ({method})")
+            raise ShadowWriteError(f"Postgres shadow {method} did not persist")
+        return primary_result
 
-    def update_cv_info(self, job_link: str, score: int, cv_url: str, **kwargs) -> Optional[Dict]:
-        result = self.airtable.update_cv_info(job_link, score, cv_url, **kwargs)
-        if result is None:
-            return None
+    def _shadow(self, method: str, primary_result, *args, **kwargs):
+        """Dispatch shadow write according to strictness policy."""
+        if method in self._STRICT:
+            return self._strict_shadow(method, primary_result, *args, **kwargs)
+        self._lenient_shadow(method, *args, **kwargs)
+        return primary_result
 
-        try:
-            shadow_result = self.postgres.update_cv_info(job_link, score, cv_url, **kwargs)
-        except Exception as e:
-            self.logger.warning("Postgres shadow write failed (update_cv_info): %s", e)
-            raise ShadowWriteError("Postgres shadow CV update failed") from e
-        if shadow_result is None:
-            self.logger.warning("Postgres shadow write missed CV update job_link=%s", job_link)
-            raise ShadowWriteError("Postgres shadow CV update did not persist")
+    def __getattr__(self, name: str):
+        """
+        Fallback delegation: forward any read/write to the Airtable primary,
+        fanning writes out to PostgreSQL shadow.
+        """
+        if name.startswith("_") or name in ("airtable", "postgres", "logger"):
+            raise AttributeError(name)
+        primary = getattr(self.airtable, name)
 
-        return result
+        def wrapped(*args, **kwargs):
+            result = primary(*args, **kwargs)
+            if _is_write(name):
+                return self._shadow(name, result, *args, **kwargs)
+            return result
+
+        return wrapped
+
+
+def _is_write(name: str) -> bool:
+    """Heuristic: treat mutation-style method names as writes."""
+    return name.startswith(("create_", "update_", "save_", "archive_", "restore_", "delete_", "increment_", "fork_"))
+
+
+class DualWriteDataManager(_DualWriteProxy):
+    """Dual-write for jobs/history/notifications. Reads from Airtable (primary)."""
+
+    _STRICT = frozenset(["create_job_record", "update_cv_info", "update_application_status"])
 
     def update_application_status(
         self,
@@ -153,212 +141,26 @@ class DualWriteDataManager:
         )
         if result is None:
             return None
-
-        try:
-            shadow_result = self.postgres.update_application_status(
-                job_id,
-                user_email,
-                application_status,
-                application_notes,
-                next_action_at,
-                update_next_action,
-                job_link=result.get("fields", {}).get("Job Link"),
-            )
-        except Exception as e:
-            self.logger.warning("Postgres shadow write failed (update_application_status): %s", e)
-            raise ShadowWriteError("Postgres shadow application update failed") from e
-        if shadow_result is None:
-            self.logger.warning(
-                "Postgres shadow write missed application job_id=%s user_email=%s",
-                job_id,
-                user_email,
-            )
-            raise ShadowWriteError("Postgres shadow application update did not persist")
-
-        return result
-
-    def create_history_record(self, data: Dict) -> Optional[str]:
-        result = self.airtable.create_history_record(data)
-
-        try:
-            self.postgres.create_history_record(data)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (create_history): {e}")
-
-        return result
-
-    def update_history_analysis(self, record_id: str, analysis_json: str, status: str = "ready") -> bool:
-        result = self.airtable.update_history_analysis(record_id, analysis_json, status)
-
-        try:
-            # For Postgres, we need to find the record by Airtable ID mapping
-            # This requires the migrated_airtable_id field in history table
-            self.postgres.update_history_analysis(record_id, analysis_json, status)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (update_history_analysis): {e}")
-
-        return result
-
-    def save_user_config(self, config_data: Dict) -> bool:
-        result = self.airtable.save_user_config(config_data)
-
-        try:
-            self.postgres.save_user_config(config_data)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (save_user_config): {e}")
-
-        return result
-
-    def save_notification_preferences(self, prefs_data: Dict) -> bool:
-        result = self.airtable.save_notification_preferences(prefs_data)
-
-        try:
-            self.postgres.save_notification_preferences(prefs_data)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (save_notification_prefs): {e}")
-
-        return result
-
-
-class DualWriteCVVersionManager:
-    """
-    Dual-write CV version manager.
-    Reads from Airtable, writes to both.
-    """
-
-    def __init__(self, airtable_manager, postgres_manager):
-        self.airtable = airtable_manager
-        self.postgres = postgres_manager
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    # =========================================================================
-    # READ OPERATIONS (Airtable primary)
-    # =========================================================================
-
-    def get_version(self, version_id: str, user_email: str) -> Optional[Dict]:
-        return self.airtable.get_version(version_id, user_email)
-
-    def list_versions(self, user_email: str, **kwargs) -> List[Dict]:
-        return self.airtable.list_versions(user_email, **kwargs)
-
-    def get_download_url(self, version_id: str, user_email: str, **kwargs) -> Optional[str]:
-        return self.airtable.get_download_url(version_id, user_email, **kwargs)
-
-    def get_categories(self, user_email: str) -> List[str]:
-        return self.airtable.get_categories(user_email)
-
-    def get_all_tags(self, user_email: str) -> List[str]:
-        return self.airtable.get_all_tags(user_email)
-
-    def get_analytics(self, user_email: str) -> Dict:
-        return self.airtable.get_analytics(user_email)
-
-    # =========================================================================
-    # WRITE OPERATIONS (Dual-write)
-    # =========================================================================
-
-    def create_version(self, user_email: str, file_path: str, version_name: str, **kwargs) -> Dict:
-        result = self.airtable.create_version(user_email, file_path, version_name, **kwargs)
-
-        try:
-            self.postgres.create_version(user_email, file_path, version_name, **kwargs)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (create_version): {e}")
-
-        return result
-
-    def update_version(self, version_id: str, user_email: str, updates: Dict) -> Optional[Dict]:
-        result = self.airtable.update_version(version_id, user_email, updates)
-
-        try:
-            self.postgres.update_version(version_id, user_email, updates)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (update_version): {e}")
-
-        return result
-
-    def archive_version(self, version_id: str, user_email: str) -> bool:
-        result = self.airtable.archive_version(version_id, user_email)
-
-        try:
-            self.postgres.archive_version(version_id, user_email)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (archive_version): {e}")
-
-        return result
-
-    def restore_version(self, version_id: str, user_email: str) -> bool:
-        result = self.airtable.restore_version(version_id, user_email)
-
-        try:
-            self.postgres.restore_version(version_id, user_email)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (restore_version): {e}")
-
-        return result
-
-    def delete_version(self, version_id: str, user_email: str) -> bool:
-        result = self.airtable.delete_version(version_id, user_email)
-
-        try:
-            self.postgres.delete_version(version_id, user_email)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (delete_version): {e}")
-
-        return result
-
-    def increment_usage(self, version_id: str, user_email: str) -> bool:
-        result = self.airtable.increment_usage(version_id, user_email)
-
-        try:
-            self.postgres.increment_usage(version_id, user_email)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (increment_usage): {e}")
-
-        return result
-
-    def increment_response(self, version_id: str, user_email: str) -> bool:
-        result = self.airtable.increment_response(version_id, user_email)
-
-        try:
-            self.postgres.increment_response(version_id, user_email)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (increment_response): {e}")
-
-        return result
-
-    def fork_version(
-        self, source_version_id: str, user_email: str, new_name: str, new_file_path: Optional[str] = None
-    ) -> Optional[Dict]:
-        result = self.airtable.fork_version(source_version_id, user_email, new_name, new_file_path)
-
-        try:
-            self.postgres.fork_version(source_version_id, user_email, new_name, new_file_path)
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (fork_version): {e}")
-
-        return result
-
-    def create_version_from_history(
-        self,
-        user_email: str,
-        history_record: Dict[str, Any],
-        version_name: Optional[str] = None,
-        auto_category: Optional[str] = None,
-        user_tags: Optional[List[str]] = None,
-    ) -> Optional[Dict]:
-        result = self.airtable.create_version_from_history(
-            user_email, history_record, version_name, auto_category, user_tags
+        return self._strict_shadow(
+            "update_application_status",
+            result,
+            job_id,
+            user_email,
+            application_status,
+            application_notes,
+            next_action_at,
+            update_next_action,
+            job_link=result.get("fields", {}).get("Job Link"),
         )
 
-        try:
-            self.postgres.create_version_from_history(
-                user_email, history_record, version_name, auto_category, user_tags
-            )
-        except Exception as e:
-            self.logger.warning(f"Postgres shadow write failed (create_version_from_history): {e}")
 
-        return result
+class DualWriteCVVersionManager(_DualWriteProxy):
+    """
+    Dual-write CV version manager.
+
+    Reads from Airtable (primary); all writes fan out to PostgreSQL shadow
+    with a lenient log-on-failure policy. Handled by ``_DualWriteProxy``.
+    """
 
 
 # =============================================================================
@@ -389,7 +191,7 @@ def get_data_manager():
         logger.info("Storage backend: PostgreSQL (direct)")
 
     elif STORAGE_BACKEND == "dual":
-        from config.settings import Config
+        from config.settings_v2 import Config
         from data_store.airtable_manager import AirtableManager
         from data_store.postgres_manager import get_postgres_manager
 
@@ -399,7 +201,7 @@ def get_data_manager():
         logger.info("Storage backend: Dual-write (Airtable primary, Postgres shadow)")
 
     else:  # "airtable" or default
-        from config.settings import Config
+        from config.settings_v2 import Config
         from data_store.airtable_manager import AirtableManager
 
         _data_manager = AirtableManager(Config.AIRTABLE_API_KEY, Config.AIRTABLE_BASE_ID, Config.AIRTABLE_TABLE_ID)
@@ -452,7 +254,7 @@ def get_history_manager():
     pointed at the history table. For Postgres, it's integrated.
     """
     if STORAGE_BACKEND == "airtable":
-        from config.settings import Config
+        from config.settings_v2 import Config
         from data_store.airtable_manager import AirtableManager
 
         return AirtableManager(Config.AIRTABLE_API_KEY, Config.AIRTABLE_BASE_ID, Config.AIRTABLE_TABLE_ID_HISTORY)

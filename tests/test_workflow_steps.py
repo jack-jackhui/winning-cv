@@ -7,9 +7,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import logging
 
-from config.settings import Config
+from config.settings_v2 import Config
 from data_store.airtable_manager import AirtableManager
-from feed.linkedin_feed import LinkedInFeedProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
 from utils.content_cleaner import ContentCleaner
 from utils.cv_loader import load_cv_content
@@ -25,8 +24,8 @@ def test_real_workflow_steps_1_to_3():
 
     logger.info("Starting REAL WORKFLOW TEST (Steps 1-3)")
 
-    # Load real configuration
-    config = Config()
+    # Load real configuration (Config is a singleton)
+    config = Config
 
     # Initialize components with real connections
     matcher = JobMatcher()

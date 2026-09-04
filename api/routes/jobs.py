@@ -30,13 +30,12 @@ from api.schemas.jobs import (
     SearchStatusResponse,
     SearchTaskResponse,
 )
-from config.settings import Config
+from config.settings_v2 import Config
 
 # Import storage factory for backend-agnostic access
 from data_store.storage_factory import get_cv_version_manager, get_data_manager, get_history_manager
 from job_processing.core import JobProcessor
 from job_sources.linkedin_cookie_manager import get_cookie_manager
-from ui.helpers import upload_pdf_to_wordpress
 from utils.minio_storage import MinIOStorage
 from utils.utils import Struct
 
@@ -338,17 +337,6 @@ async def save_job_config(
                 logger.info(f"Uploaded base CV to MinIO: {object_path}")
             except Exception as e:
                 logger.warning(f"Failed to upload CV to MinIO: {e}")
-                # Fallback to WordPress (deprecated)
-                try:
-                    cv_url = upload_pdf_to_wordpress(
-                        file_path=cv_path,
-                        filename=unique_filename,
-                        wp_site=cfg.WORDPRESS_SITE,
-                        wp_user=cfg.WORDPRESS_USERNAME,
-                        wp_app_password=cfg.WORDPRESS_APP_PASSWORD,
-                    )
-                except Exception as wp_e:
-                    logger.warning(f"Failed to upload CV to WordPress: {wp_e}")
 
         elif selected_cv_version_id:
             # Option 2: Use CV from library

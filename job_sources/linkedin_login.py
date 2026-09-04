@@ -26,7 +26,7 @@ import time
 
 from DrissionPage import Chromium, ChromiumOptions
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_sources.linkedin_cookie_manager import get_cookie_manager
 
 # Configure logging

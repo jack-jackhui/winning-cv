@@ -111,6 +111,14 @@ class Settings(BaseSettings):
     check_interval_min: int = Field(default=60, ge=5)
     max_description_length: int = 15000
 
+    # Additional search terms (hardcoded defaults)
+    additional_search_term: str = (
+        'AI IT (manager OR head OR director) "software engineering" leadership'
+    )
+    google_search_term: str = (
+        "head of IT or IT manager or software engineering manager or AI jobs near Melbourne, VIC since last week"
+    )
+
     # Notifications
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
@@ -119,6 +127,16 @@ class Settings(BaseSettings):
     smtp_server: Optional[str] = None
     default_from_email: Optional[str] = None
     default_to_email: Optional[str] = None
+
+    # WeChat notifications
+    wechat_api_key: Optional[str] = None
+    wechat_bot_url: Optional[str] = None
+    wechat_api_url: Optional[str] = None
+
+    # Legacy WordPress (deprecated - storage is MinIO only, kept for compat)
+    wordpress_site: Optional[str] = None
+    wordpress_username: Optional[str] = None
+    wordpress_app_password: Optional[str] = None
 
     # PostgreSQL (CV Knowledge Base)
     postgres_host: str = "postgres"
@@ -165,6 +183,10 @@ class Settings(BaseSettings):
     def airtable_ui_url(self) -> str:
         return f"https://airtable.com/{self.airtable_base_id}/{self.airtable_table_id}"
 
+    @property
+    def airtable_ui_history_table_url(self) -> str:
+        return f"https://airtable.com/{self.airtable_base_id}/{self.airtable_table_id_history}"
+
     @field_validator("country")
     @classmethod
     def validate_country(cls, v: str) -> str:
@@ -193,6 +215,8 @@ class ConfigCompat:
             return getattr(settings, lower)
         if hasattr(settings, name):
             return getattr(settings, name)
+        if name == "SUPPORTED_COUNTRIES":
+            return SUPPORTED_COUNTRIES
         raise AttributeError(f"Config has no attribute '{name}'")
 
 

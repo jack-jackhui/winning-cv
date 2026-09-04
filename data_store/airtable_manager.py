@@ -1,11 +1,12 @@
 import logging
 from datetime import date, datetime, timezone
 
+from pyairtable import Api
 from pyairtable.formulas import AND, EQ, NE, Field
 from requests import HTTPError
+from urllib3.util import Retry
 
-from config.settings import Config
-from utils.airtable_client import create_airtable_api
+from config.settings_v2 import Config
 
 APPLICATION_SUMMARY_FIELDS = [
     "Job Title",
@@ -20,8 +21,11 @@ APPLICATION_SUMMARY_FIELDS = [
 
 class AirtableManager:
     def __init__(self, api_key, base_id, table_id):
-        # Use robust API client with timeouts and retries
-        self.api = create_airtable_api(api_key=api_key)
+        self.api = Api(
+            api_key,
+            timeout=(10, 30),
+            retry_strategy=Retry(total=3, backoff_factor=1.0, status_forcelist=[408, 429, 500, 502, 503, 504]),
+        )
         self.base_id = base_id
         self.table = self.api.table(base_id, table_id)
         self.logger = logging.getLogger(self.__class__.__name__)

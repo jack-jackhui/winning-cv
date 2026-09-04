@@ -4,7 +4,6 @@ Handles CV generation, upload, and history.
 Uses MinIO for file storage.
 """
 
-import asyncio
 import logging
 import re
 import uuid
@@ -40,13 +39,13 @@ from api.schemas.cv import (
     TalkingPointsSchema,
     TechnicalSkillsSchema,
 )
-from config.settings import Config
+from config.settings_v2 import Config
 from cv.cv_analyzer import CVAnalyzer
 
 # Import existing functionality
-from cv.cv_generator import CVGenerator
+from cv.cv_generator_v2 import CVGeneratorV2, generate_cv_with_knowledge
 from data_store.storage_factory import get_history_manager
-from ui.helpers import extract_title_from_jd
+from utils.cv_utils import extract_title_from_jd
 from utils.minio_storage import get_minio_storage
 from utils.utils import create_docx, create_pdf, extract_text_from_file
 
@@ -238,9 +237,6 @@ async def generate_cv(
         # Generate tailored CV
         llm_response_id = None
         if use_knowledge_base:
-            # Use knowledge base enhanced generation (legacy, no response_id)
-            from cv.cv_generator import generate_cv_with_knowledge
-
             raw_md = await generate_cv_with_knowledge(
                 user_email=user.email,
                 job_desc=job_description,
@@ -248,23 +244,12 @@ async def generate_cv(
                 base_cv_content=orig_cv,
             )
         else:
-            # Use CVGeneratorV2 with Responses API
-            try:
-                from cv.cv_generator_v2 import CVGeneratorV2
-
-                generator = CVGeneratorV2()
-                raw_md, llm_response_id = generator.generate(
-                    cv_content=orig_cv,
-                    job_desc=job_description,
-                    instructions=instructions or "",
-                )
-            except ImportError:
-                # Fall back to legacy generator
-                logger.warning("CVGeneratorV2 not available, using legacy generator")
-                from cv.cv_generator import CVGenerator
-
-                generator = CVGenerator()
-                raw_md = await asyncio.to_thread(generator.generate_cv, orig_cv, job_description, instructions or "")
+            generator = CVGeneratorV2()
+            raw_md, llm_response_id = generator.generate(
+                cv_content=orig_cv,
+                job_desc=job_description,
+                instructions=instructions or "",
+            )
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
@@ -799,19 +784,12 @@ async def regenerate_cv_with_improvements(
 
         # Regenerate CV using CVGeneratorV2 with Responses API
         llm_response_id = None
-        try:
-            from cv.cv_generator_v2 import CVGeneratorV2
-
-            generator = CVGeneratorV2()
-            raw_md, llm_response_id = generator.generate(
-                cv_content=cv_markdown,
-                job_desc=job_description,
-                instructions=combined_instructions,
-            )
-        except ImportError:
-            logger.warning("CVGeneratorV2 not available, using legacy generator")
-            generator = CVGenerator()
-            raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
+        generator = CVGeneratorV2()
+        raw_md, llm_response_id = generator.generate(
+            cv_content=cv_markdown,
+            job_desc=job_description,
+            instructions=combined_instructions,
+        )
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)
@@ -985,35 +963,23 @@ async def refine_cv_with_instructions(
                 logger.warning(f"Could not fetch parent record: {e}")
 
         # Use CV generator v2 with Responses API chaining
-        try:
-            from cv.cv_generator_v2 import CVGeneratorV2
+        generator = CVGeneratorV2()
 
-            generator = CVGeneratorV2()
-
-            if llm_response_id:
-                # Chain with previous response for full context
-                raw_md, new_response_id = generator.refine(
-                    job_desc=job_description,
-                    refinement_instructions=refinement_instructions,
-                    previous_response_id=llm_response_id,
-                )
-            else:
-                # No previous response ID - do fresh generation with refinement as instructions
-                combined = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
-                raw_md, new_response_id = generator.generate(
-                    cv_content=cv_markdown,
-                    job_desc=job_description,
-                    instructions=combined,
-                )
-
-        except ImportError:
-            # Fall back to legacy generator if v2 not available
-            logger.warning("CVGeneratorV2 not available, using legacy generator")
-            new_response_id = None
-
-            combined_instructions = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
-            generator = CVGenerator()
-            raw_md = await asyncio.to_thread(generator.generate_cv, cv_markdown, job_description, combined_instructions)
+        if llm_response_id:
+            # Chain with previous response for full context
+            raw_md, new_response_id = generator.refine(
+                job_desc=job_description,
+                refinement_instructions=refinement_instructions,
+                previous_response_id=llm_response_id,
+            )
+        else:
+            # No previous response ID - do fresh generation with refinement as instructions
+            combined = f"{original_instructions}\n\nUser refinement request:\n{refinement_instructions}"
+            raw_md, new_response_id = generator.generate(
+                cv_content=cv_markdown,
+                job_desc=job_description,
+                instructions=combined,
+            )
 
         # Generate file names
         job_title = extract_title_from_jd(job_description)

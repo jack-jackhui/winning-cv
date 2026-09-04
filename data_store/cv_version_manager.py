@@ -9,10 +9,11 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from pyairtable import Api
 from pyairtable.formulas import AND, EQ, Field
+from urllib3.util import Retry
 
-from config.settings import Config
-from utils.airtable_client import get_airtable_api
+from config.settings_v2 import Config
 from utils.minio_storage import MinIOStorage, get_minio_storage
 
 logger = logging.getLogger(__name__)
@@ -61,8 +62,11 @@ class CVVersionManager:
     }
 
     def __init__(self):
-        # Use robust API client with timeouts and retries
-        self.api = get_airtable_api()
+        self.api = Api(
+            Config.AIRTABLE_API_KEY,
+            timeout=(10, 30),
+            retry_strategy=Retry(total=3, backoff_factor=1.0, status_forcelist=[408, 429, 500, 502, 503, 504]),
+        )
         self.table = self.api.table(Config.AIRTABLE_BASE_ID, Config.AIRTABLE_TABLE_ID_CV_VERSIONS)
         self._minio: Optional[MinIOStorage] = None
 

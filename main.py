@@ -2,15 +2,11 @@ import argparse
 import logging
 import os
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_processing.core import JobProcessor
 from utils.logger import setup_logger
 from utils.notifications import notify_all, notify_specific_user
-
-
-class Struct:
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
+from utils.utils import Struct
 
 
 def main(config_data: dict):

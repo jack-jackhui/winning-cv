@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -27,7 +28,6 @@ from api.routes import (
     telemetry_router,
     webhooks_router,
 )
-from scheduler.job_scheduler import JobScheduler
 from utils.logger import setup_logger
 
 # Configure logging
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 # Global scheduler instance
-scheduler = None
+scheduler: BackgroundScheduler | None = None
 
 
 def setup_cookie_health_monitoring():
@@ -48,6 +48,8 @@ def setup_cookie_health_monitoring():
     """
     global scheduler
     try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+
         from job_sources.linkedin_cookie_health import (
             check_cookie_health,
             get_check_interval_hours,
@@ -58,11 +60,13 @@ def setup_cookie_health_monitoring():
         interval_hours = get_check_interval_hours()  # Returns 24
         interval_minutes = interval_hours * 60
 
-        scheduler = JobScheduler()
+        scheduler = BackgroundScheduler()
         scheduler.add_job(
             # Force fresh test on scheduled runs
             lambda: run_cookie_health_check(send_alert=True, force_test=True),
-            interval_minutes=interval_minutes,
+            "interval",
+            minutes=interval_minutes,
+            max_instances=1,
             name="linkedin_cookie_health_check",
         )
         scheduler.start()

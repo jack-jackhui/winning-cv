@@ -59,7 +59,7 @@ Winning CV is an open-source application that transforms how you apply for jobs.
 - LinkedIn cookie health monitoring for reliable scraping
 
 ### CV-to-Job Matching Engine
-- Semantic analysis of job descriptions vs. your base CV using spaCy NLP
+- Semantic analysis of job descriptions vs. your base CV using rule-based ATS & HR scorers and LLM evaluation
 - Compatibility scoring system (0-10 scale)
 - CV-JD fit analysis with detailed breakdown
 - Skills gap identification and recommendations
@@ -112,9 +112,7 @@ Winning CV is an open-source application that transforms how you apply for jobs.
 |-------|------------|
 | Frontend | React 18, Vite, Tailwind CSS, HeroUI |
 | Backend | FastAPI, Python 3.10+ |
-| Admin UI | Streamlit with OAuth |
 | Storage | MinIO (S3-compatible), Airtable |
-| NLP | spaCy with en_core_web_sm |
 | Containerization | Docker, Docker Compose |
 
 ---
@@ -161,9 +159,6 @@ cp env.example .env
 pip install uv  # or: brew install uv
 uv pip install -r requirements.txt
 
-# Install spaCy language model
-python -m spacy download en_core_web_sm
-
 # Configure browser path in .env
 # macOS: CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 # Windows: CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -180,10 +175,6 @@ python run_api.py
 # Terminal 2: React Frontend (for development)
 cd frontend && npm install && npm run dev
 # Frontend at http://localhost:3000
-
-# Terminal 3: Streamlit Admin UI
-python webui_new.py
-# Admin UI at http://localhost:8501
 
 # Or run CLI job search
 python main.py --user-email your@email.com
@@ -308,7 +299,6 @@ winning-cv/
 ├── cv/                    # CV parsing & generation
 ├── utils/                 # MinIO storage, notifications, logging
 ├── scheduler/             # APScheduler background jobs
-├── webui_new.py           # Streamlit admin application
 ├── main.py                # CLI interface
 └── run_api.py             # FastAPI server entry point
 ```
@@ -446,9 +436,7 @@ Built with these amazing open-source technologies:
 - **[FastAPI](https://fastapi.tiangolo.com)** — Modern Python web framework
 - **[React](https://react.dev)** — UI component library
 - **[HeroUI](https://heroui.com)** — React component library
-- **[Streamlit](https://streamlit.io)** — Rapid dashboard development
 - **[MinIO](https://min.io)** — S3-compatible object storage
-- **[spaCy](https://spacy.io)** — Industrial NLP
 - **[Docker](https://docker.com)** — Containerization
 
 *Special thanks to all open-source maintainers and contributors who make projects like this possible.*

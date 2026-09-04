@@ -17,7 +17,7 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
-from config.settings import Config
+from config.settings_v2 import Config
 
 logger = logging.getLogger(__name__)
 

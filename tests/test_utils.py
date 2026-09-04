@@ -122,7 +122,7 @@ class TestConfigSingleton:
 
     def test_config_is_singleton_not_callable(self):
         """Config should be used directly, not called as Config()."""
-        from config.settings import Config
+        from config.settings_v2 import Config
 
         # Config is already an instance (singleton pattern)
         # Accessing attributes should work
@@ -134,7 +134,7 @@ class TestConfigSingleton:
 
     def test_config_has_required_attributes(self):
         """Config should have all required attributes for CV routes."""
-        from config.settings import Config
+        from config.settings_v2 import Config
 
         # These attributes are used in api/routes/cv.py
         required_attrs = [

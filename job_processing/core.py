@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
-from cv.cv_generator import CVGenerator
+from cv.cv_generator_v2 import CVGenerator
 from data_store.storage_factory import ShadowWriteError, get_data_manager
 from job_sources.additional_job_search import AdditionalJobProcessor
 from job_sources.linkedin_job_scraper import LinkedInJobScraper
@@ -355,7 +355,7 @@ class JobProcessor:
     def generate_targeted_cv(self, cv_text: str, job_data: Dict, analysis: Dict, user_id: str = "default") -> str:
         """
         Generate a custom CV using GPT-based approach in CVGenerator.
-        Returns a URL to the new CV (MinIO presigned URL or WordPress public URL).
+        Returns a URL to the new CV (MinIO presigned URL).
 
         Args:
             cv_text: The user's base CV text
@@ -366,9 +366,6 @@ class JobProcessor:
         Returns:
             URL to access the generated CV
         """
-        from config.settings import Config
-        from ui.helpers import get_storage_backend, upload_pdf
-
         generator = CVGenerator()
 
         instructions = (
@@ -401,18 +398,14 @@ class JobProcessor:
             return None
         logger.info(f"Generated PDF CV: {pdf_path}")
 
-        # ---- Upload to storage backend (MinIO or WordPress) ----
+        # ---- Upload to MinIO storage ----
         try:
-            cv_url = upload_pdf(
-                file_path=pdf_path,
-                filename=os.path.basename(pdf_filename),
-                user_id=user_id,
-                wp_site=Config.WORDPRESS_SITE,
-                wp_user=Config.WORDPRESS_USERNAME,
-                wp_app_password=Config.WORDPRESS_APP_PASSWORD,
-            )
-            backend = get_storage_backend()
-            logger.debug(f"Uploaded CV to {backend}: {cv_url}")
+            from utils.minio_storage import get_minio_storage
+
+            storage = get_minio_storage()
+            object_path = storage.upload_cv(file_path=pdf_path, user_id=user_id, filename=os.path.basename(pdf_filename))
+            cv_url = storage.get_download_url_by_path(object_path, expires_hours=24)
+            logger.debug(f"Uploaded CV to MinIO: {cv_url}")
             return cv_url
         except Exception as e:
             logger.error(f"Failed to upload PDF to storage: {e}")

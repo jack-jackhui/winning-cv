@@ -279,7 +279,7 @@ async def generate_smart_cv(
 
     Optionally provide a base_cv_version_id to use as the template structure.
     """
-    from cv.cv_generator import generate_cv_with_knowledge
+    from cv.cv_generator_v2 import generate_cv_with_knowledge
 
     # Get base CV content if specified
     base_cv_content = None

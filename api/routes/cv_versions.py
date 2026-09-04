@@ -618,7 +618,7 @@ async def create_from_history(
     The PDF is downloaded from the history record and stored as a new version;
     when a generated DOCX artifact exists, it is stored alongside the PDF.
     """
-    from config.settings import Config
+    from config.settings_v2 import Config
 
     try:
         # Get the history record

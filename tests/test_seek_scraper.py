@@ -6,7 +6,7 @@ import time
 # Add project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from config.settings import Config
+from config.settings_v2 import Config
 from job_sources.seek_job_scraper import SeekJobScraper
 from utils.logger import setup_logger
 
