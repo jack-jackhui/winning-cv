@@ -12,10 +12,22 @@ jobs:
     environment: production
     if: github.event.workflow_run.conclusion == 'success'
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+      - name: Sync deployment files to Tailscale server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TAILSCALE_DNS_NAME }}
+          username: ${{ secrets.TAILSCALE_SSH_USER || 'root' }}
+          key: ${{ secrets.TAILSCALE_SSH_KEY }}
+          source: "docker-compose.yml,scripts/deploy.sh,scripts/prod_smoke_check.sh,scripts/prod_monitor.sh,scripts/prod_monitor_cron.sh,scripts/install_prod_monitor_cron.sh,scripts/validate_prod_config.sh,scripts/prod_migrate_db.sh,init-db/02-data-storage-schema.sql,init-db/03-migration-v2.sql,init-db/06-jobs-user-link-uniqueness.sql,init-db/07-jobs-next-action.sql"
+          target: "~/winning-cv"
+          overwrite: true
       - name: Deploy to Tailscale server
         uses: appleboy/ssh-action@v1.0.3
         with:
