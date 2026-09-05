@@ -286,11 +286,11 @@ class TestSchemaIntegrity:
     def test_next_action_migration_is_wired_into_production_artifacts(self):
         project_root = Path(__file__).parent.parent
         migration_script = (project_root / "scripts" / "prod_migrate_db.sh").read_text()
-        build_workflow = (project_root / ".github" / "workflows" / "build-push.yml").read_text()
+        deploy_workflow = (project_root / ".github" / "workflows" / "deploy.yml").read_text()
 
         migration_name = "init-db/07-jobs-next-action.sql"
         assert f"< {migration_name}" in migration_script
-        assert migration_name in build_workflow
+        assert migration_name in deploy_workflow
 
     def test_analytics_function_exists(self, schema_content):
         """Verify get_cv_analytics function is defined."""
