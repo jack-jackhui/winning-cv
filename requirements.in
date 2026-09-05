@@ -30,3 +30,9 @@ ruff>=0.3.0
 pydantic-settings>=2.0.0
 # PostgreSQL async driver for CV Knowledge Base
 asyncpg>=0.29.0
+# PostgreSQL sync driver (used directly by postgres_manager.py and persistence tests)
+psycopg2-binary>=2.9.0
+# OpenAI client (Azure OpenAI Responses API, used directly by utils/llm_client.py)
+openai>=1.0.0
+# Retry/backoff helpers (tenacity, used directly by utils/matcher.py)
+tenacity>=9.0.0
