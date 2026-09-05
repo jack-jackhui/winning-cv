@@ -47,3 +47,39 @@ jobs:
             ./scripts/prod_smoke_check.sh
             docker image prune -af --filter "until=168h"
             echo "Deployment successful at $(date)"
+
+  notify-success:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send Telegram notification (Success)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          message: |
+            ✅ <b>WinningCV Deployment Successful</b>
+
+            📦 Commit: <code>${{ github.event.workflow_run.head_sha }}</code>
+            👤 Author: ${{ github.actor }}
+            🔗 <a href="${{ github.event.workflow_run.html_url }}">View Build Run</a>
+
+  notify-failure:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send Telegram notification (Failure)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          message: |
+            ❌ <b>WinningCV Deployment Failed</b>
+
+            📦 Commit: <code>${{ github.event.workflow_run.head_sha }}</code>
+            👤 Author: ${{ github.actor }}
+            🔗 <a href="${{ github.event.workflow_run.html_url }}">View Build Run</a>
